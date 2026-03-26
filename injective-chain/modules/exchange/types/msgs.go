@@ -1614,9 +1614,8 @@ func (msg *MsgIncreasePositionMargin) ValidateBasic() error {
 		return err
 	}
 
-	_, ok := IsValidSubaccountID(msg.DestinationSubaccountId)
-	if !ok {
-		return errors.Wrap(ErrBadSubaccountID, msg.DestinationSubaccountId)
+	if err := CheckValidSubaccountIDOrNonce(senderAddr, msg.DestinationSubaccountId); err != nil {
+		return err
 	}
 
 	return nil

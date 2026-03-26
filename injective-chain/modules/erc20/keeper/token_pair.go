@@ -1,6 +1,8 @@
 package keeper
 
 import (
+	"strings"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -67,4 +69,23 @@ func (k Keeper) deleteTokenPair(ctx sdk.Context, pair types.TokenPair) {
 	store.Delete([]byte(pair.BankDenom))
 	store = k.getTokenPairsStoreByERC20(ctx)
 	store.Delete(common.HexToAddress(pair.Erc20Address).Bytes())
+}
+
+// HasBankDenomOrMetadata return true if the denom with supply exists or metadata associated with the denom exists
+func (k Keeper) HasBankDenomOrMetadata(ctx sdk.Context, denom string) bool {
+	if k.bankKeeper.HasSupply(ctx, denom) {
+		return true
+	}
+
+	_, metadataExists := k.bankKeeper.GetDenomMetaData(ctx, denom)
+
+	return metadataExists
+}
+
+func erc20AddressFromBankDenomName(denom string) (addr common.Address, isERC20Denom bool) {
+	addrStr, hasPrefix := strings.CutPrefix(denom, types.DenomPrefix)
+	if !hasPrefix {
+		return addr, false
+	}
+	return common.HexToAddress(addrStr), true
 }

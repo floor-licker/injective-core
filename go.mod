@@ -60,12 +60,12 @@ require (
 	github.com/tyler-smith/go-bip39 v1.1.0
 	github.com/xlab/closer v1.1.0
 	github.com/xlab/suplog v1.4.4
-	golang.org/x/crypto v0.37.0
+	golang.org/x/crypto v0.40.0
 	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0
-	golang.org/x/sync v0.13.0
+	golang.org/x/sync v0.16.0
 	google.golang.org/genproto/googleapis/api v0.0.0-20250106144421-5f5ef82da422
 	google.golang.org/grpc v1.71.0
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.10
 	gopkg.in/DataDog/dd-trace-go.v1 v1.62.0
 	gopkg.in/yaml.v2 v2.4.0
 	sigs.k8s.io/yaml v1.4.0
@@ -298,16 +298,16 @@ require (
 	go.opentelemetry.io/otel/trace v1.34.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/net v0.39.0
+	golang.org/x/net v0.42.0
 	golang.org/x/oauth2 v0.25.0 // indirect
-	golang.org/x/sys v0.32.0 // indirect
-	golang.org/x/term v0.31.0 // indirect
-	golang.org/x/text v0.24.0 // indirect
+	golang.org/x/sys v0.34.0 // indirect
+	golang.org/x/term v0.33.0 // indirect
+	golang.org/x/text v0.27.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
 	google.golang.org/api v0.220.0 // indirect
 	google.golang.org/genproto v0.0.0-20241118233622-e639e219e697 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250127172529-29210b9bc287 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20250804133106-a7a43d27e69b // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1
 	gotest.tools/v3 v3.5.1 // indirect
@@ -315,18 +315,17 @@ require (
 )
 
 replace (
-	cosmossdk.io/api => github.com/InjectiveLabs/cosmos-sdk/api v0.50.14-inj.4
-	cosmossdk.io/client/v2 => github.com/InjectiveLabs/cosmos-sdk/client/v2 v2.0.0-v0.50.14-inj.4
-	cosmossdk.io/core => github.com/InjectiveLabs/cosmos-sdk/core v0.50.14-inj.4
-	cosmossdk.io/errors => github.com/InjectiveLabs/cosmos-sdk/errors v0.50.14-inj.4
-	cosmossdk.io/store => github.com/InjectiveLabs/cosmos-sdk/store v0.50.14-inj.4
-	cosmossdk.io/x/circuit => github.com/InjectiveLabs/cosmos-sdk/x/circuit v0.50.14-inj.4
-	cosmossdk.io/x/evidence => github.com/InjectiveLabs/cosmos-sdk/x/evidence v0.50.14-inj.4
-	cosmossdk.io/x/feegrant => github.com/InjectiveLabs/cosmos-sdk/x/feegrant v0.50.14-inj.4
-	cosmossdk.io/x/nft => github.com/InjectiveLabs/cosmos-sdk/x/nft v0.50.14-inj.4
-	cosmossdk.io/x/tx => github.com/InjectiveLabs/cosmos-sdk/x/tx v0.50.14-inj.4
-	cosmossdk.io/x/upgrade => github.com/InjectiveLabs/cosmos-sdk/x/upgrade v0.50.14-inj.4
-
+	cosmossdk.io/api => github.com/InjectiveLabs/cosmos-sdk/api v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/client/v2 => github.com/InjectiveLabs/cosmos-sdk/client/v2 v2.0.0-v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/core => github.com/InjectiveLabs/cosmos-sdk/core v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/errors => github.com/InjectiveLabs/cosmos-sdk/errors v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/store => github.com/InjectiveLabs/cosmos-sdk/store v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/x/circuit => github.com/InjectiveLabs/cosmos-sdk/x/circuit v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/x/evidence => github.com/InjectiveLabs/cosmos-sdk/x/evidence v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/x/feegrant => github.com/InjectiveLabs/cosmos-sdk/x/feegrant v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/x/nft => github.com/InjectiveLabs/cosmos-sdk/x/nft v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/x/tx => github.com/InjectiveLabs/cosmos-sdk/x/tx v0.50.14-inj.4-iteratedenoms
+	cosmossdk.io/x/upgrade => github.com/InjectiveLabs/cosmos-sdk/x/upgrade v0.50.14-inj.4-iteratedenoms
 	github.com/CosmWasm/wasmd => github.com/InjectiveLabs/wasmd v0.53.3-inj.2
 	github.com/bandprotocol/bandchain-packet => github.com/InjectiveLabs/bandchain-packet v0.0.4-inj-1
 	github.com/bcp-innovations/hyperlane-cosmos => github.com/InjectiveLabs/hyperlane-cosmos v1.0.1-inj
@@ -334,7 +333,9 @@ replace (
 
 	github.com/cometbft/cometbft => github.com/InjectiveLabs/cometbft v1.0.1-inj.6
 	github.com/cometbft/cometbft/api => github.com/InjectiveLabs/cometbft/api v1.0.0-inj.2
-	github.com/cosmos/cosmos-sdk => github.com/InjectiveLabs/cosmos-sdk v0.50.14-inj.4
+	github.com/cosmos/cosmos-sdk => github.com/InjectiveLabs/cosmos-sdk v0.50.14-inj.4-iteratedenoms
+
+	github.com/cosmos/gogoproto => github.com/InjectiveLabs/gogoproto v1.7.2-inj.2
 
 	github.com/cosmos/ibc-apps/middleware/packet-forward-middleware/v8 => github.com/InjectiveLabs/ibc-apps/middleware/packet-forward-middleware/v8 v8.2.0-inj.3
 	github.com/cosmos/ibc-apps/modules/ibc-hooks/v8 => github.com/InjectiveLabs/ibc-apps/modules/ibc-hooks/v8 v8.0.0-inj.3

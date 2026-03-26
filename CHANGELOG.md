@@ -36,6 +36,15 @@ Ref: https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+### Bug Fixes
+
+- (exchange)  Prevent derivative liquidations from being blocked when mark price pushes a market above the open notional cap
+
+### Improvements
+
+- (exchange)  Removed ability to increase someone else's position margin via MsgIncreasePositionMargin
+- (erc20)  Metadata-aware token pair validation and expose `erc20:` denoms in token pair queries
+
 ## [v1.18.2](https://github.com/InjectiveFoundation/injective-core/releases/tag/v1.18.2) - 2026-03-09
 
 ### Features

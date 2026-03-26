@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"github.com/cosmos/cosmos-sdk/client"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/spf13/cobra"
 
 	"github.com/InjectiveLabs/injective-core/cli"
+	cliflags "github.com/InjectiveLabs/injective-core/cli/flags"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/erc20/types"
 )
 
@@ -30,11 +33,37 @@ func GetParams() *cobra.Command {
 }
 
 func GetTokenPairs() *cobra.Command {
-	return cli.QueryCmd("token-pairs",
-		"Returns all created token pairs in the module",
-		types.NewQueryClient,
-		&types.QueryAllTokenPairsRequest{}, nil, nil,
-	)
+	cmd := &cobra.Command{
+		Use:   "token-pairs",
+		Short: "Returns all created token pairs in the module",
+		Args:  cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			pageReq, err := client.ReadPageRequest(cmd.Flags())
+			if err != nil {
+				return err
+			}
+
+			queryClient := types.NewQueryClient(clientCtx)
+			res, err := queryClient.AllTokenPairs(cmd.Context(), &types.QueryAllTokenPairsRequest{
+				Pagination: pageReq,
+			})
+			if err != nil {
+				return err
+			}
+
+			return clientCtx.PrintProto(res)
+		},
+	}
+
+	cliflags.AddQueryFlagsToCmd(cmd)
+	flags.AddPaginationFlagsToCmd(cmd, "token-pairs")
+
+	return cmd
 }
 
 func GetTokenPairByDenom() *cobra.Command {

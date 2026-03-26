@@ -3,9 +3,11 @@ package keeper
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"math/big"
 
 	"cosmossdk.io/errors"
+	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,6 +17,8 @@ import (
 	evmtypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/types"
 )
+
+const infiniteGasMeterRemainingGas = math.MaxUint64
 
 var permissionsHookABI *abi.ABI
 
@@ -141,10 +145,14 @@ func (k *Keeper) callEvmHook(
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	params := k.GetParams(sdkCtx)
 	gasRemaining := sdkCtx.GasMeter().GasRemaining()
+	execCtx := ctx
 
-	if gasRemaining == 0 {
-		// Short-circuit if no gas available
+	switch gasRemaining {
+	case 0: // Short-circuit if no gas available
 		return false, errors.Wrap(types.ErrContractHookError, "insufficient gas for EVM hook execution")
+	case infiniteGasMeterRemainingGas: // infinite gas meter (consensus code / EVM transaction / fixed gas mode)
+		execCtx = sdkCtx.WithGasMeter(storetypes.NewGasMeter(params.ContractHookMaxGas))
+	default:
 	}
 
 	if params.ContractHookMaxGas == 0 {
@@ -162,7 +170,7 @@ func (k *Keeper) callEvmHook(
 		GasCap: gasCap,
 	}
 
-	resp, err := k.evmKeeper.EthCall(ctx, &req)
+	resp, err := k.evmKeeper.EthCall(execCtx, &req)
 	if err != nil {
 		sdkCtx.GasMeter().ConsumeGas(req.GasCap, "EVM hook call failed")
 		return false, errors.Wrapf(types.ErrContractHookError, "EVM hook call failed: %s", err.Error())

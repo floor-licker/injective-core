@@ -38,7 +38,7 @@ type CosmosCoin struct {
 // CosmosMetaData contains all meta data concerning the Cosmos contract.
 var CosmosMetaData = &bind.MetaData{
 	ABI: "[]",
-	Bin: "0x6055604b600b8282823980515f1a607314603f577f4e487b71000000000000000000000000000000000000000000000000000000005f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f5ffdfea26469706673582212207093aa66cb0326ba8cca3e311e53883526791d7a092d96d3291a9e30b69ae2e064736f6c634300081e0033",
+	Bin: "0x6055604b600b8282823980515f1a607314603f577f4e487b71000000000000000000000000000000000000000000000000000000005f525f60045260245ffd5b305f52607381538281f3fe730000000000000000000000000000000000000000301460806040525f5ffdfea264697066735822122083d862362beef6938cd689194212a7598a260aaed4fdc8005d965b728e9dd46664736f6c63430008220033",
 }
 
 // CosmosABI is the input ABI used to generate the binding from.
@@ -211,7 +211,7 @@ func (_Cosmos *CosmosTransactorRaw) Transact(opts *bind.TransactOpts, method str
 // CosmosTypesMetaData contains all meta data concerning the CosmosTypes contract.
 var CosmosTypesMetaData = &bind.MetaData{
 	ABI: "[{\"inputs\":[{\"components\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"string\",\"name\":\"denom\",\"type\":\"string\"}],\"internalType\":\"structCosmos.Coin\",\"name\":\"\",\"type\":\"tuple\"}],\"name\":\"coin\",\"outputs\":[],\"stateMutability\":\"pure\",\"type\":\"function\"}]",
-	Bin: "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f3560e01c80632ff6e5df14602a575b5f5ffd5b60406004803603810190603c9190606c565b6042565b005b50565b5f5ffd5b5f5ffd5b5f5ffd5b5f604082840312156063576062604d565b5b81905092915050565b5f60208284031215607e57607d6045565b5b5f82013567ffffffffffffffff81111560985760976049565b5b60a2848285016051565b9150509291505056fea26469706673582212202c87ebe9d25469c0098f6f974c19e5dee6482de0dca43a901b887bf3268285a564736f6c634300081e0033",
+	Bin: "0x6080604052348015600e575f5ffd5b5060e180601a5f395ff3fe6080604052348015600e575f5ffd5b50600436106026575f3560e01c80632ff6e5df14602a575b5f5ffd5b60406004803603810190603c9190606c565b6042565b005b50565b5f5ffd5b5f5ffd5b5f5ffd5b5f604082840312156063576062604d565b5b81905092915050565b5f60208284031215607e57607d6045565b5b5f82013567ffffffffffffffff81111560985760976049565b5b60a2848285016051565b9150509291505056fea264697066735822122041ba2417dd4fc1e39bb1ead99ad5cbac53618901abccf7618aa28f16def8a2f564736f6c63430008220033",
 }
 
 // CosmosTypesABI is the input ABI used to generate the binding from.
@@ -742,8 +742,8 @@ func (_IBankModule *IBankModuleTransactorSession) Transfer(arg0 common.Address, 
 
 // ReentrancyHookMetaData contains all meta data concerning the ReentrancyHook contract.
 var ReentrancyHookMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"string\",\"name\":\"denom\",\"type\":\"string\"}],\"internalType\":\"structCosmos.Coin\",\"name\":\"\",\"type\":\"tuple\"}],\"name\":\"isTransferRestricted\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"mintTokens\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"triggerRecursion\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}]",
-	Bin: "0x6080604052348015600e575f5ffd5b50335f5f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055506105478061005b5f395ff3fe608060405260043610610042575f3560e01c80638da5cb5b1461004d578063e4e69baf14610077578063eeb9635c146100b3578063efa099a2146100c957610049565b3661004957005b5f5ffd5b348015610058575f5ffd5b506100616100df565b60405161006e91906102d0565b60405180910390f35b348015610082575f5ffd5b5061009d6004803603810190610098919061033d565b610103565b6040516100aa91906103c3565b60405180910390f35b3480156100be575f5ffd5b506100c761018e565b005b3480156100d4575f5ffd5b506100dd61020f565b005b5f5f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f606473ffffffffffffffffffffffffffffffffffffffff1663beabacc8303060016040518463ffffffff1660e01b815260040161014393929190610427565b6020604051808303815f875af115801561015f573d5f5f3e3d5ffd5b505050506040513d601f19601f820116820180604052508101906101839190610486565b505f90509392505050565b606473ffffffffffffffffffffffffffffffffffffffff166340c10f19306103e86040518363ffffffff1660e01b81526004016101cc9291906104ea565b6020604051808303815f875af11580156101e8573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061020c9190610486565b50565b606473ffffffffffffffffffffffffffffffffffffffff1663beabacc8303060016040518463ffffffff1660e01b815260040161024e93929190610427565b6020604051808303815f875af115801561026a573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061028e9190610486565b50565b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6102ba82610291565b9050919050565b6102ca816102b0565b82525050565b5f6020820190506102e35f8301846102c1565b92915050565b5f5ffd5b5f5ffd5b6102fa816102b0565b8114610304575f5ffd5b50565b5f81359050610315816102f1565b92915050565b5f5ffd5b5f604082840312156103345761033361031b565b5b81905092915050565b5f5f5f60608486031215610354576103536102e9565b5b5f61036186828701610307565b935050602061037286828701610307565b925050604084013567ffffffffffffffff811115610393576103926102ed565b5b61039f8682870161031f565b9150509250925092565b5f8115159050919050565b6103bd816103a9565b82525050565b5f6020820190506103d65f8301846103b4565b92915050565b5f819050919050565b5f819050919050565b5f819050919050565b5f61041161040c610407846103dc565b6103ee565b6103e5565b9050919050565b610421816103f7565b82525050565b5f60608201905061043a5f8301866102c1565b61044760208301856102c1565b6104546040830184610418565b949350505050565b610465816103a9565b811461046f575f5ffd5b50565b5f815190506104808161045c565b92915050565b5f6020828403121561049b5761049a6102e9565b5b5f6104a884828501610472565b91505092915050565b5f819050919050565b5f6104d46104cf6104ca846104b1565b6103ee565b6103e5565b9050919050565b6104e4816104ba565b82525050565b5f6040820190506104fd5f8301856102c1565b61050a60208301846104db565b939250505056fea26469706673582212204052fc849eef10e4e97f7dcdd8286a61da65e155f18dcbef830aea5e94122b9164736f6c634300081e0033",
+	ABI: "[{\"inputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"from\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"to\",\"type\":\"address\"},{\"components\":[{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"string\",\"name\":\"denom\",\"type\":\"string\"}],\"internalType\":\"structCosmos.Coin\",\"name\":\"amount\",\"type\":\"tuple\"}],\"name\":\"isTransferRestricted\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"mintTokens\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"receiver\",\"type\":\"address\"}],\"name\":\"mintTokensTo\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"triggerRecursion\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}]",
+	Bin: "0x6080604052348015600e575f5ffd5b50335f5f6101000a81548173ffffffffffffffffffffffffffffffffffffffff021916908373ffffffffffffffffffffffffffffffffffffffff1602179055506106778061005b5f395ff3fe60806040526004361061004d575f3560e01c80633917a49d146100585780638da5cb5b14610080578063e4e69baf146100aa578063eeb9635c146100e6578063efa099a2146100fc57610054565b3661005457005b5f5ffd5b348015610063575f5ffd5b5061007e600480360381019061007991906103f8565b610112565b005b34801561008b575f5ffd5b50610094610194565b6040516100a19190610432565b60405180910390f35b3480156100b5575f5ffd5b506100d060048036038101906100cb919061046d565b6101b8565b6040516100dd91906104f3565b60405180910390f35b3480156100f1575f5ffd5b506100fa610293565b005b348015610107575f5ffd5b50610110610314565b005b606473ffffffffffffffffffffffffffffffffffffffff166340c10f19826103e86040518363ffffffff1660e01b8152600401610150929190610557565b6020604051808303815f875af115801561016c573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061019091906105a8565b5050565b5f5f9054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b5f73f1829676db577682e944fc3493d451b67ff3e29f73ffffffffffffffffffffffffffffffffffffffff168373ffffffffffffffffffffffffffffffffffffffff1603610208575f905061028c565b606473ffffffffffffffffffffffffffffffffffffffff1663beabacc8303060016040518463ffffffff1660e01b81526004016102479392919061060c565b6020604051808303815f875af1158015610263573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061028791906105a8565b505f90505b9392505050565b606473ffffffffffffffffffffffffffffffffffffffff166340c10f19306103e86040518363ffffffff1660e01b81526004016102d1929190610557565b6020604051808303815f875af11580156102ed573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061031191906105a8565b50565b606473ffffffffffffffffffffffffffffffffffffffff1663beabacc8303060016040518463ffffffff1660e01b81526004016103539392919061060c565b6020604051808303815f875af115801561036f573d5f5f3e3d5ffd5b505050506040513d601f19601f8201168201806040525081019061039391906105a8565b50565b5f5ffd5b5f5ffd5b5f73ffffffffffffffffffffffffffffffffffffffff82169050919050565b5f6103c78261039e565b9050919050565b6103d7816103bd565b81146103e1575f5ffd5b50565b5f813590506103f2816103ce565b92915050565b5f6020828403121561040d5761040c610396565b5b5f61041a848285016103e4565b91505092915050565b61042c816103bd565b82525050565b5f6020820190506104455f830184610423565b92915050565b5f5ffd5b5f604082840312156104645761046361044b565b5b81905092915050565b5f5f5f6060848603121561048457610483610396565b5b5f610491868287016103e4565b93505060206104a2868287016103e4565b925050604084013567ffffffffffffffff8111156104c3576104c261039a565b5b6104cf8682870161044f565b9150509250925092565b5f8115159050919050565b6104ed816104d9565b82525050565b5f6020820190506105065f8301846104e4565b92915050565b5f819050919050565b5f819050919050565b5f819050919050565b5f61054161053c6105378461050c565b61051e565b610515565b9050919050565b61055181610527565b82525050565b5f60408201905061056a5f830185610423565b6105776020830184610548565b9392505050565b610587816104d9565b8114610591575f5ffd5b50565b5f815190506105a28161057e565b92915050565b5f602082840312156105bd576105bc610396565b5b5f6105ca84828501610594565b91505092915050565b5f819050919050565b5f6105f66105f16105ec846105d3565b61051e565b610515565b9050919050565b610606816105dc565b82525050565b5f60608201905061061f5f830186610423565b61062c6020830185610423565b61063960408301846105fd565b94935050505056fea26469706673582212200dc6f2168b7b93b5275f921ff3c5b0618b8ddb47396c9c2fff4701e05600248a64736f6c63430008220033",
 }
 
 // ReentrancyHookABI is the input ABI used to generate the binding from.
@@ -946,23 +946,23 @@ func (_ReentrancyHook *ReentrancyHookCallerSession) Owner() (common.Address, err
 
 // IsTransferRestricted is a paid mutator transaction binding the contract method 0xe4e69baf.
 //
-// Solidity: function isTransferRestricted(address , address , (uint256,string) ) returns(bool)
-func (_ReentrancyHook *ReentrancyHookTransactor) IsTransferRestricted(opts *bind.TransactOpts, arg0 common.Address, arg1 common.Address, arg2 CosmosCoin) (*types.Transaction, error) {
-	return _ReentrancyHook.contract.Transact(opts, "isTransferRestricted", arg0, arg1, arg2)
+// Solidity: function isTransferRestricted(address from, address to, (uint256,string) amount) returns(bool)
+func (_ReentrancyHook *ReentrancyHookTransactor) IsTransferRestricted(opts *bind.TransactOpts, from common.Address, to common.Address, amount CosmosCoin) (*types.Transaction, error) {
+	return _ReentrancyHook.contract.Transact(opts, "isTransferRestricted", from, to, amount)
 }
 
 // IsTransferRestricted is a paid mutator transaction binding the contract method 0xe4e69baf.
 //
-// Solidity: function isTransferRestricted(address , address , (uint256,string) ) returns(bool)
-func (_ReentrancyHook *ReentrancyHookSession) IsTransferRestricted(arg0 common.Address, arg1 common.Address, arg2 CosmosCoin) (*types.Transaction, error) {
-	return _ReentrancyHook.Contract.IsTransferRestricted(&_ReentrancyHook.TransactOpts, arg0, arg1, arg2)
+// Solidity: function isTransferRestricted(address from, address to, (uint256,string) amount) returns(bool)
+func (_ReentrancyHook *ReentrancyHookSession) IsTransferRestricted(from common.Address, to common.Address, amount CosmosCoin) (*types.Transaction, error) {
+	return _ReentrancyHook.Contract.IsTransferRestricted(&_ReentrancyHook.TransactOpts, from, to, amount)
 }
 
 // IsTransferRestricted is a paid mutator transaction binding the contract method 0xe4e69baf.
 //
-// Solidity: function isTransferRestricted(address , address , (uint256,string) ) returns(bool)
-func (_ReentrancyHook *ReentrancyHookTransactorSession) IsTransferRestricted(arg0 common.Address, arg1 common.Address, arg2 CosmosCoin) (*types.Transaction, error) {
-	return _ReentrancyHook.Contract.IsTransferRestricted(&_ReentrancyHook.TransactOpts, arg0, arg1, arg2)
+// Solidity: function isTransferRestricted(address from, address to, (uint256,string) amount) returns(bool)
+func (_ReentrancyHook *ReentrancyHookTransactorSession) IsTransferRestricted(from common.Address, to common.Address, amount CosmosCoin) (*types.Transaction, error) {
+	return _ReentrancyHook.Contract.IsTransferRestricted(&_ReentrancyHook.TransactOpts, from, to, amount)
 }
 
 // MintTokens is a paid mutator transaction binding the contract method 0xeeb9635c.
@@ -984,6 +984,27 @@ func (_ReentrancyHook *ReentrancyHookSession) MintTokens() (*types.Transaction, 
 // Solidity: function mintTokens() returns()
 func (_ReentrancyHook *ReentrancyHookTransactorSession) MintTokens() (*types.Transaction, error) {
 	return _ReentrancyHook.Contract.MintTokens(&_ReentrancyHook.TransactOpts)
+}
+
+// MintTokensTo is a paid mutator transaction binding the contract method 0x3917a49d.
+//
+// Solidity: function mintTokensTo(address receiver) returns()
+func (_ReentrancyHook *ReentrancyHookTransactor) MintTokensTo(opts *bind.TransactOpts, receiver common.Address) (*types.Transaction, error) {
+	return _ReentrancyHook.contract.Transact(opts, "mintTokensTo", receiver)
+}
+
+// MintTokensTo is a paid mutator transaction binding the contract method 0x3917a49d.
+//
+// Solidity: function mintTokensTo(address receiver) returns()
+func (_ReentrancyHook *ReentrancyHookSession) MintTokensTo(receiver common.Address) (*types.Transaction, error) {
+	return _ReentrancyHook.Contract.MintTokensTo(&_ReentrancyHook.TransactOpts, receiver)
+}
+
+// MintTokensTo is a paid mutator transaction binding the contract method 0x3917a49d.
+//
+// Solidity: function mintTokensTo(address receiver) returns()
+func (_ReentrancyHook *ReentrancyHookTransactorSession) MintTokensTo(receiver common.Address) (*types.Transaction, error) {
+	return _ReentrancyHook.Contract.MintTokensTo(&_ReentrancyHook.TransactOpts, receiver)
 }
 
 // TriggerRecursion is a paid mutator transaction binding the contract method 0xefa099a2.

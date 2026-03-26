@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 
+	"cosmossdk.io/collections"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/statedb"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -20,6 +21,8 @@ type BankKeeper interface {
 	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
 	MintCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 	BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
+	IterateDenoms(ctx context.Context, ranger collections.Ranger[string], cb func(string) bool) error
+	IterateDenomsWithMetaData(ctx context.Context, ranger collections.Ranger[string], cb func(string) bool) error
 }
 
 type AccountKeeper interface {

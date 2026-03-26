@@ -526,7 +526,7 @@ func (k DerivativesMsgServer) IncreasePositionMargin(
 	var (
 		sender                  = sdk.MustAccAddressFromBech32(msg.Sender)
 		sourceSubaccountID      = types.MustGetSubaccountIDOrDeriveFromNonce(sender, msg.SourceSubaccountId)
-		destinationSubaccountID = common.HexToHash(msg.DestinationSubaccountId)
+		destinationSubaccountID = types.MustGetSubaccountIDOrDeriveFromNonce(sender, msg.DestinationSubaccountId)
 		marketID                = common.HexToHash(msg.MarketId)
 	)
 

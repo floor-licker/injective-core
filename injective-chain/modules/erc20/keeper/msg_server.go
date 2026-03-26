@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 
 	"cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -75,7 +74,14 @@ func (k msgServer) CreateTokenPair(c context.Context, msg *types.MsgCreateTokenP
 		}
 	}
 
-	pair := msg.TokenPair // copy request token pair
+	// copy request token pair
+	pair := types.TokenPair{
+		BankDenom: bankDenom,
+	}
+	if msg.TokenPair.Erc20Address != "" {
+		pair.Erc20Address = erc20Address.String()
+	}
+
 	if err := k.createTokenPair(ctx, sdk.MustAccAddressFromBech32(msg.Sender), &pair); err != nil {
 		return nil, err
 	}
@@ -97,9 +103,9 @@ func (k Keeper) validateErc20Address(ctx sdk.Context, erc20Address common.Addres
 		return errors.Wrap(types.ErrInvalidTokenPair, "ERC20 contract address is not correct or doesn't exist")
 	}
 	// check that the SC does not have associated "erc20:..." token circualating already
-	erc20Denom := fmt.Sprintf(types.DenomPrefix + erc20Address.String())
-	if k.bankKeeper.HasSupply(ctx, erc20Denom) {
-		return errors.Wrapf(types.ErrExistingERC20DenomSupply, "smart contract has circulating supply of denom %s", erc20Denom)
+	erc20Denom := types.DenomPrefix + erc20Address.String()
+	if k.HasBankDenomOrMetadata(ctx, erc20Denom) {
+		return errors.Wrapf(types.ErrExistingERC20DenomSupply, "smart contract has circulating supply or metadata for denom %s", erc20Denom)
 	}
 
 	// now check that contract is ERC20 (has symbol() function)

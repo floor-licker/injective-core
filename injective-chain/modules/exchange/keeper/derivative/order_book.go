@@ -404,8 +404,9 @@ func (b *marketOrderbook) Fill(ctx sdk.Context, fillQuantity math.LegacyDec) {
 type limitOrderbook struct {
 	k DerivativeKeeper
 
-	isBuy    bool
-	notional math.LegacyDec
+	isBuy         bool
+	isLiquidation bool
+	notional      math.LegacyDec
 
 	totalQuantity           math.LegacyDec
 	transientOrderbookFills *orderbookFills
@@ -440,6 +441,7 @@ func newLimitOrderbook(
 	k DerivativeKeeper,
 	ctx sdk.Context,
 	isBuy bool,
+	isLiquidation bool,
 	transientOrders []*v2.DerivativeLimitOrder,
 	market v2.DerivativeMarketI,
 	markPrice math.LegacyDec,
@@ -490,6 +492,7 @@ func newLimitOrderbook(
 	orderbook := limitOrderbook{
 		k:             k,
 		isBuy:         isBuy,
+		isLiquidation: isLiquidation,
 		notional:      math.LegacyZeroDec(),
 		totalQuantity: math.LegacyZeroDec(),
 
@@ -755,6 +758,9 @@ func getSignedPositionQuantity(position *v2.Position) math.LegacyDec {
 }
 
 func (b *limitOrderbook) doesBreachOpenNotionalCapForLimitOrderbook(currOrder *v2.DerivativeLimitOrder) bool {
+	if b.isLiquidation {
+		return false
+	}
 	doesBreachCap, notionalDelta := DoesBreachOpenNotionalCap(
 		currOrder.OrderType,
 		currOrder.OrderInfo.Quantity,
