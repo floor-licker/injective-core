@@ -36,6 +36,8 @@ Ref: https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+## [v1.18.3](https://github.com/InjectiveFoundation/injective-core/releases/tag/v1.18.3) - 2026-04-07
+
 ### Bug Fixes
 
 - (exchange)  Prevent derivative liquidations from being blocked when mark price pushes a market above the open notional cap
