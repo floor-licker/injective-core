@@ -1,15 +1,20 @@
 coverage:
   status:
-    project: off
+    project:
+      default:
+        target: auto
+        threshold: 1%
     patch:
       default:
-        threshold: 0%
+        target: 100%
+        threshold: 10%
 
 ignore:
   - "**/*.pb.go"
   - "**/*.gw.go"
   - "**/*_test.go"
   - "**/testexchange/**"
+  - "**/benchmarks/**"
   - "**/.github/**"
 
 fixes:

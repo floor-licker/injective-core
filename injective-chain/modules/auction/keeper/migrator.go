@@ -1,17 +1,18 @@
 package keeper
 
 import (
+	sdk "github.com/cosmos/cosmos-sdk/types"
+
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/exported"
 	v2 "github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/migrations/v2"
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 type Migrator struct {
-	keeper   Keeper
+	keeper   *Keeper
 	subspace exported.Subspace
 }
 
-func NewMigrator(k Keeper, ss exported.Subspace) Migrator {
+func NewMigrator(k *Keeper, ss exported.Subspace) Migrator {
 	return Migrator{
 		keeper:   k,
 		subspace: ss,

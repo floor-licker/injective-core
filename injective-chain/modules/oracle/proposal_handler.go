@@ -34,7 +34,9 @@ func NewOracleProposalHandler(k keeper.Keeper) govtypesv1beta1.Handler { //nolin
 	}
 }
 
-func handleGrantPriceFeederPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.GrantPriceFeederPrivilegeProposal) error {
+func handleGrantPriceFeederPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.GrantPriceFeederPrivilegeProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleGrantPriceFeederPrivilegeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -56,7 +58,9 @@ func handleGrantPriceFeederPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p
 	return nil
 }
 
-func handleRevokePriceFeederPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.RevokePriceFeederPrivilegeProposal) error {
+func handleRevokePriceFeederPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.RevokePriceFeederPrivilegeProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleRevokePriceFeederPrivilegeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -77,7 +81,9 @@ func handleRevokePriceFeederPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, 
 	return nil
 }
 
-func handleGrantProviderPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.GrantProviderPrivilegeProposal) error {
+func handleGrantProviderPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.GrantProviderPrivilegeProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleGrantProviderPrivilegeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -88,7 +94,9 @@ func handleGrantProviderPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *t
 	})
 }
 
-func handleRevokeProviderPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.RevokeProviderPrivilegeProposal) error {
+func handleRevokeProviderPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.RevokeProviderPrivilegeProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleRevokeProviderPrivilegeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -102,7 +110,9 @@ func handleRevokeProviderPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *
 	return k.DeleteProviderRelayers(ctx, p.Provider, p.Relayers)
 }
 
-func handleGrantStorkPublisherPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.GrantStorkPublisherPrivilegeProposal) error {
+func handleGrantStorkPublisherPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.GrantStorkPublisherPrivilegeProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleGrantStorkPublisherPrivilegeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -114,7 +124,9 @@ func handleGrantStorkPublisherPrivilegeProposal(ctx sdk.Context, k keeper.Keeper
 	return nil
 }
 
-func handleRevokeStorkPublisherPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.RevokeStorkPublisherPrivilegeProposal) error {
+func handleRevokeStorkPublisherPrivilegeProposal(ctx sdk.Context, k keeper.Keeper, p *types.RevokeStorkPublisherPrivilegeProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleRevokeStorkPublisherPrivilegeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}

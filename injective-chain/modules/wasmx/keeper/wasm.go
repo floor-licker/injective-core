@@ -10,7 +10,6 @@ import (
 	auctiontypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/wasmx/types"
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrortypes "github.com/cosmos/cosmos-sdk/types/errors"
@@ -21,6 +20,8 @@ func (k *Keeper) hasValidCodeId(
 	addr sdk.AccAddress,
 	contract types.RegisteredContract,
 ) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "hasValidCodeId")()
+
 	contractInfo := k.wasmViewKeeper.GetContractInfo(ctx, addr)
 
 	if contractInfo.CodeID != contract.CodeId {
@@ -36,8 +37,7 @@ func (k *Keeper) hasValidCodeId(
 }
 
 func (k *Keeper) ExecuteContracts(ctx sdk.Context) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteContracts")()
 
 	ctx = ctx.WithValue(baseapp.DoNotFailFastSendContextKey, nil) // enable fail fast during contracts execution
 	params := k.GetParams(ctx)
@@ -46,6 +46,9 @@ func (k *Keeper) ExecuteContracts(ctx sdk.Context) error {
 	if !params.IsExecutionEnabled {
 		return nil
 	}
+
+	maxContractGasLimit := min(params.MaxContractGasLimit, types.MaxSafeExecutionGasLimit)
+
 	defer func() {
 		// This is needed so that the execution can be stopped by parent context if gas consumed exceeds MaxBeginBlockTotalGas
 		if r := recover(); r != nil {
@@ -69,8 +72,22 @@ func (k *Keeper) ExecuteContracts(ctx sdk.Context) error {
 				return false
 			}
 
+			// defensive programming
+			if contract.GasLimit > maxContractGasLimit {
+				k.Logger(ctx).Error(
+					"❌ Deactivating contract due to invalid gas limit",
+					"contractAddress", addr.String(),
+					"gasLimit", contract.GasLimit,
+					"maxGasLimit", maxContractGasLimit,
+				)
+
+				contract.IsExecutable = false
+				k.SetContract(ctx, addr, contract)
+				return false
+			}
+
 			// Deduct thrice the max fee upfront to account for OutOfGas scenarios - gas limit is never ensured exactly, and also to keep a reserve for deactivate handler
-			gasToDeduct := 3 * contract.GasLimit
+			gasToDeduct := types.ExecutionGasFeeMultiplier * contract.GasLimit
 
 			// Execute contract
 			response, otherErr, executeErr := k.ExecuteContract(
@@ -91,10 +108,7 @@ func (k *Keeper) ExecuteContracts(ctx sdk.Context) error {
 
 				switch {
 				case errors.Is(otherErr, types.ErrDeductingGasFees) || errors.Is(otherErr, sdkerrortypes.ErrOutOfGas) || errors.Is(executeErr, types.ErrDeductingGasFees) || errors.Is(executeErr, sdkerrortypes.ErrOutOfGas):
-					deactivateMeteredCtx := ctx.WithGasMeter(
-						storetypes.NewGasMeter(params.MaxContractGasLimit * 3),
-					)
-					deactivateErr := k.DeactivateContract(deactivateMeteredCtx, addr, &contract)
+					deactivateErr := k.DeactivateContract(meteredCtx, addr, &contract)
 					if deactivateErr != nil {
 						k.Logger(ctx).
 							Error("❌ Error deactivating contract", "contractAddress", addr.String(), "error", deactivateErr)
@@ -133,8 +147,7 @@ func (k *Keeper) ExecuteContract(
 	contract *types.RegisteredContract,
 	gasDeducted uint64,
 ) (data []byte, otherErr, executeErr error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteContract")()
 
 	return k.executeMetered(
 		ctx,
@@ -162,8 +175,7 @@ func (k *Keeper) executeMetered(
 	gasLimit, gasToDeduct uint64,
 	executeFunction func(subCtx sdk.Context) ([]byte, error),
 ) (data []byte, otherErr, executeErr error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "executeMetered")()
 
 	payerAccount, otherErr := k.DeductFees(ctx, contractAddr, gasToDeduct, contract)
 	if otherErr != nil {
@@ -237,8 +249,7 @@ func (k *Keeper) RefundOrChargeGasFees(
 	contract *types.RegisteredContract,
 	payerAccount sdk.AccountI,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RefundOrChargeGasFees")()
 
 	if gasConsumed < gasToDeduct {
 		return k.refundUnusedGasAndUpdateFeeGrant(
@@ -267,8 +278,7 @@ func (k *Keeper) refundUnusedGasAndUpdateFeeGrant(
 	contract *types.RegisteredContract,
 	payerAccount sdk.AccountI,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "refundUnusedGasAndUpdateFeeGrant")()
 
 	gasToRefund := gasToDeduct - gasConsumed
 
@@ -305,8 +315,7 @@ func (k *Keeper) deductOverspentGas(
 	contract *types.RegisteredContract,
 	payerAccount sdk.AccountI,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "deductOverspentGas")()
 
 	if contract.FundMode == types.FundingMode_GrantOnly ||
 		contract.FundMode == types.FundingMode_Dual {
@@ -339,8 +348,7 @@ func (k *Keeper) DeductFees(
 	gasToDeduct uint64,
 	contract *types.RegisteredContract,
 ) (sdk.AccountI, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeductFees")()
 
 	if contractAccount := k.accountKeeper.GetAccount(ctx, contractAddr); contractAccount == nil {
 		err := types.ErrDeductingGasFees.Wrapf("contract address: %s does not exist", contractAddr)
@@ -366,8 +374,7 @@ func (k *Keeper) deductFeeFromFunds(
 	contractAddr sdk.AccAddress,
 	contract *types.RegisteredContract,
 ) (sdk.AccountI, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "deductFeeFromFunds")()
 
 	var payerAccount sdk.AccountI
 
@@ -427,8 +434,7 @@ func (k *Keeper) RefundFees(
 	contractAddr sdk.AccAddress,
 	gasRefund, gasPrice uint64,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RefundFees")()
 
 	feeToRefund := CalculateFee(gasRefund, gasPrice)
 
@@ -454,7 +460,7 @@ func (k *Keeper) RefundFees(
 	return nil
 }
 
-// refundFees refunds fees to the given account.
+// refundFees refunds fees to the given account. Fees were sent to the auction fees subaccount by the ante.
 func refundFees(
 	bankKeeper types.BankKeeper,
 	ctx sdk.Context,
@@ -465,9 +471,9 @@ func refundFees(
 		return sdkerrortypes.ErrInsufficientFee.Wrapf("invalid fee amount: %s", fees)
 	}
 
-	err := bankKeeper.SendCoinsFromModuleToAccount(
+	err := bankKeeper.SendCoins(
 		ctx,
-		auctiontypes.ModuleName,
+		auctiontypes.AuctionFeesSubaccountAddress,
 		acc.GetAddress(),
 		fees,
 	)
@@ -482,15 +488,13 @@ func (k *Keeper) GetContractInfo(
 	ctx sdk.Context,
 	contractAddr sdk.AccAddress,
 ) *wasmtypes.ContractInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetContractInfo")()
 
 	return k.wasmViewKeeper.GetContractInfo(ctx, contractAddr)
 }
 
 func (k *Keeper) DoesContractExist(ctx sdk.Context, contractAddr sdk.AccAddress) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DoesContractExist")()
 
 	return k.wasmViewKeeper.HasContractInfo(ctx, contractAddr)
 }

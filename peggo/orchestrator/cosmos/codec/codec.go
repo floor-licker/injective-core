@@ -14,12 +14,7 @@ import (
 )
 
 func init() {
-	// set the address prefixes
-	config := sdktypes.GetConfig()
-
-	// This is specific to Injective chain
-	chaintypes.SetBech32Prefixes(config)
-	chaintypes.SetBip44CoinType(config)
+	chaintypes.InitSDKConfig()
 }
 
 func Codec() sdkcodec.Codec {

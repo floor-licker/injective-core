@@ -2,6 +2,8 @@ package base
 
 import (
 	storetypes "cosmossdk.io/store/types"
+
+	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 )
 
 // SubtractBitFromPrefix returns a prev prefix. It is calculated by subtracting 1 bit from the start value. Nil is not allowed as prefix.
@@ -82,26 +84,16 @@ func AddBitToPrefix(prefix []byte) []byte {
 	return newPrefix
 }
 
-type iterCb func(k, v []byte) (stop bool)
+type iterCb = chaintypes.IterCb
 
-// iterateSafe ensures the Iterator is closed even if the work done inside the callback panics.
+// iterateSafe delegates to the shared chaintypes.IterateSafe.
 func iterateSafe(iter storetypes.Iterator, callback iterCb) {
-	defer iter.Close()
-	for ; iter.Valid(); iter.Next() {
-		if callback(iter.Key(), iter.Value()) {
-			return
-		}
-	}
+	chaintypes.IterateSafe(iter, callback)
 }
 
-type iterKeyCb func(k []byte) (stop bool)
+type iterKeyCb = chaintypes.IterKeyCb
 
-// iterateKeysSafe only iterates over keys and ensures the Iterator is closed even if the work done inside the callback panics.
+// iterateKeysSafe delegates to the shared chaintypes.IterateKeysSafe.
 func iterateKeysSafe(iter storetypes.Iterator, callback iterKeyCb) {
-	defer iter.Close()
-	for ; iter.Valid(); iter.Next() {
-		if callback(iter.Key()) {
-			return
-		}
-	}
+	chaintypes.IterateKeysSafe(iter, callback)
 }

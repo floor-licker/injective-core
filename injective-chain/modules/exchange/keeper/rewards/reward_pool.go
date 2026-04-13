@@ -2,7 +2,6 @@ package rewards
 
 import (
 	"cosmossdk.io/errors"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
@@ -11,8 +10,7 @@ import (
 
 // GetAllCampaignRewardPools gets all campaign reward pools
 func (k TradingKeeper) GetAllCampaignRewardPools(ctx sdk.Context) []*v2.CampaignRewardPool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllCampaignRewardPools")()
 
 	rewardPools := make([]*v2.CampaignRewardPool, 0)
 	k.IterateCampaignRewardPools(ctx, false, func(pool *v2.CampaignRewardPool) (stop bool) {
@@ -25,8 +23,7 @@ func (k TradingKeeper) GetAllCampaignRewardPools(ctx sdk.Context) []*v2.Campaign
 
 // GetFirstCampaignRewardPool gets the first campaign reward pool.
 func (k TradingKeeper) GetFirstCampaignRewardPool(ctx sdk.Context) (rewardPool *v2.CampaignRewardPool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFirstCampaignRewardPool")()
 
 	appendPool := func(pool *v2.CampaignRewardPool) (stop bool) {
 		rewardPool = pool
@@ -43,6 +40,8 @@ func (k TradingKeeper) AddRewardPools(
 	campaignDurationSeconds int64,
 	lastTradingRewardPoolStartTimestamp int64,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "AddRewardPools")()
+
 	for _, campaignRewardPool := range poolsAdditions {
 		hasMatchingStartTimestamp := lastTradingRewardPoolStartTimestamp == 0 ||
 			campaignRewardPool.StartTimestamp == lastTradingRewardPoolStartTimestamp+campaignDurationSeconds

@@ -4,13 +4,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/txfees/types"
-	"github.com/InjectiveLabs/metrics"
 )
 
 // GetParams returns the total set of oracle parameters.
 func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetParams")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.ParamsKey)
@@ -26,8 +24,7 @@ func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams set the params
 func (k *Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetParams")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Set(types.ParamsKey, k.cdc.MustMarshal(&params))

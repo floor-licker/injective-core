@@ -3,7 +3,6 @@ package spot
 import (
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -13,12 +12,11 @@ import (
 )
 
 func (k SpotKeeper) ExecuteSpotMarketParamUpdateProposal(ctx sdk.Context, p *v2.SpotMarketParamUpdateProposal) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteSpotMarketParamUpdateProposal")()
+
 	marketID := common.HexToHash(p.MarketId)
 	prevMarket := k.GetSpotMarketByID(ctx, marketID)
 	if prevMarket == nil {
-		metrics.ReportFuncCall(k.svcTags)
 		return errors.Wrapf(types.ErrMarketInvalid, "market is not available, market_id %s", p.MarketId)
 	}
 
@@ -27,11 +25,9 @@ func (k SpotKeeper) ExecuteSpotMarketParamUpdateProposal(ctx sdk.Context, p *v2.
 	}
 
 	if !k.IsDenomDecimalsValid(ctx, prevMarket.BaseDenom, p.BaseDecimals) {
-		metrics.ReportFuncCall(k.svcTags)
 		return errors.Wrapf(types.ErrDenomDecimalsDoNotMatch, "denom %s does not have %d decimals", prevMarket.BaseDenom, p.BaseDecimals)
 	}
 	if !k.IsDenomDecimalsValid(ctx, prevMarket.QuoteDenom, p.QuoteDecimals) {
-		metrics.ReportFuncCall(k.svcTags)
 		return errors.Wrapf(types.ErrDenomDecimalsDoNotMatch, "denom %s does not have %d decimals", prevMarket.QuoteDenom, p.QuoteDecimals)
 	}
 
@@ -78,8 +74,7 @@ func (k SpotKeeper) UpdateSpotMarketParam( //nolint:revive // ok
 	baseDecimals, quoteDecimals uint32,
 	hasDisabledMinimalProtocolFee v2.DisableMinimalProtocolFeeUpdate,
 ) *v2.SpotMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateSpotMarketParam")()
 
 	market := k.GetSpotMarketByID(ctx, marketID)
 
@@ -135,6 +130,8 @@ func (k SpotKeeper) handleSpotMakerFeeDecrease(
 	newMakerFeeRate math.LegacyDec,
 	prevMarket *v2.SpotMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleSpotMakerFeeDecrease")()
+
 	prevMakerFeeRate := prevMarket.MakerFeeRate
 	isFeeRefundRequired := prevMakerFeeRate.IsPositive()
 	if !isFeeRefundRequired {
@@ -161,6 +158,8 @@ func (k SpotKeeper) handleSpotMakerFeeIncrease(
 	newMakerFeeRate math.LegacyDec,
 	prevMarket *v2.SpotMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleSpotMakerFeeIncrease")()
+
 	isExtraFeeChargeRequired := newMakerFeeRate.IsPositive()
 	if !isExtraFeeChargeRequired {
 		return

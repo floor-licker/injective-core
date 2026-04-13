@@ -5,6 +5,8 @@ import (
 	"math/big"
 	"sort"
 
+	"github.com/InjectiveLabs/metrics/v2"
+
 	cosmostracing "github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/tracing"
 
 	errorsmod "cosmossdk.io/errors"
@@ -91,6 +93,8 @@ type StateDB struct {
 	// EVM Tracer
 	evmTracer *cosmostracing.Hooks
 
+	meter metrics.Meter
+
 	// handle balances natively
 	evmDenom string
 	err      error
@@ -102,6 +106,8 @@ func New(ctx sdk.Context, keeper Keeper, txConfig TxConfig) *StateDB {
 }
 
 func NewWithParams(ctx sdk.Context, keeper Keeper, txConfig TxConfig, evmDenom string) *StateDB {
+	defer keeper.Meter(ctx).FuncTiming(&ctx, "NewWithParams")()
+
 	var (
 		cacheMS  cachemulti.Store
 		commitMS func()
@@ -151,6 +157,9 @@ func (s *StateDB) Keeper() Keeper {
 
 // AddLog adds a log, called by evm.
 func (s *StateDB) AddLog(log *ethtypes.Log) {
+	ctx := s.Context()
+	defer s.Meter().FuncTiming(&ctx, "AddLog")()
+
 	if log == nil {
 		return
 	}
@@ -296,6 +305,8 @@ func (s *StateDB) AddPreimage(_ common.Hash, _ []byte) {}
 // getStateObject retrieves a state object given by the address, returning nil if
 // the object is not found.
 func (s *StateDB) getStateObject(addr common.Address) *stateObject {
+	ctx := s.Context()
+	defer s.Meter().FuncTiming(&ctx, "getStateObject")()
 	// Prefer live objects if any is available
 	if obj := s.stateObjects[addr]; obj != nil {
 		return obj
@@ -396,13 +407,16 @@ func (s *StateDB) revertNativeStateToSnapshot(ms cachemulti.Store) {
 // the writes will be reverted when either the native action itself fail
 // or the wrapping message call reverted.
 func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventConverter, action func(ctx sdk.Context) error) error {
+	ctx := s.Context()
+	defer s.Meter().FuncTiming(&ctx, "ExecuteNativeAction")()
+
 	snapshot := s.snapshotNativeState()        // clone s.cacheMS to add full clone into journal later
 	cachedStore := s.cacheMS.CacheMultiStore() // just cache-wrap s.cacheMS to commit writes later on success
 	eventManager := sdk.NewEventManager()
 
 	// we need to commit-on-success logic here instead of revert-on-failure to handle all cases of failure (including panics inside action())
 	// when previously we were only handling errors returned from action() and not panics, so we could end up in an inconsistent state with partial writes
-	cacheCtx := s.ctx.WithEventManager(eventManager).WithMultiStore(cachedStore)
+	cacheCtx := ctx.WithEventManager(eventManager).WithMultiStore(cachedStore)
 
 	if err := action(cacheCtx); err != nil {
 		return err
@@ -423,6 +437,18 @@ func (s *StateDB) ExecuteNativeAction(contract common.Address, converter EventCo
 // Context returns the current context for query native state in precompiles.
 func (s *StateDB) Context() sdk.Context {
 	return s.ctx
+}
+
+// ContextPtr returns a pointer to the current context.
+func (s *StateDB) ContextPtr() *sdk.Context {
+	return &s.ctx
+}
+
+func (s *StateDB) Meter() metrics.Meter {
+	if s.meter == nil {
+		s.meter = s.keeper.Meter(s.ctx).SubMeter("StateDB", metrics.Tag("svc", "StateDB"))
+	}
+	return s.meter
 }
 
 // CacheContext returns a cache of the current context for query native state in
@@ -784,6 +810,9 @@ func (s *StateDB) Snapshot() int {
 
 // RevertToSnapshot reverts all state changes made since the given revision.
 func (s *StateDB) RevertToSnapshot(revid int) {
+	ctx := s.Context()
+	defer s.Meter().FuncTiming(&ctx, "RevertToSnapshot")()
+
 	// Find the snapshot in the stack of valid snapshots.
 	idx := sort.Search(len(s.validRevisions), func(i int) bool {
 		return s.validRevisions[i].id >= revid
@@ -801,6 +830,9 @@ func (s *StateDB) RevertToSnapshot(revid int) {
 // Commit writes the dirty states to keeper
 // the StateDB object should be discarded after committed.
 func (s *StateDB) Commit() error {
+	ctx := s.Context()
+	defer s.Meter().FuncTiming(&ctx, "Commit")()
+
 	// if there's any errors during the execution, abort
 	if s.err != nil {
 		return s.err
@@ -836,7 +868,7 @@ func (s *StateDB) Commit() error {
 				if value == obj.originStorage[key] {
 					continue
 				}
-				s.keeper.SetState(s.origCtx, obj.Address(), key, value.Bytes())
+				s.keeper.SetState(s.origCtx, obj.Address(), key, value)
 			}
 		}
 	}

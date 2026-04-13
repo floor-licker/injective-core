@@ -10,6 +10,8 @@ import (
 )
 
 func (k *BaseKeeper) SetOpenInterestForMarket(ctx sdk.Context, marketID common.Hash, openInterest math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetOpenInterestForMarket")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.DerivativeMarketOpenInterestPrefix)
 	key := marketID.Bytes()
 
@@ -22,6 +24,8 @@ func (k *BaseKeeper) SetOpenInterestForMarket(ctx sdk.Context, marketID common.H
 }
 
 func (k *BaseKeeper) ApplyOpenInterestDeltaForMarket(ctx sdk.Context, marketID common.Hash, openInterestDelta math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ApplyOpenInterestDeltaForMarket")()
+
 	if openInterestDelta.IsZero() {
 		return
 	}
@@ -38,6 +42,8 @@ func (k *BaseKeeper) ApplyOpenInterestDeltaForMarket(ctx sdk.Context, marketID c
 }
 
 func (k *BaseKeeper) GetOpenInterestForMarket(ctx sdk.Context, marketID common.Hash) math.LegacyDec {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOpenInterestForMarket")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.DerivativeMarketOpenInterestPrefix)
 	key := marketID.Bytes()
 

@@ -88,20 +88,3 @@ func (k Keeper) getRoleNamesStore(ctx sdk.Context, denom string) storetypes.KVSt
 	return prefix.NewStore(store, keyPrefix)
 }
 
-// getVouchersStore returns the store prefix where all vouchers reside
-func (k Keeper) getVouchersStore(ctx sdk.Context) storetypes.KVStore {
-	store := ctx.KVStore(k.storeKey)
-	return prefix.NewStore(store, vouchersKey)
-}
-
-// getVouchersStoreForDenom returns the store prefix where all vouchers for an address reside
-func (k Keeper) getVouchersStoreForDenom(ctx sdk.Context, denom string) storetypes.KVStore {
-	store := ctx.KVStore(k.storeKey)
-	keyPrefix := vouchersKey
-	keyPrefix = append(keyPrefix, denomWithDelim(denom)...)
-	return prefix.NewStore(store, keyPrefix)
-}
-
-func getVoucherKey(denom string, address sdk.AccAddress) []byte {
-	return append(denomWithDelim(denom), address.Bytes()...)
-}

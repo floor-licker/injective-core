@@ -1,12 +1,12 @@
 package app
 
 import (
+	"context"
 	"io"
 	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	autocliv1 "cosmossdk.io/api/cosmos/autocli/v1"
 	reflectionv1 "cosmossdk.io/api/cosmos/reflection/v1"
@@ -27,7 +27,6 @@ import (
 	"github.com/CosmWasm/wasmd/x/wasm"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
-	"github.com/InjectiveLabs/metrics"
 	hyperlanecore "github.com/bcp-innovations/hyperlane-cosmos/x/core"
 	hyperlanecorekeeper "github.com/bcp-innovations/hyperlane-cosmos/x/core/keeper"
 	hyperlanecoretypes "github.com/bcp-innovations/hyperlane-cosmos/x/core/types"
@@ -146,6 +145,7 @@ import (
 
 	"github.com/InjectiveLabs/injective-core/client/docs"
 	"github.com/InjectiveLabs/injective-core/injective-chain/app/ante"
+	"github.com/InjectiveLabs/injective-core/injective-chain/app/govcli"
 	injcodectypes "github.com/InjectiveLabs/injective-core/injective-chain/codec/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/hyperlane"
 	exchangelane "github.com/InjectiveLabs/injective-core/injective-chain/lanes/exchange"
@@ -173,9 +173,6 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance"
 	insurancekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/keeper"
 	insurancetypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/types"
-	"github.com/InjectiveLabs/injective-core/injective-chain/modules/ocr"
-	ocrkeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/ocr/keeper"
-	ocrtypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/ocr/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle"
 	oraclekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/keeper"
 	oracletypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
@@ -184,6 +181,7 @@ import (
 	peggytypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/types"
 	permissionskeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/keeper"
 	permissionsmodule "github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/module"
+	permissionstypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/tokenfactory"
 	tokenfactorykeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/tokenfactory/keeper"
 	tokenfactorytypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/tokenfactory/types"
@@ -200,10 +198,7 @@ import (
 )
 
 func init() {
-	// set the address prefixes
-	sdkConfig := sdk.GetConfig()
-	chaintypes.SetBech32Prefixes(sdkConfig)
-	chaintypes.SetBip44CoinType(sdkConfig)
+	chaintypes.InitSDKConfig()
 
 	userHomeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -256,7 +251,6 @@ var (
 		auction.AppModuleBasic{},
 		oracle.AppModuleBasic{},
 		peggy.AppModuleBasic{},
-		ocr.AppModuleBasic{},
 		tokenfactory.AppModuleBasic{},
 		permissionsmodule.AppModuleBasic{},
 		txfees.AppModuleBasic{},
@@ -282,7 +276,6 @@ var (
 		exchangetypes.ModuleName:       {authtypes.Minter, authtypes.Burner},
 		auctiontypes.ModuleName:        {authtypes.Burner},
 		insurancetypes.ModuleName:      {authtypes.Minter, authtypes.Burner},
-		ocrtypes.ModuleName:            nil,
 		tokenfactorytypes.ModuleName:   {authtypes.Minter, authtypes.Burner},
 		permissionsmodule.ModuleName:   nil,
 		txfees.ModuleName:              nil,
@@ -299,7 +292,6 @@ var (
 		distrtypes.ModuleName:        true,
 		insurancetypes.ModuleName:    true,
 		exchangetypes.ModuleName:     true,
-		ocrtypes.ModuleName:          true,
 		peggytypes.ModuleName:        true,
 		tokenfactorytypes.ModuleName: true,
 		wasmxtypes.ModuleName:        true,
@@ -341,15 +333,14 @@ type InjectiveApp struct {
 	ConsensusParamsKeeper consensusparamkeeper.Keeper
 
 	// injective keepers
-	AuctionKeeper          auctionkeeper.Keeper
+	AuctionKeeper          *auctionkeeper.Keeper
 	ExchangeKeeper         *exchangekeeper.Keeper
-	InsuranceKeeper        insurancekeeper.Keeper
+	InsuranceKeeper        *insurancekeeper.Keeper
 	TokenFactoryKeeper     tokenfactorykeeper.Keeper
-	PermissionsKeeper      permissionskeeper.Keeper
+	PermissionsKeeper      *permissionskeeper.Keeper
 	EvmKeeper              *evmkeeper.Keeper
 	PeggyKeeper            peggyKeeper.Keeper
 	OracleKeeper           oraclekeeper.Keeper
-	OcrKeeper              ocrkeeper.Keeper
 	WasmKeeper             wasmkeeper.Keeper
 	WasmxKeeper            wasmxkeeper.Keeper
 	TxFeesKeeper           txfeeskeeper.Keeper
@@ -370,7 +361,6 @@ type InjectiveApp struct {
 	ScopedTransferKeeper capabilitykeeper.ScopedKeeper
 	ScopedICAHostKeeper  capabilitykeeper.ScopedKeeper
 	ScopedWasmKeeper     capabilitykeeper.ScopedKeeper
-	ScopedOracleKeeper   capabilitykeeper.ScopedKeeper
 
 	// hyperlane keepers
 	HyperlaneCoreKeeper hyperlanecorekeeper.Keeper
@@ -598,7 +588,6 @@ func initInjectiveApp(
 			insurancetypes.StoreKey,
 			peggytypes.StoreKey,
 			auctiontypes.StoreKey,
-			ocrtypes.StoreKey,
 			tokenfactorytypes.StoreKey,
 			txfeestypes.StoreKey,
 			permissionsmodule.StoreKey,
@@ -612,12 +601,11 @@ func initInjectiveApp(
 			paramstypes.TStoreKey,
 			banktypes.TStoreKey,
 			exchangetypes.TStoreKey,
-			ocrtypes.TStoreKey,
 		)
 
 		memKeys = storetypes.NewMemoryStoreKeys(capabilitytypes.MemStoreKey)
 
-		okeys = storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey, permissionsmodule.ObjStoreKey)
+		okeys = storetypes.NewObjectStoreKeys(banktypes.ObjectStoreKey, evmtypes.ObjectStoreKey, exchangetypes.ObjectStoreKey, permissionsmodule.ObjStoreKey)
 	)
 
 	bApp := baseapp.NewBaseApp(
@@ -719,7 +707,10 @@ func (app *InjectiveApp) initLanes() (lanes initLanesResult) {
 
 // CheckTx calls a custom checkTx wrapper to ensure mempool parity between app and cometbft.
 // This overrides  BaseApp default checkTx handler.
-func (app *InjectiveApp) CheckTx(req *abci.CheckTxRequest) (*abci.CheckTxResponse, error) {
+func (app *InjectiveApp) CheckTx(req *abci.CheckTxRequest) (res *abci.CheckTxResponse, err error) {
+	_, stop := app.Meter().FuncTimingCtx(context.Background(), "CheckTxApp")
+	defer stop(&err)
+
 	return app.checkTxHandler(req)
 }
 
@@ -773,7 +764,7 @@ func (app *InjectiveApp) GetPeggyKeeper() *peggyKeeper.Keeper {
 }
 
 func (app *InjectiveApp) GetAuctionKeeper() *auctionkeeper.Keeper {
-	return &app.AuctionKeeper
+	return app.AuctionKeeper
 }
 
 func (app *InjectiveApp) GetDowntimeDetectorKeeper() *downtimedetector.Keeper {
@@ -788,8 +779,16 @@ func (app *InjectiveApp) GetOracleKeeper() *oraclekeeper.Keeper {
 	return &app.OracleKeeper
 }
 
+func (app *InjectiveApp) GetInsuranceKeeper() *insurancekeeper.Keeper {
+	return app.InsuranceKeeper
+}
+
 func (app *InjectiveApp) GetPermissionsKeeper() *permissionskeeper.Keeper {
-	return &app.PermissionsKeeper
+	return app.PermissionsKeeper
+}
+
+func (app *InjectiveApp) GetAuthzKeeper() *authzkeeper.Keeper {
+	return &app.AuthzKeeper
 }
 
 func (app *InjectiveApp) GetTxConfig() client.TxConfig { return app.txConfig }
@@ -801,7 +800,15 @@ func (app *InjectiveApp) AutoCliOpts() autocli.AppOptions {
 		if moduleWithName, ok := m.(module.HasName); ok {
 			moduleName := moduleWithName.Name()
 			if appModule, ok := moduleWithName.(appmodule.AppModule); ok {
-				modules[moduleName] = appModule
+				if moduleName == govtypes.ModuleName {
+					if govMod, ok := appModule.(gov.AppModule); ok {
+						modules[moduleName] = govcli.GovModuleWrapper{AppModule: govMod}
+					} else {
+						modules[moduleName] = appModule
+					}
+				} else {
+					modules[moduleName] = appModule
+				}
 			}
 		}
 	}
@@ -820,8 +827,7 @@ func (app *InjectiveApp) Name() string { return app.BaseApp.Name() }
 
 // BeginBlocker updates every begin block
 func (app *InjectiveApp) BeginBlocker(ctx sdk.Context) (sdk.BeginBlock, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, metrics.Tags{"svc": "app", "height": strconv.Itoa(int(ctx.BlockHeight()))})
-	defer doneFn()
+	defer app.Meter().FuncTiming(&ctx, "BeginBlocker")()
 
 	return app.mm.BeginBlock(ctx)
 }
@@ -833,8 +839,7 @@ func (app *InjectiveApp) PreBlocker(ctx sdk.Context, _ *abci.FinalizeBlockReques
 
 // EndBlocker updates every end block
 func (app *InjectiveApp) EndBlocker(ctx sdk.Context) (sdk.EndBlock, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, metrics.Tags{"svc": "app", "height": strconv.Itoa(int(ctx.BlockHeight()))})
-	defer doneFn()
+	defer ctx.Meter().FuncTiming(&ctx, "EndBlocker")()
 
 	return app.mm.EndBlock(ctx)
 }
@@ -1208,33 +1213,15 @@ func (app *InjectiveApp) initKeepers(authority string, appOpts servertypes.AppOp
 		cast.ToBool(appOpts.Get("evm.enable-grpc-tracing")),
 	)
 
-	app.OcrKeeper = ocrkeeper.NewKeeper(
-		app.codec,
-		app.keys[ocrtypes.StoreKey],
-		app.tKeys[ocrtypes.TStoreKey],
-		app.BankKeeper,
-		authority,
-		app.AccountKeeper,
-	)
-
-	app.ScopedOracleKeeper = app.CapabilityKeeper.ScopeToModule(oracletypes.ModuleName)
 	app.OracleKeeper = oraclekeeper.NewKeeper(
 		app.codec,
 		app.keys[oracletypes.StoreKey],
 		app.keys[oracletypes.MemStoreKey],
 		app.AccountKeeper,
 		app.BankKeeper,
-		app.IBCKeeper.ChannelKeeper,
-		app.IBCKeeper.PortKeeper,
-		app.ScopedOracleKeeper,
-		&app.OcrKeeper,
 		app.EvmKeeper,
 		authority,
 	)
-
-	app.OcrKeeper.SetHooks(ocrtypes.NewMultiOcrHooks(
-		app.OracleKeeper.Hooks(),
-	))
 
 	app.AuctionKeeper = auctionkeeper.NewKeeper(
 		app.codec,
@@ -1284,10 +1271,11 @@ func (app *InjectiveApp) initKeepers(authority string, appOpts servertypes.AppOp
 		app.codec,
 		app.keys[exchangetypes.StoreKey],
 		app.tKeys[exchangetypes.TStoreKey],
+		app.okeys[exchangetypes.ObjectStoreKey],
 		app.AccountKeeper,
 		app.BankKeeper,
 		&app.OracleKeeper,
-		&app.InsuranceKeeper,
+		app.InsuranceKeeper,
 		app.DistrKeeper,
 		app.StakingKeeper,
 		app.DowntimeDetectorKeeper,
@@ -1386,7 +1374,7 @@ func (app *InjectiveApp) initKeepers(authority string, appOpts servertypes.AppOp
 		app.codec,
 		&app.AuthzKeeper,
 		app.BankKeeper.(bankkeeper.BaseKeeper),
-		&app.AuctionKeeper,
+		app.AuctionKeeper,
 		app.ExchangeKeeper,
 		&app.FeeGrantKeeper,
 		&app.OracleKeeper,
@@ -1432,14 +1420,18 @@ func (app *InjectiveApp) initKeepers(authority string, appOpts servertypes.AppOp
 		app.EvmKeeper,
 		app.okeys[permissionsmodule.ObjStoreKey],
 		authtypes.NewModuleAddress(tokenfactorytypes.ModuleName).String(),
-		GetModuleAccAddresses(),
+		GetModuleAccAddressesForPermissions(),
 		authority,
 	)
-	app.TokenFactoryKeeper.SetPermissionsKeeper(&app.PermissionsKeeper)
-	app.ExchangeKeeper.SetPermissionsKeeper(&app.PermissionsKeeper)
-	app.EvmKeeper.SetHook(evmtypes.NewEVMHooks(&app.PermissionsKeeper))
+	app.TokenFactoryKeeper.SetPermissionsKeeper(app.PermissionsKeeper)
+	app.ExchangeKeeper.SetPermissionsKeeper(app.PermissionsKeeper)
+	app.AuthzKeeper.SetPermissionsKeeper(app.PermissionsKeeper)
+	app.EvmKeeper.SetHook(evmtypes.NewEVMHooks(app.PermissionsKeeper))
 	app.PermissionsKeeper.AddEnforcedRestrictionsEVMContractPauseListener(app.ExchangeKeeper)
 	app.PermissionsKeeper.AddEnforcedRestrictionsEVMContractBlacklistListener(app.ExchangeKeeper)
+	app.PermissionsKeeper.AddEnforcedRestrictionsEVMContractBlacklistListener(
+		permissionstypes.NewAccountContractBlacklistListener(app.AuthzKeeper.OnEnforcedRestrictionRemoveAuthorizations),
+	)
 
 	app.ERC20Keeper = erc20keeper.NewKeeper(
 		app.keys[erc20module.StoreKey],
@@ -1515,12 +1507,11 @@ func (app *InjectiveApp) initKeepers(authority string, appOpts servertypes.AppOp
 		AddRoute(ibcclienttypes.RouterKey, ibcclient.NewClientProposalHandler(app.IBCKeeper.ClientKeeper)). //nolint:staticcheck // SA1019 Existing use of deprecated but supported function
 		AddRoute(exchangetypes.RouterKey, exchange.NewExchangeProposalHandler(app.ExchangeKeeper)).
 		AddRoute(oracletypes.RouterKey, oracle.NewOracleProposalHandler(app.OracleKeeper)).
-		AddRoute(auctiontypes.RouterKey, auction.NewAuctionProposalHandler(app.AuctionKeeper)).
-		AddRoute(ocrtypes.RouterKey, ocr.NewOcrProposalHandler(app.OcrKeeper)).
+		AddRoute(auctiontypes.RouterKey, auction.NewAuctionProposalHandler()).
 		AddRoute(wasmxtypes.RouterKey, wasmx.NewWasmxProposalHandler(app.WasmxKeeper, wasmkeeper.NewLegacyWasmProposalHandler(app.WasmKeeper, GetEnabledProposals()))) //nolint:staticcheck // still using legacy governance, will need to migrate and use the new gov v1 later
 
 	app.GovKeeper.SetLegacyRouter(govRouter)
-	app.ExchangeKeeper.SetWasmKeepers(app.WasmKeeper, app.WasmxKeeper)
+	app.ExchangeKeeper.SetWasmKeepers(app.WasmKeeper, &app.WasmxKeeper)
 	app.ExchangeKeeper.SetGovKeeper(app.GovKeeper)
 
 	app.HyperlaneCoreKeeper = hyperlanecorekeeper.NewKeeper(
@@ -1594,7 +1585,6 @@ func (app *InjectiveApp) initManagers() { //nolint:revive // this is fine
 		insurance.NewAppModule(app.InsuranceKeeper, app.AccountKeeper, app.BankKeeper, app.GetSubspace(insurancetypes.ModuleName)),
 		oracle.NewAppModule(app.OracleKeeper, app.AccountKeeper, app.BankKeeper, app.GetSubspace(oracletypes.ModuleName)),
 		peggy.NewAppModule(app.PeggyKeeper, app.BankKeeper, app.GetSubspace(peggytypes.ModuleName)),
-		ocr.NewAppModule(app.OcrKeeper, app.AccountKeeper, app.BankKeeper, app.GetSubspace(ocrtypes.ModuleName)),
 		txfees.NewAppModule(app.TxFeesKeeper),
 		tokenfactory.NewAppModule(app.TokenFactoryKeeper, app.AccountKeeper, app.BankKeeper, app.GetSubspace(tokenfactorytypes.ModuleName)),
 		permissionsmodule.NewAppModule(app.PermissionsKeeper, app.BankKeeper, app.TokenFactoryKeeper, app.WasmKeeper, app.GetSubspace(permissionsmodule.ModuleName)),
@@ -1683,7 +1673,6 @@ func initParamsKeeper(
 	paramsKeeper.Subspace(oracletypes.ModuleName)
 	paramsKeeper.Subspace(exchangetypes.ModuleName)
 	paramsKeeper.Subspace(peggytypes.ModuleName)
-	paramsKeeper.Subspace(ocrtypes.ModuleName)
 	paramsKeeper.Subspace(tokenfactorytypes.ModuleName)
 	paramsKeeper.Subspace(permissionsmodule.ModuleName)
 	paramsKeeper.Subspace(wasmxtypes.ModuleName)
@@ -1737,7 +1726,6 @@ func initGenesisOrder() []string {
 		insurancetypes.ModuleName,
 		exchangetypes.ModuleName,
 		peggytypes.ModuleName,
-		ocrtypes.ModuleName,
 
 		ibchookstypes.ModuleName,
 		wasmtypes.ModuleName,
@@ -1785,7 +1773,6 @@ func beginBlockerOrder() []string {
 		downtimedetectortypes.ModuleName,
 		exchangetypes.ModuleName,
 		oracletypes.ModuleName,
-		ocrtypes.ModuleName,
 		tokenfactorytypes.ModuleName,
 		erc20module.ModuleName,
 		permissionsmodule.ModuleName,
@@ -1827,7 +1814,6 @@ func endBlockerOrder() []string {
 		exchangetypes.ModuleName,
 		auctiontypes.ModuleName,
 		insurancetypes.ModuleName,
-		ocrtypes.ModuleName,
 		tokenfactorytypes.ModuleName,
 		erc20module.ModuleName,
 		permissionsmodule.ModuleName,
@@ -1848,5 +1834,14 @@ func GetModuleAccAddresses() map[string]bool {
 	for moduleName := range ModuleBasics {
 		moduleAccAddresses[authtypes.NewModuleAddress(moduleName).String()] = true
 	}
+	return moduleAccAddresses
+}
+
+// GetModuleAccAddressesForPermissions returns the set of addresses the permissions module treats as module accounts.
+// It includes all standard module account addresses plus the auction fees subaccount, so that ante fees and
+// sweeps to/from that address bypass permissioned-denom send restrictions.
+func GetModuleAccAddressesForPermissions() map[string]bool {
+	moduleAccAddresses := GetModuleAccAddresses()
+	moduleAccAddresses[auctiontypes.AuctionFeesSubaccountAddress.String()] = true
 	return moduleAccAddresses
 }

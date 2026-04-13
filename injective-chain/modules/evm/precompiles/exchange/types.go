@@ -15,12 +15,13 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
+	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles"
 	exchangeabi "github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles/bindings/cosmos/precompile/exchange"
 	precompiletypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles/types"
 	exchangetypesv2 "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
 
-var (
+const (
 	errInvalidNumberOfArgs = "invalid number of arguments: expected %d, got %d"
 	errInvalidGranteeArg   = "invalid grantee argument: %v"
 	errInvalidGranterArg   = "invalid granter argument: %v"
@@ -274,16 +275,44 @@ func (ec *ExchangeContract) castDerivativeOrder(
 		TriggerPrice: &humanReadableTriggerPrice,
 	}
 
-	chainFormattedHold := market.NotionalToChainFormat(humanReadableMargin).TruncateInt()
-
-	hold := sdk.Coins{
-		sdk.NewCoin(
-			market.QuoteDenom,
-			chainFormattedHold,
-		),
+	hold, err := ec.derivativeOrderHold(orderV2, market, evm)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	return orderV2, hold, nil
+}
+
+func (ec *ExchangeContract) derivativeOrderHold(
+	order *exchangetypesv2.DerivativeOrder,
+	market *exchangetypesv2.DerivativeMarket,
+	evm *vm.EVM,
+) (sdk.Coins, error) {
+	if !order.IsVanilla() {
+		return sdk.Coins{}, nil
+	}
+
+	tradeFeeRate := market.GetTakerFeeRate()
+	if order.OrderType.IsPostOnly() {
+		tradeFeeRate = market.GetMakerFeeRate()
+	}
+
+	if order.OrderType.IsAtomic() {
+		stateDB, ok := evm.StateDB.(precompiles.ExtStateDB)
+		if !ok {
+			return nil, errors.New("invalid EVM state DB")
+		}
+		tradeFeeRate = tradeFeeRate.Mul(
+			ec.exchangeKeeper.GetMarketAtomicExecutionFeeMultiplier(
+				stateDB.Context(),
+				market.MarketID(),
+				market.GetMarketType(),
+			),
+		)
+	}
+
+	chainFormattedHold := market.NotionalToChainFormat(order.GetMarginHold(tradeFeeRate)).TruncateInt()
+	return sdk.NewCoins(sdk.NewCoin(market.QuoteDenom, chainFormattedHold)), nil
 }
 
 func (ec *ExchangeContract) castDerivativeOrders(

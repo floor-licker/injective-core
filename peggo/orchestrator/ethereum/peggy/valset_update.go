@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/InjectiveLabs/coretracer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
@@ -26,12 +25,12 @@ func (s *peggyContract) SendEthValsetUpdate(
 	oldValset *peggytypes.Valset,
 	newValset *peggytypes.Valset,
 	confirms []*peggytypes.MsgValsetConfirm,
-) (*common.Hash, error) {
-	defer coretracer.Trace(&ctx, s.svcTags)()
+) (txHash *common.Hash, err error) {
+	ctx, done := s.meter.FuncTimingCtx(ctx, "SendEthValsetUpdate")
+	defer done(&err)
 
 	if newValset.Nonce <= oldValset.Nonce {
 		err := errors.New("new valset nonce should be greater than old valset nonce")
-		coretracer.TraceError(ctx, err)
 		return nil, err
 	}
 
@@ -56,7 +55,6 @@ func (s *peggyContract) SendEthValsetUpdate(
 	// members of the validator set in the contract.
 	currentValidators, currentPowers, sigV, sigR, sigS, err := checkValsetSigsAndRepack(oldValset, confirms)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		err = errors.Wrap(err, "confirmations check failed")
 		return nil, err
 	}
@@ -94,7 +92,6 @@ func (s *peggyContract) SendEthValsetUpdate(
 		sigS,
 	)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		log.WithError(err).Errorln("ABI Pack (Peggy updateValset) method")
 		return nil, err
 	}
@@ -104,10 +101,9 @@ func (s *peggyContract) SendEthValsetUpdate(
 		return nil, errors.New("Transaction with same valset input data is already present in mempool")
 	}
 
-	txHash, err := s.SendTx(ctx, s.peggyAddress, txData)
+	hash, err := s.SendTx(ctx, s.peggyAddress, txData)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
-		log.WithError(err).WithField("tx_hash", txHash.Hex()).Errorln("Failed to sign and submit (Peggy updateValset) to EVM")
+		log.WithError(err).WithField("tx_hash", hash.Hex()).Errorln("Failed to sign and submit (Peggy updateValset) to EVM")
 		return nil, err
 	}
 
@@ -153,7 +149,7 @@ func (s *peggyContract) SendEthValsetUpdate(
 	//     }
 	//     Ok(())
 
-	return &txHash, nil
+	return &hash, nil
 }
 
 func validatorsAndPowers(valset *peggytypes.Valset) (
@@ -185,30 +181,32 @@ func checkValsetSigsAndRepack(
 		return
 	}
 
-	signerToSig := make(map[string]*peggytypes.MsgValsetConfirm, len(confirms))
+	signerToSig := make(map[common.Address]*peggytypes.MsgValsetConfirm, len(confirms))
 	for _, sig := range confirms {
-		signerToSig[sig.EthAddress] = sig
+		signerToSig[common.HexToAddress(sig.EthAddress)] = sig
 	}
 
 	powerOfGoodSigs := new(big.Int)
-	for _, m := range valset.Members {
-		mPower := big.NewInt(0).SetUint64(m.Power)
-		if sig, ok := signerToSig[m.EthereumAddress]; ok && sig.EthAddress == m.EthereumAddress {
+	for _, member := range valset.Members {
+		mPower := big.NewInt(0).SetUint64(member.Power)
+		mAddr := common.HexToAddress(member.EthereumAddress)
+		if sig, ok := signerToSig[mAddr]; ok {
 			powerOfGoodSigs.Add(powerOfGoodSigs, mPower)
-			validators = append(validators, common.HexToAddress(m.EthereumAddress))
+			validators = append(validators, mAddr)
 			powers = append(powers, mPower)
 			sigV, sigR, sigS := sigToVRS(sig.Signature)
 			v = append(v, sigV)
 			r = append(r, sigR)
 			s = append(s, sigS)
 		} else {
-			validators = append(validators, common.HexToAddress(m.EthereumAddress))
+			validators = append(validators, mAddr)
 			powers = append(powers, mPower)
 			v = append(v, 0)
 			r = append(r, [32]byte{})
 			s = append(s, [32]byte{})
 		}
 	}
+
 	if peggyPowerToPercent(powerOfGoodSigs) < 66 {
 		err = ErrInsufficientVotingPowerToPass
 		return

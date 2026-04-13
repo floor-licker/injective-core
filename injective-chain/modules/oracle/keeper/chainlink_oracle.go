@@ -1,48 +1,15 @@
 package keeper
 
 import (
-	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	"github.com/InjectiveLabs/metrics"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
-type ChainlinkKeeper interface {
-	GetChainlinkPrice(ctx sdk.Context, base string, quote string) *math.LegacyDec
-	HasChainlinkPriceState(ctx sdk.Context, key string) bool
-}
-
-// GetChainlinkPrice gets the price for a given base quote pair.
-func (k *Keeper) GetChainlinkPrice(ctx sdk.Context, base, quote string) *math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	basePrice := k.ocrKeeper.GetTransmission(ctx, base)
-
-	if basePrice == nil || basePrice.Answer.IsNil() || !basePrice.Answer.IsPositive() {
-		return nil
-	}
-
-	if base == quote {
-		return &basePrice.Answer
-	}
-
-	quotePrice := k.ocrKeeper.GetTransmission(ctx, quote)
-	if quotePrice == nil || quotePrice.Answer.IsNil() || !quotePrice.Answer.IsPositive() {
-		return nil
-	}
-
-	price := basePrice.Answer.Quo(quotePrice.Answer)
-	return &price
-}
-
 // GetChainlinkPriceState reads the stored price state.
 func (k *Keeper) GetChainlinkPriceState(ctx sdk.Context, symbol string) *types.ChainlinkPriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetChainlinkPriceState")()
 
 	var priceState types.ChainlinkPriceState
 	bz := k.getStore(ctx).Get(types.GetChainlinkPriceStoreKey(symbol))
@@ -54,48 +21,9 @@ func (k *Keeper) GetChainlinkPriceState(ctx sdk.Context, symbol string) *types.C
 	return &priceState
 }
 
-// SetChainlinkPriceState sets the chainlink price state.
-func (k *Keeper) SetChainlinkPriceState(ctx sdk.Context, symbol string, priceState *types.ChainlinkPriceState) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	bz := k.cdc.MustMarshal(priceState)
-	k.getStore(ctx).Set(types.GetChainlinkPriceStoreKey(symbol), bz)
-
-	k.AppendPriceRecord(ctx, types.OracleType_Chainlink, symbol, &types.PriceRecord{
-		Timestamp: priceState.PriceState.Timestamp,
-		Price:     priceState.PriceState.Price,
-	})
-}
-
-// GetChainlinkReferencePrice fetches prices for a given pair in math.LegacyDec
-func (k *Keeper) GetChainlinkReferencePrice(ctx sdk.Context, base, quote string) *math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-	// query ref by using GetChainlinkPriceState
-	basePriceState := k.GetChainlinkPriceState(ctx, base)
-
-	if quote == types.QuoteUSD {
-		return &basePriceState.PriceState.Price
-	}
-
-	quotePriceState := k.GetChainlinkPriceState(ctx, quote)
-
-	if basePriceState == nil || quotePriceState == nil {
-		return nil
-	}
-
-	baseRate := basePriceState.Answer
-	quoteRate := quotePriceState.Answer
-
-	price := baseRate.Quo(quoteRate)
-	return &price
-}
-
 // GetAllChainlinkPriceStates reads all stored chainlink price states.
 func (k *Keeper) GetAllChainlinkPriceStates(ctx sdk.Context) []*types.ChainlinkPriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllChainlinkPriceStates")()
 
 	priceStates := make([]*types.ChainlinkPriceState, 0)
 	store := ctx.KVStore(k.storeKey)

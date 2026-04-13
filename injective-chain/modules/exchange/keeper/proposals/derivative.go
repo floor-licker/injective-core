@@ -15,6 +15,8 @@ func (k *ProposalKeeper) HandleDerivativeMarketParamUpdateProposal(
 	ctx sdk.Context,
 	p *v2.DerivativeMarketParamUpdateProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleDerivativeMarketParamUpdateProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -48,7 +50,7 @@ func (k *ProposalKeeper) HandleDerivativeMarketParamUpdateProposal(
 
 	// must use `if` not `else` here due to `DisableMinimalProtocolFeeUpdate_NoUpdate`
 	if p.HasDisabledMinimalProtocolFee == v2.DisableMinimalProtocolFeeUpdate_False {
-		minimalProtocolFeeRate = k.GetParams(ctx).MinimalProtocolFeeRate
+		minimalProtocolFeeRate = k.GetCachedParams(ctx).MinimalProtocolFeeRate
 	}
 
 	discountSchedule := k.GetFeeDiscountSchedule(ctx)
@@ -151,6 +153,8 @@ func (k *ProposalKeeper) checkDerivativeMarketOracleParams(
 	market *v2.DerivativeMarket,
 	p *v2.DerivativeMarketParamUpdateProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.checkDerivativeMarketOracleParams")()
+
 	if p.OracleParams == nil {
 		p.OracleParams = v2.NewOracleParams(market.OracleBase, market.OracleQuote, market.OracleScaleFactor, market.OracleType)
 	} else {
@@ -185,6 +189,8 @@ func (k *ProposalKeeper) checkDerivativeMarketOracleParams(
 }
 
 func (k *ProposalKeeper) HandlePerpetualMarketLaunchProposal(ctx sdk.Context, p *v2.PerpetualMarketLaunchProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandlePerpetualMarketLaunchProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -218,6 +224,8 @@ func (k *ProposalKeeper) HandlePerpetualMarketLaunchProposal(ctx sdk.Context, p 
 }
 
 func (k *ProposalKeeper) HandleExpiryFuturesMarketLaunchProposal(ctx sdk.Context, p *v2.ExpiryFuturesMarketLaunchProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleExpiryFuturesMarketLaunchProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}

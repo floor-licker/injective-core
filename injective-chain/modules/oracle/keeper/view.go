@@ -5,8 +5,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
@@ -21,8 +19,7 @@ type ViewKeeper interface {
 
 // GetPrice returns the price for a given pair for a given oracle type.
 func (k *Keeper) GetPrice(ctx sdk.Context, oracletype types.OracleType, base, quote string) *math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPrice")()
 
 	switch oracletype {
 	case types.OracleType_Band:
@@ -31,8 +28,6 @@ func (k *Keeper) GetPrice(ctx sdk.Context, oracletype types.OracleType, base, qu
 		return k.GetPriceFeedPrice(ctx, base, quote)
 	case types.OracleType_Coinbase:
 		return k.GetCoinbasePrice(ctx, base, quote)
-	case types.OracleType_Chainlink:
-		return k.GetChainlinkPrice(ctx, base, quote)
 	case types.OracleType_Razor:
 		return nil
 	case types.OracleType_Dia:
@@ -59,8 +54,7 @@ func (k *Keeper) GetPrice(ctx sdk.Context, oracletype types.OracleType, base, qu
 
 // GetPriceState returns the price for a given pair for a given oracle type.
 func (k *Keeper) GetPricePairState(ctx sdk.Context, oracletype types.OracleType, base, quote string, scalingOptions *types.ScalingOptions) *types.PricePairState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPricePairState")()
 
 	if scalingOptions != nil {
 		isSupportedWithScaling := oracletype != types.OracleType_PriceFeed && quote != types.QuoteUSD
@@ -136,8 +130,7 @@ func (k *Keeper) GetPricePairState(ctx sdk.Context, oracletype types.OracleType,
 // getCumulativePriceForPriceFeed returns cumulative prices for PriceFeed oracle type.
 // For PriceFeed oracles, the direct pair price is used and quoteCumulative represents time.
 func (k *Keeper) getCumulativePriceForPriceFeed(ctx sdk.Context, base, quote string) (baseCumulative, quoteCumulative *math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getCumulativePriceForPriceFeed")()
 
 	priceState := k.GetPriceFeedPriceState(ctx, base, quote)
 	if priceState == nil {
@@ -165,8 +158,7 @@ func (k *Keeper) getPriceStatesForOracle(
 	oracleType types.OracleType,
 	base, quote string,
 ) (basePriceState, quotePriceState *types.PriceState) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getPriceStatesForOracle")()
 
 	var priceStateGetter func(symbol string) *types.PriceState
 
@@ -248,8 +240,7 @@ func (k *Keeper) GetCumulativePrice(
 	base,
 	quote string,
 ) (baseCumulative, quoteCumulative *math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCumulativePrice")()
 
 	if oracleType == types.OracleType_PriceFeed {
 		return k.getCumulativePriceForPriceFeed(ctx, base, quote)

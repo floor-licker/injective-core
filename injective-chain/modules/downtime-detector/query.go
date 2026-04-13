@@ -9,7 +9,9 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/downtime-detector/types"
 )
 
-func (k *Keeper) RecoveredSinceDowntimeOfLength(ctx sdk.Context, downtime types.Downtime, recoveryDuration time.Duration) (bool, error) {
+func (k *Keeper) RecoveredSinceDowntimeOfLength(ctx sdk.Context, downtime types.Downtime, recoveryDuration time.Duration) (recovered bool, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "RecoveredSinceDowntimeOfLength")(&err)
+
 	lastDowntime, err := k.GetLastDowntimeOfLength(ctx, downtime)
 	if err != nil {
 		return false, err

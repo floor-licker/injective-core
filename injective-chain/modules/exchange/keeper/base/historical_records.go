@@ -2,7 +2,6 @@ package base
 
 import (
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -11,8 +10,7 @@ import (
 )
 
 func (k *BaseKeeper) GetAllHistoricalTradeRecords(ctx sdk.Context) []*v2.TradeRecords {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllHistoricalTradeRecords")()
 
 	allTradeRecords := make([]*v2.TradeRecords, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -30,8 +28,7 @@ func (k *BaseKeeper) GetAllHistoricalTradeRecords(ctx sdk.Context) []*v2.TradeRe
 }
 
 func (k *BaseKeeper) SetHistoricalTradeRecords(ctx sdk.Context, marketID common.Hash, entry *v2.TradeRecords) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetHistoricalTradeRecords")()
 
 	store := k.getStore(ctx)
 
@@ -41,8 +38,7 @@ func (k *BaseKeeper) SetHistoricalTradeRecords(ctx sdk.Context, marketID common.
 
 // GetHistoricalTradeRecords returns the historical trade records for a market starting from the `from` time.
 func (k *BaseKeeper) GetHistoricalTradeRecords(ctx sdk.Context, marketID common.Hash, from int64) (entry *v2.TradeRecords, omitted bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetHistoricalTradeRecords")()
 
 	entry = &v2.TradeRecords{MarketId: marketID.Hex()}
 

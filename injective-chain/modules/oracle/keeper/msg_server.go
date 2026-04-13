@@ -7,8 +7,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
@@ -22,8 +20,7 @@ type MsgServer struct {
 	StorkMsgServer
 	ChainlinkDataStreamsMsgServer
 
-	Keeper
-	svcTags metrics.Tags
+	*Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the oracle MsgServer interface
@@ -36,16 +33,13 @@ func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 		PythMsgServer:                 NewPythMsgServerImpl(keeper),
 		StorkMsgServer:                NewStorkMsgServerImpl(keeper),
 		ChainlinkDataStreamsMsgServer: NewChainlinkDataStreamsMsgServerImpl(keeper),
-		Keeper:                        keeper,
-		svcTags: metrics.Tags{
-			"svc": "oracle_h",
-		},
+		Keeper:                        &keeper,
 	}
 }
 
 func (m MsgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, m.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
 
 	if msg.Authority != m.authority {
 		return nil, errors.Wrapf(govtypes.ErrInvalidSigner, "invalid authority: expected %s, got %s", m.authority, msg.Authority)
@@ -55,7 +49,7 @@ func (m MsgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (
 		return nil, err
 	}
 
-	m.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	m.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }

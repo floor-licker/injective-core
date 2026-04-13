@@ -80,7 +80,7 @@ make lint
 # Run linter against last commit only
 make lint-last-commit
 
-# Note: Uses golangci-lint v2.1.6 with 15 minute timeout
+# Note: Uses golangci-lint v2.11.4 with 15 minute timeout
 # Configuration is in .golangci.yml
 ```
 

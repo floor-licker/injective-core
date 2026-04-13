@@ -11,6 +11,8 @@ import (
 
 // createDenom creates a new denom in bank module after validating and charging creation fee
 func (k Keeper) createDenom(ctx sdk.Context, creatorAddr, subdenom, name, symbol string, decimals uint32, allowAdminBurn bool) (newTokenDenom string, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "createDenom")()
+
 	denom, err := k.validateCreateDenom(ctx, creatorAddr, subdenom)
 	if err != nil {
 		return "", err
@@ -28,6 +30,8 @@ func (k Keeper) createDenom(ctx sdk.Context, creatorAddr, subdenom, name, symbol
 // Runs createDenom logic after the charge and all denom validation has been handled.
 // Made into a second function for genesis initialization.
 func (k Keeper) createDenomAfterValidation(ctx sdk.Context, creatorAddr, denom, subdenom, name, symbol string, decimals uint32, allowAdminBurn bool) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "createDenomAfterValidation")()
+
 	denomMetaData := banktypes.Metadata{
 		DenomUnits: []*banktypes.DenomUnit{
 			{
@@ -68,6 +72,7 @@ func (k Keeper) createDenomAfterValidation(ctx sdk.Context, creatorAddr, denom, 
 }
 
 func (k Keeper) validateCreateDenom(ctx sdk.Context, creatorAddr, subdenom string) (newTokenDenom string, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "validateCreateDenom")()
 	// Temporary check until IBC bug is sorted out
 	if k.bankKeeper.HasSupply(ctx, subdenom) {
 		return "", fmt.Errorf("temporary error until IBC bug is sorted out, " +
@@ -88,6 +93,7 @@ func (k Keeper) validateCreateDenom(ctx sdk.Context, creatorAddr, subdenom strin
 }
 
 func (k Keeper) chargeForCreateDenom(ctx sdk.Context, creatorAddr string) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "chargeForCreateDenom")()
 	// Send creation fee to community pool
 	creationFee := k.GetParams(ctx).DenomCreationFee
 	accAddr, err := sdk.AccAddressFromBech32(creatorAddr)

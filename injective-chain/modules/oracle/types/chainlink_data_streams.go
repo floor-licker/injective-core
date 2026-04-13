@@ -10,6 +10,7 @@ func NewChainlinkDataStreamsPriceState(
 	reportPrice math.Int,
 	validFromTimestamp uint64,
 	observationsTimestamp uint64,
+	expiresAt uint64,
 	price math.LegacyDec,
 	blockTime int64,
 ) *ChainlinkDataStreamsPriceState {
@@ -18,6 +19,7 @@ func NewChainlinkDataStreamsPriceState(
 		ReportPrice:           reportPrice,
 		ValidFromTimestamp:    validFromTimestamp,
 		ObservationsTimestamp: observationsTimestamp,
+		ExpiresAt:             expiresAt,
 		PriceState:            *NewPriceState(price, blockTime),
 	}
 }
@@ -27,11 +29,13 @@ func (c *ChainlinkDataStreamsPriceState) Update(
 	reportPrice math.Int,
 	validFromTimestamp uint64,
 	observationsTimestamp uint64,
+	expiresAt uint64,
 	price math.LegacyDec,
 	blockTime int64,
 ) {
 	c.ReportPrice = reportPrice
 	c.ValidFromTimestamp = validFromTimestamp
 	c.ObservationsTimestamp = observationsTimestamp
+	c.ExpiresAt = expiresAt
 	c.PriceState.UpdatePrice(price, blockTime)
 }

@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"context"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/shopspring/decimal"
 	log "github.com/xlab/suplog"
@@ -15,7 +15,7 @@ import (
 func (s *Orchestrator) runBatchCreator(ctx context.Context) (err error) {
 	bc := batchCreator{
 		Orchestrator: s,
-		svcTags:      coretracer.NewTag("svc", "batch_creator"),
+		meter:        s.meter.SubMeter("batch_creator", metrics.Tag("svc", "batch_creator")),
 	}
 
 	s.logger.WithField("loop_duration", s.cfg.LoopDuration.String()).Debugln("starting BatchCreator...")
@@ -27,19 +27,20 @@ func (s *Orchestrator) runBatchCreator(ctx context.Context) (err error) {
 
 type batchCreator struct {
 	*Orchestrator
-	svcTags coretracer.Tags
+	meter metrics.Meter
 }
 
 func (l *batchCreator) Log() log.Logger {
 	return l.logger.WithField("loop", "BatchCreator")
 }
 
-func (l *batchCreator) requestTokenBatches(ctx context.Context) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *batchCreator) requestTokenBatches(ctx context.Context) (err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "requestTokenBatches")
+	defer done(&err)
 
 	fees, err := l.getUnbatchedTokenFees(ctx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
+		l.meter.FuncError(ctx, "requestTokenBatches", err)
 		l.Log().WithError(err).Warningln("failed to get withdrawal fees")
 		return nil
 	}
@@ -52,6 +53,7 @@ func (l *batchCreator) requestTokenBatches(ctx context.Context) error {
 	for _, fee := range fees {
 		ok, err := l.checkFee(ctx, fee)
 		if err != nil {
+			l.meter.FuncError(ctx, "requestTokenBatches", err)
 			l.Log().WithError(err).Warningln("error checking batch")
 			continue
 		}
@@ -67,6 +69,7 @@ func (l *batchCreator) requestTokenBatches(ctx context.Context) error {
 		}
 
 		if err := l.injective.SendRequestBatch(ctx, denom); err != nil {
+			l.meter.FuncError(ctx, "requestTokenBatches", err)
 			l.Log().WithError(err).Warningln("failed to request batch, perhaps it's already been requested?")
 		}
 	}
@@ -74,30 +77,29 @@ func (l *batchCreator) requestTokenBatches(ctx context.Context) error {
 	return nil
 }
 
-func (l *batchCreator) getUnbatchedTokenFees(ctx context.Context) ([]*peggytypes.BatchFees, error) {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *batchCreator) getUnbatchedTokenFees(ctx context.Context) (fees []*peggytypes.BatchFees, err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "getUnbatchedTokenFees")
+	defer done(&err)
 
-	var fees []*peggytypes.BatchFees
 	fn := func() (err error) {
 		fees, err = l.injective.UnbatchedTokensWithFees(ctx)
 		return
 	}
 
 	if err := l.retry(ctx, fn); err != nil {
-		coretracer.TraceError(ctx, err)
 		return nil, err
 	}
 
 	return fees, nil
 }
 
-func (l *batchCreator) checkFee(ctx context.Context, fee *peggytypes.BatchFees) (bool, error) {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *batchCreator) checkFee(ctx context.Context, fee *peggytypes.BatchFees) (ok bool, err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "checkFee")
+	defer done(&err)
 
 	tokenAddress := gethcommon.HexToAddress(fee.Token)
 	tokenDecimals, err := l.ethereum.TokenDecimals(ctx, tokenAddress)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		l.Log().WithError(err).Warningln("is token address valid?")
 		return false, err
 	}
@@ -108,7 +110,6 @@ func (l *batchCreator) checkFee(ctx context.Context, fee *peggytypes.BatchFees) 
 
 	tokenPriceUSDFloat, err := l.priceFeed.QueryUSDPrice(ctx, tokenAddress)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		l.Log().WithError(err).Warningln("failed to query price feed", "token_addr", tokenAddress.String())
 		return false, err
 	}

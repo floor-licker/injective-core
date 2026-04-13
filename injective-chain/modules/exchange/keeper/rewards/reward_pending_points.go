@@ -2,7 +2,6 @@ package rewards
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
@@ -13,8 +12,7 @@ import (
 func (k TradingKeeper) MoveRewardPointsToPending(
 	ctx sdk.Context, allAccountPoints []*types.TradingRewardAccountPoints, totalPoints math.LegacyDec, pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "MoveRewardPointsToPending")()
 
 	for _, accountPoint := range allAccountPoints {
 		k.SetAccountCampaignTradingRewardPendingPoints(ctx, accountPoint.Account, pendingPoolStartTimestamp, accountPoint.Points)
@@ -32,8 +30,7 @@ func (k TradingKeeper) UpdateAccountCampaignTradingRewardPendingPoints(
 	addedPoints math.LegacyDec,
 	pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateAccountCampaignTradingRewardPendingPoints")()
 
 	if addedPoints.IsZero() {
 		return
@@ -46,8 +43,7 @@ func (k TradingKeeper) UpdateAccountCampaignTradingRewardPendingPoints(
 
 // GetAllTradingRewardCampaignAccountPendingPoints gets the trading reward points for all accounts
 func (k TradingKeeper) GetAllTradingRewardCampaignAccountPendingPoints(ctx sdk.Context) []*v2.TradingRewardCampaignAccountPendingPoints {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTradingRewardCampaignAccountPendingPoints")()
 
 	accountPoints := make([]*v2.TradingRewardCampaignAccountPendingPoints, 0)
 	appendPoints := func(
@@ -90,8 +86,7 @@ func (k TradingKeeper) GetAllAccountCampaignTradingRewardPendingPointsWithTotalP
 	ctx sdk.Context,
 	pendingPoolStartTimestamp int64,
 ) (accountPoints []*types.TradingRewardAccountPoints, totalPoints math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllAccountCampaignTradingRewardPendingPointsWithTotalPointsForPool")()
 
 	accountPoints = make([]*types.TradingRewardAccountPoints, 0)
 	totalPoints = math.LegacyZeroDec()
@@ -112,8 +107,7 @@ func (k TradingKeeper) IncrementTotalTradingRewardPendingPoints(
 	points math.LegacyDec,
 	pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementTotalTradingRewardPendingPoints")()
 
 	currPoints := k.GetTotalTradingRewardPendingPoints(ctx, pendingPoolStartTimestamp)
 	newPoints := currPoints.Add(points)
@@ -126,6 +120,8 @@ func (k TradingKeeper) PersistTradingRewardPendingPoints(
 	tradingRewards types.TradingRewardPoints,
 	pendingPoolStartTimestamp int64,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistTradingRewardPendingPoints")()
+
 	totalTradingRewardPoints := math.LegacyZeroDec()
 
 	for _, account := range tradingRewards.GetSortedAccountKeys() {

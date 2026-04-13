@@ -38,17 +38,21 @@ func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 var _ types.MsgServer = msgServer{}
 
 func (k msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
+
 	if msg.Authority != k.authority {
 		return nil, errors.Wrapf(govtypes.ErrInvalidSigner, "invalid authority: expected %s, got %s", k.authority, msg.Authority)
 	}
 
-	k.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }
 
 func (k msgServer) CreateTokenPair(c context.Context, msg *types.MsgCreateTokenPair) (*types.MsgCreateTokenPairResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateTokenPair")()
 
 	bankDenom := msg.TokenPair.BankDenom
 	erc20Address := common.HexToAddress(msg.TokenPair.Erc20Address)
@@ -63,7 +67,7 @@ func (k msgServer) CreateTokenPair(c context.Context, msg *types.MsgCreateTokenP
 	}
 
 	// validate that bank denom exists
-	if !k.bankKeeper.HasSupply(c, bankDenom) {
+	if !k.bankKeeper.HasSupply(ctx, bankDenom) {
 		return nil, types.ErrUnknownBankDenom
 	}
 
@@ -98,12 +102,14 @@ func (k msgServer) CreateTokenPair(c context.Context, msg *types.MsgCreateTokenP
 }
 
 func (k Keeper) validateErc20Address(ctx sdk.Context, erc20Address common.Address) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "validateErc20Address")()
 	// does account exist?
 	if acc := k.evmKeeper.GetAccount(ctx, erc20Address); acc == nil || bytes.Equal(acc.CodeHash, evmtypes.EmptyCodeHash) {
 		return errors.Wrap(types.ErrInvalidTokenPair, "ERC20 contract address is not correct or doesn't exist")
 	}
 	// check that the SC does not have associated "erc20:..." token circualating already
 	erc20Denom := types.DenomPrefix + erc20Address.String()
+
 	if k.HasBankDenomOrMetadata(ctx, erc20Denom) {
 		return errors.Wrapf(types.ErrExistingERC20DenomSupply, "smart contract has circulating supply or metadata for denom %s", erc20Denom)
 	}
@@ -128,6 +134,8 @@ func (k Keeper) validateErc20Address(ctx sdk.Context, erc20Address common.Addres
 
 func (k msgServer) DeleteTokenPair(c context.Context, msg *types.MsgDeleteTokenPair) (*types.MsgDeleteTokenPairResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTokenPair")()
+
 	pair, _ := k.GetTokenPairForDenom(ctx, msg.BankDenom)
 	if pair == nil {
 		return nil, errors.Wrapf(types.ErrUnknownBankDenom, "token pair for denom %s does not exist", msg.BankDenom)

@@ -36,6 +36,54 @@ Ref: https://keepachangelog.com/en/1.1.0/
 
 ## [Unreleased]
 
+## [v1.19.0](https://github.com/InjectiveFoundation/injective-core/releases/tag/v1.19.0) - 2026-XX-XX
+
+### Features
+
+- (evm)  Add missing JSON-RPC methods (eth_getBlockReceipts) and tweak limits for tracing
+- (exchange)  Added white-knight liquidator fee split configuration and logic
+- (ops)  switch to OpenTelemetry metrics and tracing
+
+### Bug Fixes
+
+- (evm)  Fix in the EVM GetBalance function to return the account's available balance only, and not the total balance
+- (peggy)  Added EthereumSigned interface registration in peggy module codec
+- (permissions)  Fix EVM hook issues (gas consumption, error handling)
+- (peggy)  Added logic to initialize MintAmountERC20 value when creating a new peggy rate limit
+- (evm)  Allow set-metadata from bank precompile only for erc20 denoms
+- (exchange)  Fixed FBA orders matching to not invalidate partial fills when the remaining of the order has to be cancelled because it becomes invalid after the partial fill
+- (txfees)  Fix in txfees proto registration to ensure the governance messages are correctly displayed by the CLI query
+- (insurance)  Wrap withdrawRedemption with executeAtomic to prevent partial state mutations
+- (gov)  Solved an incompatibility between the GOV module CLI queries and a couple of Injective specific proposals
+- (exchange)  Fixed negative deposit when a transient derivative SELL limit order is matched at an FBA clearing price far above the order price: fee shortfall is embedded in position margin (allowing negative margin) so stored and calculated market balance stay equal and the insurance fund is not used
+- (exchange)  Fixed phantom liquidator order and spurious refund when market is insolvent during liquidation (e.g. emergency settle): do not persist cache; pause market and cancel orders on real state instead
+- (exchange)  Count synthetic trades in perpetual funding VWAP and enforce min tick and notional validations
+- (peggy)  Apply new oracle id when updating a rate limit
+- (peggy)  Prevent bogus future claims from bloating the state
+- (peggy)  Invalid deposits contribute to rate limit inflow
+
+### Improvements
+
+- (go)  Update build env to Go 1.26.2
+- (permissions)  Add genesis validation for namespaces
+- (insurance)  Added event for failed insurance withdrawals
+- (oracle)  Added extra check to ensure that Chainlink Data Stream new price is stores only when it is greater than zero
+- (insurance)  Added DOS resilience for insurance redemptions
+- (exchange)  Added PostOnlyMode checks to privileged actions
+- (auction)  changed the TX fees transfer to the auction module to use a module subaccount. The subaccount funds are moved to the auction module main account when the new round starts
+- (evm)  purge the key from EVM State Storage when set to empty value
+- (exchange)  Improved offsetting logic by using bankruptcy settling price and guarding emergency settling
+- (auction)  Added vouchers capabilities in the auction module to create vouchers when any tokens in the auction basket fail to be sent to the auction winner
+- (insurance)  Added vouchers capabilities in the insurance module to create vouchers when withdrawal logic fails to send the insurance deposits to the user for a redemption
+- (erc20)  Check not only for supply but also for denom metadata existence during token pair creation
+- (authz)  Revoke authz SendAuthorizations from blacklisted user on permissions hook event
+- (chainstream)  Added support in chainstream for Chainlink Data Stream oracle price updates
+- (peggy)  Apply mint amount restrictions on all erc20 assets
+
+### Deprecated
+
+- (oracle)  Deprecated old OCR Chainlink oracle (that was never used in mainnet)
+
 ## [v1.18.3](https://github.com/InjectiveFoundation/injective-core/releases/tag/v1.18.3) - 2026-04-07
 
 ### Bug Fixes

@@ -1,23 +1,22 @@
 package keeper
 
 import (
+	"context"
+
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
-
-	capabilitykeeper "github.com/cosmos/ibc-go/modules/capability/keeper"
 )
 
 // Keeper defines a module interface that facilitates the getting and setting of oracle reference data
 type Keeper struct {
 	PriceFeederKeeper
 	CoinbaseKeeper
-	ChainlinkKeeper
 	ProviderKeeper
 	PythKeeper
 	StorkKeeper
@@ -30,17 +29,11 @@ type Keeper struct {
 
 	accountKeeper authkeeper.AccountKeeper
 	bankKeeper    types.BankKeeper
-
-	channelKeeper types.ChannelKeeper
-	portKeeper    types.PortKeeper
-	scopedKeeper  capabilitykeeper.ScopedKeeper
-
-	ocrKeeper types.OcrKeeper
-	evmKeeper types.EVMKeeper
-
-	svcTags metrics.Tags
+	evmKeeper     types.EVMKeeper
 
 	authority string
+
+	meter metrics.Meter
 }
 
 // NewKeeper creates new instances of the oracle Keeper
@@ -50,10 +43,6 @@ func NewKeeper(
 	memKey storetypes.StoreKey,
 	ak authkeeper.AccountKeeper,
 	bk types.BankKeeper,
-	channelKeeper types.ChannelKeeper,
-	portKeeper types.PortKeeper,
-	scopedKeeper capabilitykeeper.ScopedKeeper,
-	ocrKeeper types.OcrKeeper,
 	evmKeeper types.EVMKeeper,
 	authority string,
 ) Keeper {
@@ -63,20 +52,21 @@ func NewKeeper(
 		cdc:           cdc,
 		accountKeeper: ak,
 		bankKeeper:    bk,
-		channelKeeper: channelKeeper,
-		portKeeper:    portKeeper,
-		scopedKeeper:  scopedKeeper,
-		ocrKeeper:     ocrKeeper,
 		evmKeeper:     evmKeeper,
 		authority:     authority,
-		svcTags: metrics.Tags{
-			"svc": "oracle_k",
-		},
 	}
 }
 
 func (k *Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", types.ModuleName)
+}
+
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
 }
 
 func (k *Keeper) getStore(ctx sdk.Context) storetypes.KVStore {

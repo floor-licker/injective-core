@@ -1,7 +1,6 @@
 package rewards
 
 import (
-	"github.com/InjectiveLabs/metrics"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	distrkeeper "github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 
@@ -19,8 +18,6 @@ type TradingKeeper struct { //nolint:revive // ok
 	feeDiscounts *feediscounts.FeeDiscountsKeeper
 	bank         bankkeeper.Keeper
 	distribution distrkeeper.Keeper
-
-	svcTags metrics.Tags
 }
 
 func New(
@@ -34,6 +31,5 @@ func New(
 		bank:         bk,
 		feeDiscounts: fd,
 		distribution: d,
-		svcTags:      metrics.Tags{"svc": "trading_k"},
 	}
 }

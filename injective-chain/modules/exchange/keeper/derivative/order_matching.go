@@ -2,7 +2,6 @@ package derivative
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -10,6 +9,50 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
+
+// MatchDerivativeOrderbooks performs the matching loop between market and limit orderbooks.
+// It iterates until either side is exhausted or prices no longer cross (spread becomes positive).
+// The market orderbook is always peeked first so cap checks run before any limit-side state changes.
+// Returns immediately if marketOrderbook or limitOrderbook is nil.
+//
+//revive:disable:cyclomatic // Any refactoring to the function would make it less readable
+func MatchDerivativeOrderbooks(
+	ctx sdk.Context,
+	marketOrderbook *MarketOrderbook,
+	limitOrderbook *LimitOrderbook,
+	isMarketBuy bool, // revive:disable:flag-parameter // can't be easily refactored (we need to peek from market orderbook first)
+) {
+	if marketOrderbook == nil || limitOrderbook == nil {
+		return
+	}
+
+	defer marketOrderbook.k.Meter(ctx).FuncTiming(&ctx, "MatchDerivativeOrderbooks")()
+
+	for {
+		var buyOrder, sellOrder *v2.PriceLevel
+		if isMarketBuy {
+			buyOrder = marketOrderbook.Peek(ctx)
+			sellOrder = limitOrderbook.Peek(ctx)
+		} else {
+			sellOrder = marketOrderbook.Peek(ctx)
+			buyOrder = limitOrderbook.Peek(ctx)
+		}
+
+		if buyOrder == nil || sellOrder == nil {
+			break
+		}
+
+		unitSpread := sellOrder.Price.Sub(buyOrder.Price)
+		matchQuantityIncrement := math.LegacyMinDec(buyOrder.Quantity, sellOrder.Quantity)
+
+		if unitSpread.IsPositive() || matchQuantityIncrement.IsZero() {
+			break
+		}
+
+		marketOrderbook.Fill(ctx, matchQuantityIncrement)
+		limitOrderbook.Fill(ctx, matchQuantityIncrement)
+	}
+}
 
 //nolint:revive //ok
 func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
@@ -26,15 +69,14 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 	currentOpenNotional math.LegacyDec,
 	openNotionalCap v2.OpenNotionalCap,
 ) *v2.DerivativeMarketOrderExpansionData {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketOrderExecutionData")()
 
 	derivativeMarketOrderExecutionData := &v2.DerivativeMarketOrderExpansionData{
 		OpenInterestDelta: math.LegacyZeroDec(),
 	}
 
 	var (
-		marketBuyOrderbook = newDerivativeMarketOrderbook(
+		marketBuyOrderbook = NewDerivativeMarketOrderbook(
 			k,
 			true,
 			isLiquidation,
@@ -47,7 +89,7 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 			positionStates,
 			positionCache,
 		)
-		limitSellOrderbook = newLimitOrderbook(
+		limitSellOrderbook = NewLimitOrderbook(
 			k,
 			ctx,
 			false,
@@ -62,7 +104,7 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 			positionCache,
 		)
 
-		marketSellOrderbook = newDerivativeMarketOrderbook(
+		marketSellOrderbook = NewDerivativeMarketOrderbook(
 			k,
 			false,
 			isLiquidation,
@@ -76,7 +118,7 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 			positionCache,
 		)
 
-		limitBuyOrderbook = newLimitOrderbook(
+		limitBuyOrderbook = NewLimitOrderbook(
 			k,
 			ctx,
 			true,
@@ -126,7 +168,7 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 			continue
 		}
 
-		k.executeDerivativeMarketOrders(ctx, m)
+		MatchDerivativeOrderbooks(ctx, m.marketOrderbook, m.limitOrderbook, m.isMarketBuy)
 
 		var marketOrderClearingPrice math.LegacyDec
 		if !m.marketOrderbook.totalQuantity.IsZero() {
@@ -137,7 +179,7 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 			marketOrderTradeFeeRate = math.LegacyZeroDec() // no trading fees for liquidations
 		}
 
-		marketOrderStateExpansions, marketOrderCancels := k.processDerivativeMarketOrderbookMatchingResults(
+		marketOrderStateExpansions, marketOrderCancels := k.ProcessDerivativeMarketOrderbookMatchingResults(
 			ctx,
 			market,
 			funding,
@@ -159,7 +201,7 @@ func (k DerivativeKeeper) GetDerivativeMarketOrderExecutionData(
 		if m.limitOrderbook != nil {
 			restingOrderFills := m.limitOrderbook.GetRestingOrderbookFills()
 			limitOrderClearingPrice := math.LegacyDec{} // no clearing price for limit orders when executed against market orders
-			restingLimitOrderStateExpansions = k.processRestingDerivativeLimitOrderbookFills(
+			restingLimitOrderStateExpansions = k.ProcessRestingDerivativeLimitOrderbookFills(
 				ctx,
 				market,
 				funding,
@@ -211,6 +253,8 @@ func (k DerivativeKeeper) PersistSingleDerivativeMarketOrderExecution(
 	modifiedPositionCache v2.ModifiedPositionCache,
 	isLiquidation bool,
 ) (points types.TradingRewardPoints, isMarketSolvent bool) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistSingleDerivativeMarketOrderExecution")()
+
 	if execution == nil {
 		return tradingRewardPoints, true
 	}
@@ -287,120 +331,15 @@ func (k DerivativeKeeper) PersistSingleDerivativeMarketOrderExecution(
 	return tradingRewardPoints, isMarketSolvent
 }
 
-func (k DerivativeKeeper) ExecuteDerivativeMarketOrderMatching(
-	ctx sdk.Context,
-	matchedMarketDirection *types.MatchedMarketDirection,
-	stakingInfo *v2.FeeDiscountStakingInfo,
-) *v2.DerivativeBatchExecutionData {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	marketID := matchedMarketDirection.MarketId
-
-	market, markPrice := k.GetDerivativeOrBinaryOptionsMarketWithMarkPrice(ctx, marketID, true)
-
-	if market == nil {
-		return nil
-	}
-
-	feeDiscountConfig := k.feeDiscounts.GetFeeDiscountConfigForMarket(ctx, marketID, stakingInfo)
-
-	var funding *v2.PerpetualMarketFunding
-	if market.GetIsPerpetual() {
-		funding = k.GetPerpetualMarketFunding(ctx, marketID)
-	}
-
-	// Step 0: Obtain the market buy and sell orders from the transient store for convenience
-	// Step 0: Obtain the market buy and sell orders from the transient store for convenience
-	marketBuyOrders := k.GetAllTransientDerivativeMarketOrdersByMarketDirection(ctx, marketID, true)
-	marketSellOrders := k.GetAllTransientDerivativeMarketOrdersByMarketDirection(ctx, marketID, false)
-
-	positionStates := v2.NewPositionStates()
-	positionCache := make(map[common.Hash]*v2.Position)
-
-	currentOpenNotional := k.GetOpenNotionalForMarket(ctx, marketID, markPrice)
-	openNotionalCap := market.GetOpenNotionalCap()
-
-	isLiquidation := false
-	derivativeMarketOrderExecution := k.GetDerivativeMarketOrderExecutionData(
-		ctx,
-		market,
-		market.GetTakerFeeRate(),
-		markPrice,
-		funding,
-		marketBuyOrders,
-		marketSellOrders,
-		positionStates,
-		positionCache,
-		feeDiscountConfig,
-		isLiquidation,
-		currentOpenNotional,
-		openNotionalCap,
-	)
-
-	batchExecutionData := derivativeMarketOrderExecution.GetMarketDerivativeBatchExecutionData(
-		market,
-		markPrice,
-		funding,
-		positionStates,
-		isLiquidation,
-	)
-
-	return batchExecutionData
-}
-
-func (k DerivativeKeeper) executeDerivativeMarketOrders(ctx sdk.Context, matchingOrderbook *marketExecutionOrderbook) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	var (
-		isMarketBuy     = matchingOrderbook.isMarketBuy
-		marketOrderbook = matchingOrderbook.marketOrderbook
-		limitOrderbook  = matchingOrderbook.limitOrderbook
-	)
-
-	if marketOrderbook == nil || limitOrderbook == nil {
-		return
-	}
-
-	for {
-		var buyOrder, sellOrder *v2.PriceLevel
-
-		if isMarketBuy {
-			buyOrder = marketOrderbook.Peek(ctx)
-			sellOrder = limitOrderbook.Peek(ctx)
-		} else {
-			sellOrder = marketOrderbook.Peek(ctx)
-			buyOrder = limitOrderbook.Peek(ctx)
-		}
-
-		// Base Case: Iterated over all the orders!
-		if buyOrder == nil || sellOrder == nil {
-			break
-		}
-
-		unitSpread := sellOrder.Price.Sub(buyOrder.Price)
-		matchQuantityIncrement := math.LegacyMinDec(buyOrder.Quantity, sellOrder.Quantity)
-
-		// Exit if no more matchable orders
-		if unitSpread.IsPositive() || matchQuantityIncrement.IsZero() {
-			break
-		}
-
-		marketOrderbook.Fill(ctx, matchQuantityIncrement)
-		limitOrderbook.Fill(matchQuantityIncrement)
-	}
-}
-
-// processRestingDerivativeLimitOrderbookFills processes the resting derivative limit order execution.
+// ProcessRestingDerivativeLimitOrderbookFills processes the resting derivative limit order execution.
 // NOTE: clearingPrice may be Nil
 //
 //nolint:revive //ok
-func (k DerivativeKeeper) processRestingDerivativeLimitOrderbookFills(
+func (k DerivativeKeeper) ProcessRestingDerivativeLimitOrderbookFills(
 	ctx sdk.Context,
 	market v2.DerivativeMarketI,
 	funding *v2.PerpetualMarketFunding,
-	fills *orderbookFills,
+	fills *OrderbookFills,
 	isBuy bool,
 	positionStates map[common.Hash]*v2.PositionState,
 	clearingPrice math.LegacyDec,
@@ -408,10 +347,12 @@ func (k DerivativeKeeper) processRestingDerivativeLimitOrderbookFills(
 	feeDiscountConfig *v2.FeeDiscountConfig,
 	isLiquidation bool,
 ) []*v2.DerivativeOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessRestingDerivativeLimitOrderbookFills")()
+
 	stateExpansions := make([]*v2.DerivativeOrderStateExpansion, len(fills.Orders))
 
 	for idx := range fills.Orders {
-		stateExpansions[idx] = k.applyPositionDeltaAndGetDerivativeLimitOrderStateExpansion(
+		stateExpansions[idx] = k.ApplyPositionDeltaAndGetDerivativeLimitOrderStateExpansion(
 			ctx,
 			market,
 			funding,
@@ -433,7 +374,7 @@ func (k DerivativeKeeper) processRestingDerivativeLimitOrderbookFills(
 // NOTE: clearingPrice can be nil
 //
 //nolint:revive //ok
-func (k DerivativeKeeper) applyPositionDeltaAndGetDerivativeLimitOrderStateExpansion(
+func (k DerivativeKeeper) ApplyPositionDeltaAndGetDerivativeLimitOrderStateExpansion(
 	ctx sdk.Context,
 	market v2.DerivativeMarketI,
 	funding *v2.PerpetualMarketFunding,
@@ -446,8 +387,7 @@ func (k DerivativeKeeper) applyPositionDeltaAndGetDerivativeLimitOrderStateExpan
 	feeDiscountConfig *v2.FeeDiscountConfig,
 	isLiquidation bool,
 ) *v2.DerivativeOrderStateExpansion {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ApplyPositionDeltaAndGetDerivativeLimitOrderStateExpansion")()
 
 	var executionPrice math.LegacyDec
 	if clearingPrice.IsNil() {
@@ -551,16 +491,16 @@ func (k DerivativeKeeper) applyPositionDeltaAndGetDerivativeLimitOrderStateExpan
 		availableBalanceChange = availableBalanceChange.Add(feeData.TraderFee.Abs())
 	}
 
-	availableBalanceChange, totalBalanceChange = k.adjustPositionMarginIfNecessary(
+	availableBalanceChange, totalBalanceChange, feeDebtMarketBalanceDelta := k.adjustPositionMarginIfNecessary(
 		ctx,
 		market,
-		order.SubaccountID(),
 		position,
 		availableBalanceChange,
 		totalBalanceChange,
 	)
 
-	marketBalanceDelta := v2.GetMarketBalanceDelta(payout, collateralizationMargin, feeData.TraderFee, order.IsReduceOnly())
+	marketBalanceDelta := v2.GetMarketBalanceDelta(payout, collateralizationMargin, feeData.TraderFee, order.IsReduceOnly()).
+		Add(feeDebtMarketBalanceDelta)
 	stateExpansion := v2.DerivativeOrderStateExpansion{
 		SubaccountID:          order.SubaccountID(),
 		PositionDelta:         positionDelta,
@@ -593,6 +533,8 @@ func (k DerivativeKeeper) fillPositionStateCache(
 	isOrderBuy bool,
 	positionStates map[common.Hash]*v2.PositionState,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "fillPositionStateCache")()
+
 	positionState := positionStates[orderSubaccountID]
 	if positionState != nil {
 		return
@@ -615,8 +557,11 @@ func (k DerivativeKeeper) fillPositionStateCache(
 
 // NOTE: clearingPrice may be Nil
 //
+// ProcessDerivativeMarketOrderbookMatchingResults processes the derivative market order matching results.
+//
 //nolint:revive //ok
-func (k DerivativeKeeper) processDerivativeMarketOrderbookMatchingResults(
+//nolint:revive //ok
+func (k DerivativeKeeper) ProcessDerivativeMarketOrderbookMatchingResults(
 	ctx sdk.Context,
 	market v2.DerivativeMarketI,
 	funding *v2.PerpetualMarketFunding,
@@ -628,8 +573,7 @@ func (k DerivativeKeeper) processDerivativeMarketOrderbookMatchingResults(
 	tradeRewardsMultiplier math.LegacyDec,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) ([]*v2.DerivativeOrderStateExpansion, []*v2.DerivativeMarketOrderCancel) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessDerivativeMarketOrderbookMatchingResults")()
 
 	stateExpansions := make([]*v2.DerivativeOrderStateExpansion, len(marketOrders))
 	ordersToCancel := make([]*v2.DerivativeMarketOrderCancel, 0, len(marketOrders))
@@ -698,8 +642,7 @@ func (k DerivativeKeeper) applyPositionDeltaAndGetDerivativeMarketOrderStateExpa
 	tradeRewardMultiplier math.LegacyDec,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) *v2.DerivativeOrderStateExpansion {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "applyPositionDeltaAndGetDerivativeMarketOrderStateExpansion")()
 
 	if fillQuantity.IsNil() {
 		fillQuantity = math.LegacyZeroDec()
@@ -766,16 +709,16 @@ func (k DerivativeKeeper) applyPositionDeltaAndGetDerivativeMarketOrderStateExpa
 		Add(matchedFeeRefundOrCharge).
 		Add(unmatchedFeeRefund)
 
-	availableBalanceChange, totalBalanceChange = k.adjustPositionMarginIfNecessary(
+	availableBalanceChange, totalBalanceChange, feeDebtMarketBalanceDelta := k.adjustPositionMarginIfNecessary(
 		ctx,
 		market,
-		order.SubaccountID(),
 		position,
 		availableBalanceChange,
 		totalBalanceChange,
 	)
 
-	marketBalanceDelta := v2.GetMarketBalanceDelta(payout, collateralizationMargin, feeData.TraderFee, order.IsReduceOnly())
+	marketBalanceDelta := v2.GetMarketBalanceDelta(payout, collateralizationMargin, feeData.TraderFee, order.IsReduceOnly()).
+		Add(feeDebtMarketBalanceDelta)
 	stateExpansion := v2.DerivativeOrderStateExpansion{
 		SubaccountID:          order.SubaccountID(),
 		PositionDelta:         positionDelta,
@@ -873,310 +816,46 @@ func getDerivativeOrderFeesAndRefunds(
 // Can happen if sell order is matched at better price incurring a higher trading fee that needs to be charged to trader. Function is implemented
 // in a more general way to also handle other unknown cases as defensive programming.
 //
+// The third return value is the notional fee-debt component to add to execution.MarketBalanceDelta so
+// ApplyMarketBalanceDelta runs only in the persist stage (with EnsureMarketSolvency), not during matching.
+//
 //nolint:revive //ok
 func (k DerivativeKeeper) adjustPositionMarginIfNecessary(
 	ctx sdk.Context,
 	market v2.DerivativeMarketI,
-	subaccountID common.Hash,
 	position *v2.Position,
 	availableBalanceChange, totalBalanceChange math.LegacyDec,
-) (math.LegacyDec, math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+) (math.LegacyDec, math.LegacyDec, math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "adjustPositionMarginIfNecessary")()
 
-	// if available balance delta is negative, it means sell order was matched at better price implying a higher fee
-	// we need to charge trader for the higher fee
-	hasPositiveAvailableBalanceDelta := !availableBalanceChange.IsNegative()
-	if hasPositiveAvailableBalanceDelta {
-		return availableBalanceChange, totalBalanceChange
+	// if available balance delta is positive, the sell matched at a better price and no fee debt arises.
+	if !availableBalanceChange.IsNegative() {
+		return availableBalanceChange, totalBalanceChange, math.LegacyZeroDec()
 	}
 
-	// for binary options:
-	// 	we can safely reduce from balances, because his margin was adjusted meaning he has enough balance to cover it
-	// 	and we shouldn't adjust the margin anyways
-	isBinaryOptions := market.GetMarketType().IsBinaryOptions()
-	if isBinaryOptions {
-		return availableBalanceChange, totalBalanceChange
+	// for binary options the margin was already adjusted during order placement, so balances can
+	// absorb the negative delta directly without embedding into margin.
+	if market.GetMarketType().IsBinaryOptions() {
+		return availableBalanceChange, totalBalanceChange, math.LegacyZeroDec()
 	}
 
-	// check if position has sufficient margin to deduct from, may not be the case during liquidations beyond bankruptcy
-	//
-	// NOTE that one may think that a reduce-only order could result in a case where a trader has insufficient balance and no position margin.
-	// This would require a reduce-only order of the full position size at exactly bankruptcy price, leading to zero total payout.
-	// -> user would have zero balance and zero margin and we could not charge him.
-	// However, this is not exploitable, because a user would first need to create an order at a price even worse than bankruptcy price
-	// to create a non-zero matched fee charge (trading fee of matched vs. order price). Fortunately we always check if an order closes
-	// a position beyond bankruptcy price (`CheckValidPositionToReduce`), even during FBA matching and we use the original order price for this check.
-
-	hasSufficientMarginToCharge := position.Margin.GT(availableBalanceChange.Abs())
-	if !hasSufficientMarginToCharge {
-		return availableBalanceChange, totalBalanceChange
+	// When the position is fully closed there is no open position to carry fee debt.
+	// Return the raw negative delta for downstream solvency handling.
+	if !position.Quantity.IsPositive() {
+		return availableBalanceChange, totalBalanceChange, math.LegacyZeroDec()
 	}
 
-	chainFormattedAvailableBalanceChange := market.NotionalToChainFormat(availableBalanceChange)
-	spendableFunds := k.subaccount.GetSpendableFunds(ctx, subaccountID, market.GetQuoteDenom())
-	isTraderMissingFunds := spendableFunds.Add(chainFormattedAvailableBalanceChange).IsNegative()
-
-	if !isTraderMissingFunds {
-		return availableBalanceChange, totalBalanceChange
-	}
-
-	// trader has **not** have enough funds to cover additional fee
-	// for derivatives: we can instead safely reduce his position margin
+	// Embed the full fee overcharge into position margin so that deposit balance is unaffected.
+	// Zeroing AvailableBalanceDelta makes each fill's deposit impact independent of other same-batch
+	// fills for the same subaccount — avoiding the stale-spendable cumulative overcharge bug that
+	// arises when GetSpendableFunds (persisted state) is used per-fill to decide whether to embed.
 	position.Margin = position.Margin.Add(availableBalanceChange)
-	k.ApplyMarketBalanceDelta(ctx, market.MarketID(), chainFormattedAvailableBalanceChange)
+	feeDebtMarketBalanceDelta := availableBalanceChange
 
-	// charging from margin, so give back to available and total balance
 	modifiedTotalBalanceChange := totalBalanceChange.Sub(availableBalanceChange)
-	modifiedAvailableBalanceChange := math.LegacyZeroDec() // available - available becomes 0
+	modifiedAvailableBalanceChange := math.LegacyZeroDec()
 
-	return modifiedAvailableBalanceChange, modifiedTotalBalanceChange
-}
-
-// limitOrderbookExpansionSide holds an orderbook side (buy or sell) and the expansionData
-// callbacks used when processing fills, so both sides can be handled in a single loop.
-type limitOrderbookExpansionSide struct {
-	orderbook                     *limitOrderbook
-	isBuy                         bool
-	addNewRestingOrder            func(*v2.DerivativeLimitOrder)
-	setRestingLimitOrderCancels   func([]*v2.DerivativeLimitOrder)
-	setTransientLimitOrderCancels func([]*v2.DerivativeLimitOrder)
-}
-
-//nolint:revive //ok
-func (k DerivativeKeeper) GetDerivativeMatchingExecutionData(
-	ctx sdk.Context,
-	market v2.DerivativeMarketI,
-	markPrice math.LegacyDec,
-	funding *v2.PerpetualMarketFunding,
-	transientBuyOrders, transientSellOrders []*v2.DerivativeLimitOrder,
-	positionStates map[common.Hash]*v2.PositionState,
-	positionCache map[common.Hash]*v2.Position,
-	feeDiscountConfig *v2.FeeDiscountConfig,
-	currentOpenNotional math.LegacyDec,
-	openNotionalCap v2.OpenNotionalCap,
-) *v2.DerivativeMatchingExpansionData {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	var (
-		buyOrderbook = newLimitOrderbook(
-			k,
-			ctx,
-			true,
-			false,
-			transientBuyOrders,
-			market,
-			markPrice,
-			funding,
-			currentOpenNotional,
-			openNotionalCap,
-			positionStates,
-			positionCache,
-		)
-		sellOrderbook = newLimitOrderbook(
-			k,
-			ctx,
-			false,
-			false,
-			transientSellOrders,
-			market,
-			markPrice,
-			funding,
-			currentOpenNotional,
-			openNotionalCap,
-			positionStates,
-			positionCache,
-		)
-	)
-
-	if buyOrderbook != nil && sellOrderbook != nil {
-		buyOrderbook.SetOppositeSideDerivativeOrderbook(sellOrderbook)
-		sellOrderbook.SetOppositeSideDerivativeOrderbook(buyOrderbook)
-	}
-
-	if buyOrderbook != nil {
-		defer buyOrderbook.Close()
-	}
-
-	if sellOrderbook != nil {
-		defer sellOrderbook.Close()
-	}
-
-	var clearingQuantity, clearingPrice math.LegacyDec
-
-	if buyOrderbook != nil && sellOrderbook != nil {
-		var (
-			lastBuyPrice  math.LegacyDec
-			lastSellPrice math.LegacyDec
-		)
-
-		for {
-			buyOrder := buyOrderbook.Peek(ctx)
-			sellOrder := sellOrderbook.Peek(ctx)
-
-			// Base Case: Iterated over all the orders!
-			if buyOrder == nil || sellOrder == nil {
-				break
-			}
-
-			unitSpread := sellOrder.Price.Sub(buyOrder.Price)
-			matchQuantityIncrement := math.LegacyMinDec(buyOrder.Quantity, sellOrder.Quantity)
-
-			// Exit if no more matchable orders
-			if unitSpread.IsPositive() || matchQuantityIncrement.IsZero() {
-				break
-			}
-
-			lastBuyPrice = buyOrder.Price
-			lastSellPrice = sellOrder.Price
-
-			buyOrderbook.Fill(matchQuantityIncrement)
-			sellOrderbook.Fill(matchQuantityIncrement)
-		}
-
-		clearingQuantity = buyOrderbook.GetTotalQuantityFilled()
-
-		if clearingQuantity.IsPositive() {
-			midMarketPrice := k.GetDerivativeMidPriceOrBestPrice(ctx, market.MarketID())
-			clearingPrice = k.GetClearingPriceFromMatching(
-				lastBuyPrice,
-				lastSellPrice,
-				markPrice,
-				clearingQuantity,
-				midMarketPrice,
-				buyOrderbook,
-				sellOrderbook,
-			)
-		}
-	}
-
-	tradeRewardsMultiplierConfig := k.GetEffectiveTradingRewardsMarketPointsMultiplierConfig(ctx, market.MarketID())
-	expansionData := v2.NewDerivativeMatchingExpansionData(clearingPrice, clearingQuantity)
-
-	var sides []limitOrderbookExpansionSide
-	if buyOrderbook != nil {
-		sides = append(sides, limitOrderbookExpansionSide{
-			orderbook:                     buyOrderbook,
-			isBuy:                         true,
-			addNewRestingOrder:            expansionData.AddNewBuyRestingLimitOrder,
-			setRestingLimitOrderCancels:   expansionData.SetRestingLimitBuyOrderCancels,
-			setTransientLimitOrderCancels: expansionData.SetTransientLimitBuyOrderCancels,
-		})
-	}
-	if sellOrderbook != nil {
-		sides = append(sides, limitOrderbookExpansionSide{
-			orderbook:                     sellOrderbook,
-			isBuy:                         false,
-			addNewRestingOrder:            expansionData.AddNewSellRestingLimitOrder,
-			setRestingLimitOrderCancels:   expansionData.SetRestingLimitSellOrderCancels,
-			setTransientLimitOrderCancels: expansionData.SetTransientLimitSellOrderCancels,
-		})
-	}
-
-	for _, side := range sides {
-		for hash := range side.orderbook.GetPartialCancelOrders() {
-			expansionData.PartialCancelOrders[hash] = struct{}{}
-		}
-
-		mergedOrderbookFills := newMergedDerivativeOrderbookFills(
-			side.isBuy,
-			side.orderbook.GetTransientOrderbookFills(),
-			side.orderbook.GetRestingOrderbookFills(),
-		)
-
-		for {
-			fill := mergedOrderbookFills.Next()
-
-			if fill == nil {
-				break
-			}
-
-			expansion := k.applyPositionDeltaAndGetDerivativeLimitOrderStateExpansion(
-				ctx,
-				market,
-				funding,
-				side.isBuy,
-				fill.IsTransient,
-				fill.Order,
-				positionStates,
-				fill.FillQuantity,
-				clearingPrice,
-				tradeRewardsMultiplierConfig,
-				feeDiscountConfig,
-				false,
-			)
-
-			expansionData.AddExpansion(side.isBuy, fill.IsTransient, expansion)
-
-			_, isPartialCancel := expansionData.PartialCancelOrders[fill.Order.Hash()]
-			if fill.IsTransient && expansion.LimitOrderFilledDelta.FillableQuantity().IsPositive() && !isPartialCancel {
-				side.addNewRestingOrder(fill.Order)
-			}
-		}
-
-		side.setRestingLimitOrderCancels(side.orderbook.GetRestingOrderbookCancels())
-		side.setTransientLimitOrderCancels(side.orderbook.GetTransientOrderbookCancels())
-		expansionData.OpenInterestDelta = expansionData.OpenInterestDelta.Add(side.orderbook.GetOpenInterestDelta())
-	}
-
-	return expansionData
-}
-
-//nolint:revive //ok
-func (k DerivativeKeeper) GetClearingPriceFromMatching(
-	lastBuyPrice,
-	lastSellPrice,
-	markPrice,
-	_ math.LegacyDec,
-	midMarketPrice *math.LegacyDec,
-	buyOrderbook,
-	sellOrderbook *limitOrderbook,
-) math.LegacyDec {
-	hasEmptyRestingOrderbookAndMarkPrice := midMarketPrice == nil && markPrice.IsNil()
-	if hasEmptyRestingOrderbookAndMarkPrice {
-		// rare edge case, no other choice than using matched orders
-		return GetFullFallBackClearingPrice(lastBuyPrice, lastSellPrice)
-	}
-
-	if midMarketPrice == nil {
-		return GetOracleFallBackClearingPrice(lastBuyPrice, lastSellPrice, markPrice)
-	}
-
-	return GetRegularClearingPrice(lastBuyPrice, lastSellPrice, markPrice, midMarketPrice)
-}
-
-func GetOracleFallBackClearingPrice(lastBuyPrice, lastSellPrice, markPrice math.LegacyDec) math.LegacyDec {
-	if lastBuyPrice.LTE(markPrice) {
-		return lastBuyPrice
-	}
-
-	if lastSellPrice.GTE(markPrice) {
-		return lastSellPrice
-	}
-
-	return markPrice
-}
-
-func GetFullFallBackClearingPrice(lastBuyPrice, lastSellPrice math.LegacyDec) math.LegacyDec {
-	// clearing price = (lastBuyPrice + lastSellPrice) / 2
-	return lastBuyPrice.Add(lastSellPrice).Quo(math.LegacyNewDec(2))
-}
-
-func GetRegularClearingPrice(lastBuyPrice, lastSellPrice, markPrice math.LegacyDec, midMarketPrice *math.LegacyDec) math.LegacyDec {
-	if lastBuyPrice.LTE(*midMarketPrice) {
-		return lastBuyPrice
-	}
-
-	if lastSellPrice.GTE(*midMarketPrice) {
-		return lastSellPrice
-	}
-
-	if !markPrice.IsNil() {
-		return GetOracleFallBackClearingPrice(lastBuyPrice, lastSellPrice, markPrice)
-	}
-
-	return *midMarketPrice
+	return modifiedAvailableBalanceChange, modifiedTotalBalanceChange, feeDebtMarketBalanceDelta
 }
 
 //nolint:revive //ok
@@ -1186,8 +865,7 @@ func (k DerivativeKeeper) PersistDerivativeMatchingExecution(
 	derivativeVwapData v2.DerivativeVwapInfo,
 	tradingRewardPoints types.TradingRewardPoints,
 ) types.TradingRewardPoints {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistDerivativeMatchingExecution")()
 
 	for batchIdx := range batchDerivativeMatchingExecutionData {
 		execution := batchDerivativeMatchingExecutionData[batchIdx]
@@ -1272,8 +950,7 @@ func (k DerivativeKeeper) PersistDerivativeMarketOrderExecution(
 	tradingRewardPoints types.TradingRewardPoints,
 	modifiedPositionCache v2.ModifiedPositionCache,
 ) types.TradingRewardPoints {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistDerivativeMarketOrderExecution")()
 
 	for _, derivativeExecutionData := range batchDerivativeExecutionData {
 		tradingRewardPoints, _ = k.PersistSingleDerivativeMarketOrderExecution(
@@ -1302,8 +979,7 @@ func (k DerivativeKeeper) ExecuteDerivativeMarketOrderImmediately(
 	positionCache map[common.Hash]*v2.Position,
 	isLiquidation bool,
 ) (*v2.DerivativeMarketOrderResults, bool, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteDerivativeMarketOrderImmediately")()
 
 	marketBuyOrders := make([]*v2.DerivativeMarketOrder, 0)
 	marketSellOrders := make([]*v2.DerivativeMarketOrder, 0)
@@ -1345,12 +1021,10 @@ func (k DerivativeKeeper) ExecuteDerivativeMarketOrderImmediately(
 
 	if isLiquidation {
 		if marketOrder.IsBuy() && derivativeMarketOrderExecution.MarketBuyClearingQuantity.IsZero() {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, true, types.ErrNoLiquidity
 		}
 
 		if !marketOrder.IsBuy() && derivativeMarketOrderExecution.MarketSellClearingQuantity.IsZero() {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, true, types.ErrNoLiquidity
 		}
 	}
@@ -1393,86 +1067,19 @@ func (k DerivativeKeeper) ExecuteDerivativeMarketOrderImmediately(
 	return results, isMarketSolvent, nil
 }
 
-func (k DerivativeKeeper) ExecuteDerivativeLimitOrderMatching(
-	ctx sdk.Context,
-	matchedMarketDirection *types.MatchedMarketDirection,
-	stakingInfo *v2.FeeDiscountStakingInfo,
-	modifiedPositionCache v2.ModifiedPositionCache,
-) *v2.DerivativeBatchExecutionData {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	marketID := matchedMarketDirection.MarketId
-
-	market, markPrice := k.GetDerivativeOrBinaryOptionsMarketWithMarkPrice(ctx, marketID, true)
-	if market == nil {
-		return nil
-	}
-
-	feeDiscountConfig := k.feeDiscounts.GetFeeDiscountConfigForMarket(ctx, marketID, stakingInfo)
-
-	var funding *v2.PerpetualMarketFunding
-	if market.GetIsPerpetual() {
-		funding = k.GetPerpetualMarketFunding(ctx, marketID)
-	}
-
-	positionStates := v2.NewPositionStates()
-	positionCache := make(map[common.Hash]*v2.Position)
-
-	currentOpenNotional := k.GetOpenNotionalForMarket(ctx, marketID, markPrice)
-	openNotionalCap := market.GetOpenNotionalCap()
-
-	// Step 0: Obtain the limit buy and sell orders from the transient store for convenience
-
-	filteredResults := k.getFilteredTransientOrdersAndOrdersToCancel(ctx, marketID, modifiedPositionCache)
-	derivativeLimitOrderExecutionData := k.GetDerivativeMatchingExecutionData(
-		ctx,
-		market,
-		markPrice,
-		funding,
-		filteredResults.transientLimitBuyOrders,
-		filteredResults.transientLimitSellOrders,
-		positionStates,
-		positionCache,
-		feeDiscountConfig,
-		currentOpenNotional,
-		openNotionalCap,
-	)
-
-	derivativeLimitOrderExecutionData.TransientLimitBuyOrderCancels = append(
-		derivativeLimitOrderExecutionData.TransientLimitBuyOrderCancels,
-		filteredResults.transientLimitBuyOrdersToCancel...,
-	)
-
-	derivativeLimitOrderExecutionData.TransientLimitSellOrderCancels = append(
-		derivativeLimitOrderExecutionData.TransientLimitSellOrderCancels,
-		filteredResults.transientLimitSellOrdersToCancel...,
-	)
-
-	batchExecutionData := derivativeLimitOrderExecutionData.GetLimitMatchingDerivativeBatchExecutionData(
-		market,
-		markPrice,
-		funding,
-		positionStates,
-	)
-
-	return batchExecutionData
-}
-
 func (k DerivativeKeeper) PersistPerpetualFundingInfo(ctx sdk.Context, perpetualVwapInfo v2.DerivativeVwapInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistPerpetualFundingInfo")()
 
 	marketIDs := perpetualVwapInfo.GetSortedPerpetualMarketIDs()
 	blockTime := ctx.BlockTime().Unix()
 
 	for _, marketID := range marketIDs {
-		markPrice := perpetualVwapInfo.PerpetualVwapInfo[marketID].MarkPrice
-		if markPrice == nil || markPrice.IsNil() || markPrice.IsZero() {
+		_, latestMarkPrice := k.GetDerivativeMarketWithMarkPrice(ctx, marketID, true)
+		if latestMarkPrice.IsNil() || latestMarkPrice.IsZero() {
 			continue
 		}
 
-		syntheticVwapUnitDelta := perpetualVwapInfo.ComputeSyntheticVwapUnitDelta(marketID)
+		syntheticVwapUnitDelta := perpetualVwapInfo.ComputeSyntheticVwapUnitDelta(marketID, latestMarkPrice)
 
 		funding := k.GetPerpetualMarketFunding(ctx, marketID)
 		timeElapsed := math.LegacyNewDec(blockTime - funding.LastTimestamp)
@@ -1494,11 +1101,12 @@ func (k DerivativeKeeper) PersistPerpetualFundingInfo(ctx sdk.Context, perpetual
 }
 
 //nolint:revive // ok
-func (k DerivativeKeeper) getFilteredTransientOrdersAndOrdersToCancel(
+func (k DerivativeKeeper) GetFilteredTransientOrdersAndOrdersToCancel(
 	ctx sdk.Context,
 	marketID common.Hash,
 	modifiedPositionCache v2.ModifiedPositionCache,
-) *filteredTransientOrderResults {
+) *FilteredTransientOrderResults {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFilteredTransientOrdersAndOrdersToCancel")()
 	// get orders while also obtaining the subaccountIDs corresponding to positions that have been modified by a market order earlier this block
 	transientLimitBuyOrders, buyROTracker := k.GetAllTransientDerivativeLimitOrdersWithPotentiallyConflictingReduceOnlyOrders(ctx, marketID, true, modifiedPositionCache)
 	transientLimitSellOrders, sellROTracker := k.GetAllTransientDerivativeLimitOrdersWithPotentiallyConflictingReduceOnlyOrders(ctx, marketID, false, modifiedPositionCache)
@@ -1508,26 +1116,26 @@ func (k DerivativeKeeper) getFilteredTransientOrdersAndOrdersToCancel(
 	k.updateTransientOrderHashesToCancel(ctx, transientOrderHashesToCancel, marketID, true, buyROTracker, modifiedPositionCache)
 	k.updateTransientOrderHashesToCancel(ctx, transientOrderHashesToCancel, marketID, false, sellROTracker, modifiedPositionCache)
 
-	results := &filteredTransientOrderResults{
-		transientLimitBuyOrders:          make([]*v2.DerivativeLimitOrder, 0, len(transientLimitBuyOrders)),
-		transientLimitSellOrders:         make([]*v2.DerivativeLimitOrder, 0, len(transientLimitSellOrders)),
-		transientLimitBuyOrdersToCancel:  make([]*v2.DerivativeLimitOrder, 0, len(transientOrderHashesToCancel)),
-		transientLimitSellOrdersToCancel: make([]*v2.DerivativeLimitOrder, 0, len(transientOrderHashesToCancel)),
+	results := &FilteredTransientOrderResults{
+		TransientLimitBuyOrders:          make([]*v2.DerivativeLimitOrder, 0, len(transientLimitBuyOrders)),
+		TransientLimitSellOrders:         make([]*v2.DerivativeLimitOrder, 0, len(transientLimitSellOrders)),
+		TransientLimitBuyOrdersToCancel:  make([]*v2.DerivativeLimitOrder, 0, len(transientOrderHashesToCancel)),
+		TransientLimitSellOrdersToCancel: make([]*v2.DerivativeLimitOrder, 0, len(transientOrderHashesToCancel)),
 	}
 
 	for _, order := range transientLimitBuyOrders {
 		if _, found := transientOrderHashesToCancel[order.Hash()]; found {
-			results.transientLimitBuyOrdersToCancel = append(results.transientLimitBuyOrdersToCancel, order)
+			results.TransientLimitBuyOrdersToCancel = append(results.TransientLimitBuyOrdersToCancel, order)
 		} else {
-			results.transientLimitBuyOrders = append(results.transientLimitBuyOrders, order)
+			results.TransientLimitBuyOrders = append(results.TransientLimitBuyOrders, order)
 		}
 	}
 
 	for _, order := range transientLimitSellOrders {
 		if _, found := transientOrderHashesToCancel[order.Hash()]; found {
-			results.transientLimitSellOrdersToCancel = append(results.transientLimitSellOrdersToCancel, order)
+			results.TransientLimitSellOrdersToCancel = append(results.TransientLimitSellOrdersToCancel, order)
 		} else {
-			results.transientLimitSellOrders = append(results.transientLimitSellOrders, order)
+			results.TransientLimitSellOrders = append(results.TransientLimitSellOrders, order)
 		}
 	}
 
@@ -1542,6 +1150,8 @@ func (k DerivativeKeeper) updateTransientOrderHashesToCancel(
 	roTracker v2.ReduceOnlyOrdersTracker,
 	modifiedPositionCache v2.ModifiedPositionCache,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateTransientOrderHashesToCancel")()
+
 	for _, subaccountID := range roTracker.GetSortedSubaccountIDs() {
 		position := modifiedPositionCache.GetPosition(marketID, subaccountID)
 		if position == nil {
@@ -1581,6 +1191,8 @@ func (k DerivativeKeeper) updateTransientOrderHashesToCancel(
 }
 
 func (k DerivativeKeeper) GetOpenNotionalForMarket(ctx sdk.Context, marketID common.Hash, markPrice math.LegacyDec) math.LegacyDec {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOpenNotionalForMarket")()
+
 	openInterest := k.GetOpenInterestForMarket(ctx, marketID)
 	if markPrice.IsNil() {
 		return math.LegacyZeroDec()
@@ -1600,9 +1212,11 @@ func addAllTransientRoOrdersForSubaccountToCancellation(
 	}
 }
 
-type filteredTransientOrderResults struct {
-	transientLimitBuyOrders          []*v2.DerivativeLimitOrder
-	transientLimitSellOrders         []*v2.DerivativeLimitOrder
-	transientLimitBuyOrdersToCancel  []*v2.DerivativeLimitOrder
-	transientLimitSellOrdersToCancel []*v2.DerivativeLimitOrder
+// FilteredTransientOrderResults contains transient orders filtered for reduce-only conflicts.
+// Orders that conflict with modified positions are separated into the "ToCancel" slices.
+type FilteredTransientOrderResults struct {
+	TransientLimitBuyOrders          []*v2.DerivativeLimitOrder
+	TransientLimitSellOrders         []*v2.DerivativeLimitOrder
+	TransientLimitBuyOrdersToCancel  []*v2.DerivativeLimitOrder
+	TransientLimitSellOrdersToCancel []*v2.DerivativeLimitOrder
 }

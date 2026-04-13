@@ -2,7 +2,6 @@ package base
 
 import (
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
@@ -11,8 +10,7 @@ import (
 
 // GetAuctionExchangeTransferDenomDecimals returns the decimals of the given denom.
 func (k *BaseKeeper) GetAuctionExchangeTransferDenomDecimals(ctx sdk.Context, denom string) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAuctionExchangeTransferDenomDecimals")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetDenomDecimalsKey(denom))
@@ -35,8 +33,7 @@ func (k *BaseKeeper) GetAuctionExchangeTransferDenomDecimals(ctx sdk.Context, de
 
 // SetAuctionExchangeTransferDenomDecimals saves the decimals of the given denom.
 func (k *BaseKeeper) SetAuctionExchangeTransferDenomDecimals(ctx sdk.Context, denom string, decimals uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAuctionExchangeTransferDenomDecimals")()
 
 	store := k.getStore(ctx)
 	store.Set(types.GetDenomDecimalsKey(denom), sdk.Uint64ToBigEndian(decimals))
@@ -44,8 +41,7 @@ func (k *BaseKeeper) SetAuctionExchangeTransferDenomDecimals(ctx sdk.Context, de
 
 // DeleteAuctionExchangeTransferDenomDecimals delete the decimals of the given denom.
 func (k *BaseKeeper) DeleteAuctionExchangeTransferDenomDecimals(ctx sdk.Context, denom string) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAuctionExchangeTransferDenomDecimals")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetDenomDecimalsKey(denom))
@@ -53,8 +49,7 @@ func (k *BaseKeeper) DeleteAuctionExchangeTransferDenomDecimals(ctx sdk.Context,
 
 // GetAllAuctionExchangeTransferDenomDecimals returns all denom decimals
 func (k *BaseKeeper) GetAllAuctionExchangeTransferDenomDecimals(ctx sdk.Context) []v2.DenomDecimals {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllAuctionExchangeTransferDenomDecimals")()
 
 	denomDecimals := make([]v2.DenomDecimals, 0)
 	k.IterateAuctionExchangeTransferDenomDecimals(ctx, func(p v2.DenomDecimals) (stop bool) {
@@ -67,8 +62,7 @@ func (k *BaseKeeper) GetAllAuctionExchangeTransferDenomDecimals(ctx sdk.Context)
 
 // IterateAuctionExchangeTransferDenomDecimals iterates over denom decimals calling process on each denom decimal.
 func (k *BaseKeeper) IterateAuctionExchangeTransferDenomDecimals(ctx sdk.Context, process func(denomDecimal v2.DenomDecimals) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateAuctionExchangeTransferDenomDecimals")()
 
 	store := k.getStore(ctx)
 	denomDecimalStore := prefix.NewStore(store, types.DenomDecimalsPrefix)

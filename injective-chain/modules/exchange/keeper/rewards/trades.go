@@ -7,13 +7,11 @@ import (
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 )
 
 // GetAllOptedOutRewardAccounts gets all accounts that have opted out of rewards
 func (k TradingKeeper) GetAllOptedOutRewardAccounts(ctx sdk.Context) []string {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllOptedOutRewardAccounts")()
 
 	registeredDMMs := make([]string, 0)
 	k.IterateOptedOutRewardAccounts(ctx, func(account sdk.AccAddress, isRegisteredDMM bool) (stop bool) {
@@ -38,6 +36,8 @@ func (k TradingKeeper) GetTradeDataAndIncrementVolumeContribution(
 	feeDiscountConfig *v2.FeeDiscountConfig,
 	isMaker bool,
 ) *v2.TradeFeeData {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTradeDataAndIncrementVolumeContribution")()
+
 	discountedTradeFeeRate := k.feeDiscounts.FetchAndUpdateDiscountedTradingFeeRate(
 		ctx,
 		tradeFeeRate,

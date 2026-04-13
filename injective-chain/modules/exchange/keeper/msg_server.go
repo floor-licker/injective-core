@@ -1,8 +1,6 @@
 package keeper
 
 import (
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
@@ -16,7 +14,6 @@ type MsgServer struct {
 	AccountsMsgServer
 	GeneralMsgServer
 	WasmMsgServer
-	svcTags metrics.Tags
 }
 
 // NewMsgServerImpl returns an implementation of the exchange MsgServer interface
@@ -29,9 +26,6 @@ func NewMsgServerImpl(keeper *Keeper) v2.MsgServer {
 		AccountsMsgServer:      AccountsMsgServerImpl(keeper),
 		GeneralMsgServer:       NewGeneralMsgServerImpl(keeper),
 		WasmMsgServer:          NewWasmMsgServerImpl(keeper),
-		svcTags: metrics.Tags{
-			"svc": "exchange_h",
-		},
 	}
 }
 
@@ -44,8 +38,7 @@ type v1MsgServer struct {
 	AccountsV1MsgServer
 	WasmV1MsgServer
 	*Keeper
-	server  v2.MsgServer
-	svcTags metrics.Tags
+	server v2.MsgServer
 }
 
 // NewV1MsgServerImpl returns an implementation of the exchange MsgServer interface
@@ -59,8 +52,5 @@ func NewV1MsgServerImpl(keeper *Keeper, server v2.MsgServer) types.MsgServer {
 		WasmV1MsgServer:          NewWasmV1MsgServerImpl(*keeper, server),
 		Keeper:                   keeper,
 		server:                   server,
-		svcTags: metrics.Tags{
-			"svc": "exchange_v1_h",
-		},
 	}
 }

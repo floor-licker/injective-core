@@ -2,7 +2,6 @@ package spot
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -11,15 +10,48 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
 
+// MatchingOrderbook is the minimal interface for orderbooks that can participate in spot matching.
+// Both SpotMarketOrderbook and SpotLimitOrderbook implement it.
+type MatchingOrderbook interface {
+	Peek(sdk.Context) *v2.PriceLevel
+	Fill(sdk.Context, math.LegacyDec)
+}
+
+// MatchSpotOrderbooks performs the matching loop between buy and sell orderbooks.
+// It iterates until either side is exhausted or prices no longer cross (spread becomes positive).
+// Callers pass the buy-side and sell-side orderbooks (each may be market or limit).
+func MatchSpotOrderbooks(
+	ctx sdk.Context,
+	buyOrderbook MatchingOrderbook,
+	sellOrderbook MatchingOrderbook,
+) {
+	for {
+		buyOrder := buyOrderbook.Peek(ctx)
+		sellOrder := sellOrderbook.Peek(ctx)
+
+		if buyOrder == nil || sellOrder == nil {
+			break
+		}
+
+		unitSpread := sellOrder.Price.Sub(buyOrder.Price)
+		matchQuantityIncrement := math.LegacyMinDec(buyOrder.Quantity, sellOrder.Quantity)
+
+		if unitSpread.IsPositive() || matchQuantityIncrement.IsZero() {
+			break
+		}
+
+		buyOrderbook.Fill(ctx, matchQuantityIncrement)
+		sellOrderbook.Fill(ctx, matchQuantityIncrement)
+	}
+}
+
 func (k SpotKeeper) ExecuteAtomicSpotMarketOrder(
 	ctx sdk.Context,
 	market *v2.SpotMarket,
 	marketOrder *v2.SpotMarketOrder,
 	feeRate math.LegacyDec,
 ) *v2.SpotMarketOrderResults {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteAtomicSpotMarketOrder")()
 
 	marketID := market.MarketID()
 
@@ -152,8 +184,7 @@ func (k SpotKeeper) getMarketOrderStateExpansionsAndClearingPrice(
 	feeDiscountConfig *v2.FeeDiscountConfig,
 	takerFeeRate math.LegacyDec,
 ) (spotLimitOrderStateExpansions, spotMarketOrderStateExpansions []*v2.SpotOrderStateExpansion, clearingPrice, clearingQuantity math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getMarketOrderStateExpansionsAndClearingPrice")()
 
 	isLimitBuy := !isMarketBuy
 	limitOrdersIterator := k.SpotLimitOrderbookIterator(ctx, market.MarketID(), isLimitBuy)
@@ -162,7 +193,7 @@ func (k SpotKeeper) getMarketOrderStateExpansionsAndClearingPrice(
 	if limitOrderbook != nil {
 		defer limitOrderbook.Close()
 	} else {
-		spotMarketOrderStateExpansions = k.processSpotMarketOrderStateExpansions(
+		spotMarketOrderStateExpansions = k.ProcessSpotMarketOrderStateExpansions(
 			ctx,
 			market.MarketID(),
 			isMarketBuy,
@@ -180,38 +211,13 @@ func (k SpotKeeper) getMarketOrderStateExpansionsAndClearingPrice(
 
 	marketOrderbook := NewSpotMarketOrderbook(marketOrders)
 
-	// Determine matchable market orders and limit orders
-	for {
-		var buyOrder, sellOrder *v2.PriceLevel
-
-		if isMarketBuy {
-			buyOrder = marketOrderbook.Peek()
-			sellOrder = limitOrderbook.Peek()
-		} else {
-			sellOrder = marketOrderbook.Peek()
-			buyOrder = limitOrderbook.Peek()
-		}
-
-		// Base Case: Iterated over all the orders!
-		if buyOrder == nil || sellOrder == nil {
-			break
-		}
-
-		unitSpread := sellOrder.Price.Sub(buyOrder.Price)
-		matchQuantityIncrement := math.LegacyMinDec(buyOrder.Quantity, sellOrder.Quantity)
-
-		// Exit if no more matchable orders
-		if unitSpread.IsPositive() || matchQuantityIncrement.IsZero() {
-			break
-		}
-
-		if err := marketOrderbook.Fill(matchQuantityIncrement); err != nil {
-			k.Logger(ctx).Error("Fill marketOrderbook failed during getMarketOrderStateExpansionsAndClearingPrice:", err)
-		}
-		if err := limitOrderbook.Fill(matchQuantityIncrement); err != nil {
-			k.Logger(ctx).Error("Fill limitOrderbook failed during getMarketOrderStateExpansionsAndClearingPrice:", err)
-		}
+	var buyOrderbook, sellOrderbook MatchingOrderbook
+	if isMarketBuy {
+		buyOrderbook, sellOrderbook = marketOrderbook, limitOrderbook
+	} else {
+		buyOrderbook, sellOrderbook = limitOrderbook, marketOrderbook
 	}
+	MatchSpotOrderbooks(ctx, buyOrderbook, sellOrderbook)
 
 	clearingQuantity = limitOrderbook.GetTotalQuantityFilled()
 
@@ -220,7 +226,7 @@ func (k SpotKeeper) getMarketOrderStateExpansionsAndClearingPrice(
 		clearingPrice = limitOrderbook.GetNotional().Quo(clearingQuantity)
 	}
 
-	spotLimitOrderStateExpansions = k.processRestingSpotLimitOrderExpansions(
+	spotLimitOrderStateExpansions = k.ProcessRestingSpotLimitOrderExpansions(
 		ctx,
 		market.MarketID(),
 		limitOrderbook.GetRestingOrderbookFills(),
@@ -232,7 +238,7 @@ func (k SpotKeeper) getMarketOrderStateExpansionsAndClearingPrice(
 		feeDiscountConfig,
 	)
 
-	spotMarketOrderStateExpansions = k.processSpotMarketOrderStateExpansions(
+	spotMarketOrderStateExpansions = k.ProcessSpotMarketOrderStateExpansions(
 		ctx,
 		market.MarketID(),
 		isMarketBuy,
@@ -248,11 +254,11 @@ func (k SpotKeeper) getMarketOrderStateExpansionsAndClearingPrice(
 	return
 }
 
-// processSpotMarketOrderStateExpansions processes the spot market order state expansions.
+// ProcessSpotMarketOrderStateExpansions processes the spot market order state expansions.
 // NOTE: clearingPrice may be Nil
 //
 //nolint:revive // ok
-func (k SpotKeeper) processSpotMarketOrderStateExpansions(
+func (k SpotKeeper) ProcessSpotMarketOrderStateExpansions(
 	ctx sdk.Context,
 	marketID common.Hash,
 	isMarketBuy bool,
@@ -263,6 +269,8 @@ func (k SpotKeeper) processSpotMarketOrderStateExpansions(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) []*v2.SpotOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessSpotMarketOrderStateExpansions")()
+
 	stateExpansions := make([]*v2.SpotOrderStateExpansion, len(marketOrders))
 
 	for idx := range marketOrders {
@@ -293,6 +301,8 @@ func (k SpotKeeper) getSpotMarketOrderStateExpansion(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) *v2.SpotOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getSpotMarketOrderStateExpansion")()
+
 	var baseChangeAmount, quoteChangeAmount math.LegacyDec
 
 	if fillQuantity.IsNil() {
@@ -369,7 +379,7 @@ func (k SpotKeeper) getSpotMarketOrderStateExpansion(
 }
 
 //nolint:revive // ok
-func (k SpotKeeper) processRestingSpotLimitOrderExpansions(
+func (k SpotKeeper) ProcessRestingSpotLimitOrderExpansions(
 	ctx sdk.Context,
 	marketID common.Hash,
 	fills *v2.OrderbookFills,
@@ -379,6 +389,8 @@ func (k SpotKeeper) processRestingSpotLimitOrderExpansions(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) []*v2.SpotOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessRestingSpotLimitOrderExpansions")()
+
 	stateExpansions := make([]*v2.SpotOrderStateExpansion, len(fills.Orders))
 	for idx, order := range fills.Orders {
 		fillQuantity, fillPrice := fills.FillQuantities[idx], order.OrderInfo.Price
@@ -427,6 +439,8 @@ func (k SpotKeeper) getRestingSpotLimitBuyStateExpansion(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) *v2.SpotOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getRestingSpotLimitBuyStateExpansion")()
+
 	var baseChangeAmount, quoteChangeAmount math.LegacyDec
 
 	isMaker := true
@@ -517,6 +531,8 @@ func (k SpotKeeper) getSpotLimitSellStateExpansion(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) *v2.SpotOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getSpotLimitSellStateExpansion")()
+
 	orderNotional := fillQuantity.Mul(fillPrice)
 
 	var tradeRewardMultiplier math.LegacyDec
@@ -574,6 +590,8 @@ func (k SpotKeeper) PersistSingleSpotMarketOrderExecution(
 	spotVwapData v2.SpotVwapInfo,
 	tradingRewardPoints types.TradingRewardPoints,
 ) types.TradingRewardPoints {
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistSingleSpotMarketOrderExecution")()
+
 	if execution == nil {
 		return tradingRewardPoints
 	}
@@ -620,64 +638,19 @@ func (k SpotKeeper) PersistSingleSpotMarketOrderExecution(
 	return tradingRewardPoints
 }
 
-func (k SpotKeeper) ExecuteSpotMarketOrders(
-	ctx sdk.Context,
-	marketOrderIndicator *v2.MarketOrderIndicator,
-	stakingInfo *v2.FeeDiscountStakingInfo,
-) *v2.SpotBatchExecutionData {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	var (
-		marketID                     = common.HexToHash(marketOrderIndicator.MarketId)
-		isMarketBuy                  = marketOrderIndicator.IsBuy
-		market                       = k.GetSpotMarket(ctx, marketID, true)
-		tradeRewardsMultiplierConfig = k.GetEffectiveTradingRewardsMarketPointsMultiplierConfig(ctx, market.MarketID())
-		feeDiscountConfig            = k.feeDiscounts.GetFeeDiscountConfigForMarket(ctx, marketID, stakingInfo)
-	)
-
-	if market == nil {
-		return nil
-	}
-
-	// Step 1: Obtain the clearing price, clearing quantity, spot limit & spot market state expansions
-	marketOrders := k.GetAllTransientSpotMarketOrders(ctx, marketID, isMarketBuy)
-	spotLimitOrderStateExpansions,
-		spotMarketOrderStateExpansions,
-		clearingPrice,
-		clearingQuantity := k.getMarketOrderStateExpansionsAndClearingPrice(
-		ctx,
-		market,
-		isMarketBuy,
-		marketOrders,
-		tradeRewardsMultiplierConfig,
-		feeDiscountConfig,
-		market.TakerFeeRate,
-	)
-
-	batchExecutionData := GetSpotMarketOrderBatchExecutionData(
-		isMarketBuy,
-		market,
-		spotLimitOrderStateExpansions,
-		spotMarketOrderStateExpansions,
-		clearingPrice,
-		clearingQuantity,
-	)
-
-	return batchExecutionData
-}
-
 func (k SpotKeeper) PersistSpotMarketOrderExecution(
 	ctx sdk.Context,
 	batchSpotExecutionData []*v2.SpotBatchExecutionData,
 	spotVwapData v2.SpotVwapInfo,
 ) types.TradingRewardPoints {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistSpotMarketOrderExecution")()
 
 	tradingRewardPoints := types.NewTradingRewardPoints()
 	for batchIdx := range batchSpotExecutionData {
 		execution := batchSpotExecutionData[batchIdx]
+		if execution == nil {
+			continue
+		}
 		marketID := execution.Market.MarketID()
 
 		tradingRewardPoints = k.PersistSingleSpotMarketOrderExecution(ctx, marketID, execution, spotVwapData, tradingRewardPoints)
@@ -685,395 +658,10 @@ func (k SpotKeeper) PersistSpotMarketOrderExecution(
 	return tradingRewardPoints
 }
 
-func (k SpotKeeper) ExecuteSpotLimitOrderMatching(
-	ctx sdk.Context,
-	matchedMarketDirection *types.MatchedMarketDirection,
-	stakingInfo *v2.FeeDiscountStakingInfo,
-) *v2.SpotBatchExecutionData {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	marketID := matchedMarketDirection.MarketId
-	market := k.GetSpotMarket(ctx, marketID, true)
-	if market == nil {
-		return nil
-	}
-
-	tradeRewardsMultiplierConfig := k.GetEffectiveTradingRewardsMarketPointsMultiplierConfig(ctx, market.MarketID())
-	feeDiscountConfig := k.feeDiscounts.GetFeeDiscountConfigForMarket(ctx, marketID, stakingInfo)
-
-	// Step 0: Obtain the new buy and sell limit orders from the transient store for convenience
-	newBuyOrders := k.GetAllTransientSpotLimitOrdersByMarketDirection(ctx, marketID, true)
-	newSellOrders := k.GetAllTransientSpotLimitOrdersByMarketDirection(ctx, marketID, false)
-
-	// Step 1: Obtain the buy and sell orderbooks with updated fill quantities and the clearing price from matching
-	matchingResults := k.getMatchedSpotLimitOrderClearingResults(ctx, marketID, newBuyOrders, newSellOrders)
-
-	clearingPrice := matchingResults.ClearingPrice
-	batchExecutionData := k.GetSpotLimitMatchingBatchExecutionData(
-		ctx,
-		market,
-		matchingResults,
-		clearingPrice,
-		tradeRewardsMultiplierConfig,
-		feeDiscountConfig,
-	)
-
-	return batchExecutionData
-}
-
-// getMatchedSpotLimitOrderClearingResults returns the SpotOrderbookMatchingResults.
+// TODO: refactor to merge ProcessTransientSpotLimitBuyOrderbookMatchingResults and ProcessTransientSpotLimitSellOrderbookMatchingResults
 //
 //nolint:revive // ok
-func (k SpotKeeper) getMatchedSpotLimitOrderClearingResults(
-	ctx sdk.Context,
-	marketID common.Hash,
-	transientBuyOrders []*v2.SpotLimitOrder,
-	transientSellOrders []*v2.SpotLimitOrder,
-) *v2.SpotOrderbookMatchingResults {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	buyOrdersIterator := k.SpotLimitOrderbookIterator(ctx, marketID, true)
-	sellOrdersIterator := k.SpotLimitOrderbookIterator(ctx, marketID, false)
-	buyOrderbook := NewSpotLimitOrderbook(k, buyOrdersIterator, transientBuyOrders, true)
-	sellOrderbook := NewSpotLimitOrderbook(k, sellOrdersIterator, transientSellOrders, false)
-
-	if buyOrderbook != nil {
-		defer buyOrderbook.Close()
-	}
-
-	if sellOrderbook != nil {
-		defer sellOrderbook.Close()
-	}
-
-	orderbookResults := NewSpotOrderbookMatchingResults(transientBuyOrders, transientSellOrders)
-	if buyOrderbook == nil || sellOrderbook == nil {
-		return orderbookResults
-	}
-
-	var (
-		lastBuyPrice  math.LegacyDec
-		lastSellPrice math.LegacyDec
-	)
-
-	for {
-		buyOrder := buyOrderbook.Peek()
-		sellOrder := sellOrderbook.Peek()
-
-		// Base Case: Finished iterating over all the orders
-		if buyOrder == nil || sellOrder == nil {
-			break
-		}
-
-		unitSpread := sellOrder.Price.Sub(buyOrder.Price)
-		hasNoMatchableOrdersLeft := unitSpread.IsPositive()
-
-		if hasNoMatchableOrdersLeft {
-			break
-		}
-
-		lastBuyPrice = buyOrder.Price
-		lastSellPrice = sellOrder.Price
-
-		matchQuantityIncrement := math.LegacyMinDec(buyOrder.Quantity, sellOrder.Quantity)
-
-		if err := buyOrderbook.Fill(matchQuantityIncrement); err != nil {
-			k.Logger(ctx).Error("Fill buyOrderbook failed during getMatchedSpotLimitOrderClearingResults:", err)
-		}
-		if err := sellOrderbook.Fill(matchQuantityIncrement); err != nil {
-			k.Logger(ctx).Error("Fill sellOrderbook failed during getMatchedSpotLimitOrderClearingResults:", err)
-		}
-	}
-
-	var clearingPrice math.LegacyDec
-	clearingQuantity := sellOrderbook.GetTotalQuantityFilled()
-
-	if clearingQuantity.IsPositive() {
-		midMarketPrice := k.GetSpotMidPriceOrBestPrice(ctx, marketID)
-		switch {
-		case midMarketPrice != nil && lastBuyPrice.LTE(*midMarketPrice):
-			// default case when a resting orderbook exists beforehand
-			clearingPrice = lastBuyPrice
-		case midMarketPrice != nil && lastSellPrice.GTE(*midMarketPrice):
-			clearingPrice = lastSellPrice
-		case midMarketPrice != nil:
-			clearingPrice = *midMarketPrice
-		default:
-			// edge case when a resting orderbook does not exist, so no other choice
-			// clearing price = (lastBuyPrice + lastSellPrice) / 2
-			validClearingPrice := lastBuyPrice.Add(lastSellPrice).Quo(math.LegacyNewDec(2))
-			clearingPrice = validClearingPrice
-		}
-	}
-
-	orderbookResults.ClearingPrice = clearingPrice
-	orderbookResults.ClearingQuantity = clearingQuantity
-	orderbookResults.TransientBuyOrderbookFills = buyOrderbook.GetTransientOrderbookFills()
-	orderbookResults.RestingBuyOrderbookFills = buyOrderbook.GetRestingOrderbookFills()
-	orderbookResults.TransientSellOrderbookFills = sellOrderbook.GetTransientOrderbookFills()
-	orderbookResults.RestingSellOrderbookFills = sellOrderbook.GetRestingOrderbookFills()
-
-	return orderbookResults
-}
-
-func (k SpotKeeper) GetSpotLimitMatchingBatchExecutionData( //nolint:revive // ok
-	ctx sdk.Context,
-	market *v2.SpotMarket,
-	orderbookResults *v2.SpotOrderbookMatchingResults,
-	clearingPrice math.LegacyDec,
-	pointsMultiplier v2.PointsMultiplier,
-	feeDiscountConfig *v2.FeeDiscountConfig,
-) *v2.SpotBatchExecutionData {
-	// Initialize map DepositKey subaccountID => Deposit Delta (availableBalanceDelta, totalDepositsDelta)
-	baseDenomDepositDeltas := types.NewDepositDeltas()
-	quoteDenomDepositDeltas := types.NewDepositDeltas()
-
-	limitBuyRestingOrderBatchEvent,
-		limitSellRestingOrderBatchEvent,
-		filledDeltas,
-		restingTradingRewards := k.processBothRestingSpotLimitOrderbookMatchingResults(
-		ctx,
-		orderbookResults,
-		market,
-		clearingPrice,
-		market.MakerFeeRate,
-		market.RelayerFeeShareRate,
-		baseDenomDepositDeltas,
-		quoteDenomDepositDeltas,
-		pointsMultiplier,
-		feeDiscountConfig,
-	)
-
-	// filled deltas are handled implicitly with the new resting spot limit orders
-	limitBuyNewOrderBatchEvent,
-		limitSellNewOrderBatchEvent,
-		newRestingBuySpotLimitOrders,
-		newRestingSellSpotLimitOrders,
-		transientTradingRewards := k.processBothTransientSpotLimitOrderbookMatchingResults(
-		ctx,
-		orderbookResults,
-		market,
-		clearingPrice,
-		market.MakerFeeRate,
-		market.TakerFeeRate,
-		market.RelayerFeeShareRate,
-		baseDenomDepositDeltas,
-		quoteDenomDepositDeltas,
-		pointsMultiplier,
-		feeDiscountConfig,
-	)
-
-	eventBatchSpotExecution := make([]*v2.EventBatchSpotExecution, 0)
-
-	if limitBuyRestingOrderBatchEvent != nil {
-		eventBatchSpotExecution = append(eventBatchSpotExecution, limitBuyRestingOrderBatchEvent)
-	}
-
-	if limitSellRestingOrderBatchEvent != nil {
-		eventBatchSpotExecution = append(eventBatchSpotExecution, limitSellRestingOrderBatchEvent)
-	}
-
-	if limitBuyNewOrderBatchEvent != nil {
-		eventBatchSpotExecution = append(eventBatchSpotExecution, limitBuyNewOrderBatchEvent)
-	}
-
-	if limitSellNewOrderBatchEvent != nil {
-		eventBatchSpotExecution = append(eventBatchSpotExecution, limitSellNewOrderBatchEvent)
-	}
-
-	vwapData := v2.NewSpotVwapData()
-	vwapData = vwapData.ApplyExecution(orderbookResults.ClearingPrice, orderbookResults.ClearingQuantity)
-
-	tradingRewards := types.MergeTradingRewardPoints(restingTradingRewards, transientTradingRewards)
-
-	// Final Step: Store the SpotBatchExecutionData for future reduction/processing
-	batch := &v2.SpotBatchExecutionData{
-		Market:                         market,
-		BaseDenomDepositDeltas:         baseDenomDepositDeltas,
-		QuoteDenomDepositDeltas:        quoteDenomDepositDeltas,
-		BaseDenomDepositSubaccountIDs:  baseDenomDepositDeltas.GetSortedSubaccountKeys(),
-		QuoteDenomDepositSubaccountIDs: quoteDenomDepositDeltas.GetSortedSubaccountKeys(),
-		LimitOrderFilledDeltas:         filledDeltas,
-		LimitOrderExecutionEvent:       eventBatchSpotExecution,
-		TradingRewardPoints:            tradingRewards,
-		VwapData:                       vwapData,
-	}
-
-	if len(newRestingBuySpotLimitOrders) > 0 || len(newRestingSellSpotLimitOrders) > 0 {
-		batch.NewOrdersEvent = &v2.EventNewSpotOrders{
-			MarketId:   market.MarketId,
-			BuyOrders:  newRestingBuySpotLimitOrders,
-			SellOrders: newRestingSellSpotLimitOrders,
-		}
-	}
-	return batch
-}
-
-// processBothRestingSpotLimitOrderbookMatchingResults processes both the orderbook matching results to produce the spot execution batch events and filledDelta.
-// Note: clearingPrice should be set to math.LegacyDec{} for normal fills
-//
-//nolint:revive // ok
-func (k SpotKeeper) processBothRestingSpotLimitOrderbookMatchingResults(
-	ctx sdk.Context,
-	o *v2.SpotOrderbookMatchingResults,
-	market *v2.SpotMarket,
-	clearingPrice math.LegacyDec,
-	tradeFeeRate, relayerFeeShareRate math.LegacyDec,
-	baseDenomDepositDeltas types.DepositDeltas,
-	quoteDenomDepositDeltas types.DepositDeltas,
-	pointsMultiplier v2.PointsMultiplier,
-	feeDiscountConfig *v2.FeeDiscountConfig,
-) (
-	limitBuyRestingOrderBatchEvent *v2.EventBatchSpotExecution,
-	limitSellRestingOrderBatchEvent *v2.EventBatchSpotExecution,
-	filledDeltas []*v2.SpotLimitOrderDelta,
-	tradingRewardPoints types.TradingRewardPoints,
-) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	marketID := market.MarketID()
-
-	var spotLimitBuyOrderStateExpansions, spotLimitSellOrderStateExpansions []*v2.SpotOrderStateExpansion
-	var buyTradingRewards, sellTradingRewards types.TradingRewardPoints
-	var currFilledDeltas []*v2.SpotLimitOrderDelta
-
-	filledDeltas = make([]*v2.SpotLimitOrderDelta, 0)
-
-	if o.RestingBuyOrderbookFills != nil {
-		orderbookFills := o.GetOrderbookFills(v2.RestingLimitBuy)
-		spotLimitBuyOrderStateExpansions = k.processRestingSpotLimitOrderExpansions(
-			ctx,
-			marketID,
-			orderbookFills,
-			true,
-			clearingPrice,
-			tradeFeeRate,
-			relayerFeeShareRate,
-			pointsMultiplier,
-			feeDiscountConfig,
-		)
-
-		// Process limit order events and filledDeltas
-		limitBuyRestingOrderBatchEvent, currFilledDeltas, buyTradingRewards = v2.GetBatchExecutionEventsFromSpotLimitOrderStateExpansions(
-			true,
-			market,
-			v2.ExecutionType_LimitMatchRestingOrder,
-			spotLimitBuyOrderStateExpansions,
-			baseDenomDepositDeltas, quoteDenomDepositDeltas,
-		)
-
-		filledDeltas = append(filledDeltas, currFilledDeltas...)
-	}
-
-	if o.RestingSellOrderbookFills != nil {
-		orderbookFills := o.GetOrderbookFills(v2.RestingLimitSell)
-		spotLimitSellOrderStateExpansions = k.processRestingSpotLimitOrderExpansions(
-			ctx,
-			marketID,
-			orderbookFills,
-			false,
-			clearingPrice,
-			tradeFeeRate,
-			relayerFeeShareRate,
-			pointsMultiplier,
-			feeDiscountConfig,
-		)
-
-		// Process limit order events and filledDeltas
-		limitSellRestingOrderBatchEvent, currFilledDeltas, sellTradingRewards = v2.GetBatchExecutionEventsFromSpotLimitOrderStateExpansions(
-			false,
-			market,
-			v2.ExecutionType_LimitMatchRestingOrder,
-			spotLimitSellOrderStateExpansions,
-			baseDenomDepositDeltas, quoteDenomDepositDeltas,
-		)
-		filledDeltas = append(filledDeltas, currFilledDeltas...)
-	}
-
-	tradingRewardPoints = types.MergeTradingRewardPoints(buyTradingRewards, sellTradingRewards)
-
-	return
-}
-
-// processBothTransientSpotLimitOrderbookMatchingResults processes the transient spot limit orderbook matching results.
-// Note: clearingPrice should be set to math.LegacyDec{} for normal fills
-//
-//nolint:revive // ok
-func (k SpotKeeper) processBothTransientSpotLimitOrderbookMatchingResults(
-	ctx sdk.Context,
-	o *v2.SpotOrderbookMatchingResults,
-	market *v2.SpotMarket,
-	clearingPrice math.LegacyDec,
-	makerFeeRate, takerFeeRate, relayerFeeShareRate math.LegacyDec,
-	baseDenomDepositDeltas, quoteDenomDepositDeltas types.DepositDeltas,
-	pointsMultiplier v2.PointsMultiplier,
-	feeDiscountConfig *v2.FeeDiscountConfig,
-) (
-	limitBuyNewOrderBatchEvent *v2.EventBatchSpotExecution,
-	limitSellNewOrderBatchEvent *v2.EventBatchSpotExecution,
-	newRestingBuySpotLimitOrders []*v2.SpotLimitOrder,
-	newRestingSellSpotLimitOrders []*v2.SpotLimitOrder,
-	tradingRewardPoints types.TradingRewardPoints,
-) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
-
-	var expansions []*v2.SpotOrderStateExpansion
-	var buyTradingRewards types.TradingRewardPoints
-	var sellTradingRewards types.TradingRewardPoints
-
-	if o.TransientBuyOrderbookFills != nil {
-		expansions, newRestingBuySpotLimitOrders = k.processTransientSpotLimitBuyOrderbookMatchingResults(
-			ctx,
-			market.MarketID(),
-			o,
-			clearingPrice,
-			makerFeeRate,
-			takerFeeRate,
-			relayerFeeShareRate,
-			pointsMultiplier,
-			feeDiscountConfig,
-		)
-
-		limitBuyNewOrderBatchEvent, _, buyTradingRewards = v2.GetBatchExecutionEventsFromSpotLimitOrderStateExpansions(
-			true,
-			market,
-			v2.ExecutionType_LimitMatchNewOrder,
-			expansions,
-			baseDenomDepositDeltas, quoteDenomDepositDeltas,
-		)
-	}
-
-	if o.TransientSellOrderbookFills != nil {
-		expansions, newRestingSellSpotLimitOrders = k.processTransientSpotLimitSellOrderbookMatchingResults(
-			ctx,
-			market.MarketID(),
-			o,
-			clearingPrice,
-			takerFeeRate,
-			relayerFeeShareRate,
-			pointsMultiplier,
-			feeDiscountConfig,
-		)
-
-		limitSellNewOrderBatchEvent, _, sellTradingRewards = v2.GetBatchExecutionEventsFromSpotLimitOrderStateExpansions(
-			false,
-			market,
-			v2.ExecutionType_LimitMatchNewOrder,
-			expansions,
-			baseDenomDepositDeltas, quoteDenomDepositDeltas,
-		)
-	}
-	tradingRewardPoints = types.MergeTradingRewardPoints(buyTradingRewards, sellTradingRewards)
-	return
-}
-
-// TODO: refactor to merge processTransientSpotLimitBuyOrderbookMatchingResults and processTransientSpotLimitSellOrderbookMatchingResults
-//
-//nolint:revive // ok
-func (k SpotKeeper) processTransientSpotLimitBuyOrderbookMatchingResults(
+func (k SpotKeeper) ProcessTransientSpotLimitBuyOrderbookMatchingResults(
 	ctx sdk.Context,
 	marketID common.Hash,
 	o *v2.SpotOrderbookMatchingResults,
@@ -1082,8 +670,7 @@ func (k SpotKeeper) processTransientSpotLimitBuyOrderbookMatchingResults(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) ([]*v2.SpotOrderStateExpansion, []*v2.SpotLimitOrder) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessTransientSpotLimitBuyOrderbookMatchingResults")()
 
 	orderbookFills := o.TransientBuyOrderbookFills
 	stateExpansions := make([]*v2.SpotOrderStateExpansion, len(orderbookFills.Orders))
@@ -1122,6 +709,8 @@ func (k SpotKeeper) getTransientSpotLimitBuyStateExpansion( //nolint:revive // o
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) *v2.SpotOrderStateExpansion {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getTransientSpotLimitBuyStateExpansion")()
+
 	orderNotional, clearingChargeOrRefund, matchedFeeRefund := math.LegacyZeroDec(), math.LegacyZeroDec(), math.LegacyZeroDec()
 
 	isMaker := false
@@ -1188,9 +777,9 @@ func (k SpotKeeper) getTransientSpotLimitBuyStateExpansion( //nolint:revive // o
 	return &stateExpansion
 }
 
-// processTransientSpotLimitSellOrderbookMatchingResults processes.
+// ProcessTransientSpotLimitSellOrderbookMatchingResults processes.
 // Note: clearingPrice should be set to math.LegacyDec{} for normal fills
-func (k SpotKeeper) processTransientSpotLimitSellOrderbookMatchingResults(
+func (k SpotKeeper) ProcessTransientSpotLimitSellOrderbookMatchingResults(
 	ctx sdk.Context,
 	marketID common.Hash,
 	o *v2.SpotOrderbookMatchingResults,
@@ -1199,8 +788,7 @@ func (k SpotKeeper) processTransientSpotLimitSellOrderbookMatchingResults(
 	pointsMultiplier v2.PointsMultiplier,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) ([]*v2.SpotOrderStateExpansion, []*v2.SpotLimitOrder) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessTransientSpotLimitSellOrderbookMatchingResults")()
 
 	orderbookFills := o.TransientSellOrderbookFills
 
@@ -1237,8 +825,7 @@ func (k SpotKeeper) PersistSpotMatchingExecution( //nolint:revive // ok
 	spotVwapData v2.SpotVwapInfo,
 	tradingRewardPoints types.TradingRewardPoints,
 ) types.TradingRewardPoints {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistSpotMatchingExecution")()
 
 	// Persist Spot Matching execution data
 	for batchIdx := range batchSpotMatchingExecutionData {

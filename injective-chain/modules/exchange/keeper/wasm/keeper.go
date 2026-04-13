@@ -1,12 +1,12 @@
 package wasm
 
 import (
+	"bytes"
 	"encoding/json"
 	"sort"
 
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	"github.com/ethereum/go-ethereum/common"
@@ -28,7 +28,6 @@ type WasmKeeper struct { //nolint:revive // ok
 	derivative *derivative.DerivativeKeeper
 	wasmv      types.WasmViewKeeper
 	wasmx      types.WasmxExecutionKeeper
-	svcTags    metrics.Tags
 }
 
 func New(
@@ -46,7 +45,6 @@ func New(
 		derivative: d,
 		wasmv:      wv,
 		wasmx:      wx,
-		svcTags:    map[string]string{"svc": "wasm_k"},
 	}
 }
 
@@ -55,6 +53,8 @@ func (k WasmKeeper) PrivilegedExecuteContractWithVersion(
 	msg *v2.MsgPrivilegedExecuteContract,
 	exchangeTypeVersion types.ExchangeTypeVersion,
 ) (*v2.MsgPrivilegedExecuteContractResponse, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "PrivilegedExecuteContractWithVersion")()
+
 	k.Logger(ctx).Debug("=============== ⭐️ [Start] PrivilegedExecuteContract ⭐️ ===============")
 
 	sender, _ := sdk.AccAddressFromBech32(msg.Sender)
@@ -82,6 +82,8 @@ func (k WasmKeeper) handleFundsTransfer(
 	sender,
 	contract sdk.AccAddress,
 ) (fundsBefore, totalFunds sdk.Coins, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleFundsTransfer")()
+
 	fundsBefore = sdk.Coins(make([]sdk.Coin, 0, len(msg.Funds)))
 	totalFunds = sdk.Coins{}
 
@@ -110,6 +112,8 @@ func (k WasmKeeper) handleFundsTransfer(
 func (k WasmKeeper) executeContractAndHandleAction(
 	ctx sdk.Context, contract, sender sdk.AccAddress, totalFunds sdk.Coins, data string, exchangeTypeVersion types.ExchangeTypeVersion,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "executeContractAndHandleAction")()
+
 	execMsg, err := wasmxtypes.NewInjectiveExecMsg(sender, data)
 	if err != nil {
 		return errors.Wrap(err, "failed to create exec msg")
@@ -142,8 +146,7 @@ func (k WasmKeeper) HandlePrivilegedAction(
 	action types.InjectiveAction,
 	exchangeTypeVersion types.ExchangeTypeVersion,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandlePrivilegedAction")()
 
 	switch t := action.(type) {
 	case *types.SyntheticTradeAction:
@@ -162,6 +165,8 @@ func (k WasmKeeper) handleSyntheticTradePrivilegedAction(
 	action *types.SyntheticTradeAction,
 	exchangeTypeVersion types.ExchangeTypeVersion,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleSyntheticTradePrivilegedAction")()
+
 	if exchangeTypeVersion == types.ExchangeTypeVersionV1 {
 		newContractTrades, err := k.ConvertSyntheticTradesV1ToV2(ctx, action.ContractTrades)
 		if err != nil {
@@ -184,6 +189,8 @@ func (k WasmKeeper) ConvertSyntheticTradesV1ToV2(
 	ctx sdk.Context,
 	trades []*types.SyntheticTrade,
 ) ([]*types.SyntheticTrade, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ConvertSyntheticTradesV1ToV2")()
+
 	v2Trades := make([]*types.SyntheticTrade, 0, len(trades))
 	for _, trade := range trades {
 		derivativeMarket := k.derivative.GetDerivativeMarketByID(ctx, trade.MarketID)
@@ -234,8 +241,11 @@ func (k WasmKeeper) HandlePositionTransferAction(
 	origin sdk.AccAddress,
 	action *types.PositionTransfer,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandlePositionTransferAction")()
+
+	if k.IsPostOnlyMode(ctx) {
+		return types.ErrPostOnlyMode.Wrap("position transfers are not allowed in post-only mode")
+	}
 
 	m := k.derivative.GetDerivativeMarketInfo(ctx, action.MarketID, true)
 
@@ -296,15 +306,19 @@ func (k WasmKeeper) HandlePositionTransferAction(
 
 	k.applyOpenInterestDeltaIfNeeded(ctx, action.MarketID, oiDelta)
 
-	k.checkAndResolveReduceOnlyConflicts(ctx, action.MarketID, action.SourceSubaccountID, sourcePosition, !sourcePosition.IsLong)
+	if err := k.checkAndResolveReduceOnlyConflicts(ctx, action.MarketID, action.SourceSubaccountID, sourcePosition, !sourcePosition.IsLong); err != nil {
+		return err
+	}
 
-	k.resolvePositionTransferDestinationReduceOnlyEffects(
+	if err := k.resolvePositionTransferDestinationReduceOnlyEffects(
 		ctx,
 		action,
 		destinationPosition,
 		isSourceLongBefore,
 		isDestinationLongBefore,
-	)
+	); err != nil {
+		return err
+	}
 
 	events.Emit(ctx, k.BaseKeeper, &v2.EventPositionTransfer{
 		MarketId:                action.MarketID.Hex(),
@@ -329,9 +343,11 @@ func (k WasmKeeper) resolvePositionTransferDestinationReduceOnlyEffects(
 	destinationPosition *v2.Position,
 	sourceDirBefore Direction,
 	destDirBefore Direction,
-) {
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "resolvePositionTransferDestinationReduceOnlyEffects")()
+
 	if sourceDirBefore == destDirBefore {
-		return
+		return nil
 	}
 
 	destWasLong := destDirBefore == DirLong
@@ -339,15 +355,16 @@ func (k WasmKeeper) resolvePositionTransferDestinationReduceOnlyEffects(
 	// if destination position flipped or is closed, cancel all RO orders
 	if destWasLong != destinationPosition.IsLong || destinationPosition.Quantity.IsZero() {
 		metadata := k.GetSubaccountOrderbookMetadata(ctx, action.MarketID, action.DestinationSubaccountID, !destWasLong)
-		k.cancelAllReduceOnlyOrders(ctx, action.MarketID, action.DestinationSubaccountID, metadata, !destWasLong)
-		return
+		return k.cancelAllReduceOnlyOrders(ctx, action.MarketID, action.DestinationSubaccountID, metadata, !destWasLong)
 	}
 
 	// partial closing case
-	k.checkAndResolveReduceOnlyConflicts(ctx, action.MarketID, action.DestinationSubaccountID, destinationPosition, !destinationPosition.IsLong)
+	return k.checkAndResolveReduceOnlyConflicts(ctx, action.MarketID, action.DestinationSubaccountID, destinationPosition, !destinationPosition.IsLong)
 }
 
 func (k WasmKeeper) applyOpenInterestDeltaIfNeeded(ctx sdk.Context, marketID common.Hash, oiDelta math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "applyOpenInterestDeltaIfNeeded")()
+
 	if oiDelta.IsZero() {
 		return
 	}
@@ -360,30 +377,28 @@ func (k WasmKeeper) checkAndResolveReduceOnlyConflicts(
 	subaccountID common.Hash,
 	position *v2.Position,
 	isReduceOnlyDirectionBuy bool,
-) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "checkAndResolveReduceOnlyConflicts")()
 
 	metadata := k.GetSubaccountOrderbookMetadata(ctx, marketID, subaccountID, isReduceOnlyDirectionBuy)
 
 	if metadata.ReduceOnlyLimitOrderCount == 0 {
-		return
+		return nil
 	}
 
 	if position.Quantity.IsZero() {
-		k.cancelAllReduceOnlyOrders(ctx, marketID, subaccountID, metadata, isReduceOnlyDirectionBuy)
-		return
+		return k.cancelAllReduceOnlyOrders(ctx, marketID, subaccountID, metadata, isReduceOnlyDirectionBuy)
 	}
 
 	cumulativeOrderSideQuantity := metadata.AggregateReduceOnlyQuantity.Add(metadata.AggregateVanillaQuantity)
 
 	maxRoQuantityToCancel := cumulativeOrderSideQuantity.Sub(position.Quantity)
 	if maxRoQuantityToCancel.IsNegative() || maxRoQuantityToCancel.IsZero() {
-		return
+		return nil
 	}
 
 	subaccountEOBResults := v2.NewSubaccountOrderResults()
-	k.derivative.CancelMinimumReduceOnlyOrders(
+	return k.derivative.CancelMinimumReduceOnlyOrders(
 		ctx,
 		marketID,
 		subaccountID,
@@ -401,15 +416,14 @@ func (k WasmKeeper) cancelAllReduceOnlyOrders(
 	subaccountID common.Hash,
 	metadata *v2.SubaccountOrderbookMetadata,
 	isBuy bool,
-) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "cancelAllReduceOnlyOrders")()
 
 	if metadata.ReduceOnlyLimitOrderCount == 0 {
-		return
+		return nil
 	}
 
-	orders, totalQuantity := k.subaccount.GetWorstReduceOnlySubaccountOrdersUpToCount(
+	orders := k.subaccount.GetWorstReduceOnlySubaccountOrdersUpToCount(
 		ctx,
 		marketID,
 		subaccountID,
@@ -417,7 +431,7 @@ func (k WasmKeeper) cancelAllReduceOnlyOrders(
 		&metadata.ReduceOnlyLimitOrderCount,
 	)
 
-	k.derivative.CancelReduceOnlyOrders(ctx, marketID, subaccountID, metadata, isBuy, totalQuantity, orders)
+	return k.derivative.CancelReduceOnlyOrders(ctx, marketID, subaccountID, metadata, isBuy, orders)
 }
 
 func (k WasmKeeper) HandleSyntheticTradeAction(
@@ -426,8 +440,11 @@ func (k WasmKeeper) HandleSyntheticTradeAction(
 	origin sdk.AccAddress,
 	action *types.SyntheticTradeAction,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandleSyntheticTradeAction")()
+
+	if k.IsPostOnlyMode(ctx) {
+		return types.ErrPostOnlyMode.Wrap("synthetic trades are not allowed in post-only mode")
+	}
 
 	summary, err := action.Summarize()
 	if err != nil {
@@ -452,12 +469,16 @@ type syntheticEventData struct {
 	trades            []*v2.DerivativeTradeLog
 }
 
+type syntheticFundingVwapByMarket map[common.Hash]*v2.VwapData
+
 func (k WasmKeeper) processSyntheticTradeAction(
 	ctx sdk.Context,
 	contractAddress sdk.AccAddress,
 	marketIDs []common.Hash,
 	action *types.SyntheticTradeAction,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processSyntheticTradeAction")()
+
 	totalMarginAndFees := make(map[string]math.LegacyDec)
 	totalFees := make(map[string]math.LegacyDec)
 	markets := make(map[common.Hash]*v2.DerivativeMarketInfo)
@@ -506,12 +527,16 @@ func (k WasmKeeper) processSyntheticTradeAction(
 	}
 
 	for _, marketID := range marketIDs {
-		k.resolveSyntheticTradeROConflictsForMarket(ctx, marketID, initialPositions, finalPositions)
+		if err := k.resolveSyntheticTradeROConflictsForMarket(ctx, marketID, initialPositions, finalPositions); err != nil {
+			return err
+		}
 
 		if cs := caps[marketID]; cs != nil && !cs.openInterestDelta.IsZero() {
 			k.ApplyOpenInterestDeltaForMarket(ctx, marketID, cs.openInterestDelta)
 		}
 	}
+
+	k.persistSyntheticTradeFundingVwap(ctx, markets, action.UserTrades)
 
 	keys := make([]syntheticEventKey, 0, len(eventGroups))
 	for key := range eventGroups {
@@ -540,6 +565,79 @@ func (k WasmKeeper) processSyntheticTradeAction(
 	return nil
 }
 
+func (k WasmKeeper) persistSyntheticTradeFundingVwap(
+	ctx sdk.Context,
+	markets map[common.Hash]*v2.DerivativeMarketInfo,
+	trades []*types.SyntheticTrade,
+) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "persistSyntheticTradeFundingVwap")()
+
+	vwapByMarket := buildSyntheticFundingVwapByMarket(markets, trades)
+
+	for _, marketID := range sortedSyntheticFundingVwapMarketIDs(vwapByMarket) {
+		k.persistSyntheticTradeFundingVwapForMarket(ctx, marketID, markets[marketID], vwapByMarket[marketID])
+	}
+}
+
+func buildSyntheticFundingVwapByMarket(
+	markets map[common.Hash]*v2.DerivativeMarketInfo,
+	trades []*types.SyntheticTrade,
+) syntheticFundingVwapByMarket {
+	vwapByMarket := make(syntheticFundingVwapByMarket)
+
+	for _, trade := range trades {
+		marketInfo := markets[trade.MarketID]
+		if !shouldPersistSyntheticFundingTrade(marketInfo, trade) {
+			continue
+		}
+
+		vwapByMarket[trade.MarketID] = applySyntheticFundingTradeExecution(vwapByMarket[trade.MarketID], trade)
+	}
+
+	return vwapByMarket
+}
+
+func shouldPersistSyntheticFundingTrade(marketInfo *v2.DerivativeMarketInfo, trade *types.SyntheticTrade) bool {
+	return marketInfo != nil &&
+		marketInfo.Market != nil &&
+		marketInfo.Market.IsPerpetual &&
+		!trade.Quantity.IsZero()
+}
+
+func applySyntheticFundingTradeExecution(vwapData *v2.VwapData, trade *types.SyntheticTrade) *v2.VwapData {
+	if vwapData == nil {
+		vwapData = v2.NewVwapData()
+	}
+
+	return vwapData.ApplyExecution(trade.Price, trade.Quantity)
+}
+
+func sortedSyntheticFundingVwapMarketIDs(vwapByMarket syntheticFundingVwapByMarket) []common.Hash {
+	marketIDs := make([]common.Hash, 0, len(vwapByMarket))
+	for marketID := range vwapByMarket {
+		marketIDs = append(marketIDs, marketID)
+	}
+
+	sort.SliceStable(marketIDs, func(i, j int) bool {
+		return bytes.Compare(marketIDs[i].Bytes(), marketIDs[j].Bytes()) < 0
+	})
+
+	return marketIDs
+}
+
+func (k WasmKeeper) persistSyntheticTradeFundingVwapForMarket(
+	ctx sdk.Context,
+	marketID common.Hash,
+	marketInfo *v2.DerivativeMarketInfo,
+	vwapData *v2.VwapData,
+) {
+	if marketInfo == nil || marketInfo.MarkPrice.IsNil() || marketInfo.MarkPrice.IsZero() || vwapData == nil || vwapData.Quantity.IsZero() {
+		return
+	}
+
+	k.AccumulateSyntheticPerpetualFundingVwap(ctx, marketID, marketInfo.MarkPrice, vwapData.Price, vwapData.Quantity)
+}
+
 func ensureSyntheticTradeParties(
 	contractAddress sdk.AccAddress,
 	origin sdk.AccAddress,
@@ -560,6 +658,15 @@ func ensureSyntheticTradeParties(
 func ensureActiveDerivativeMarket(market *v2.DerivativeMarket, markPrice math.LegacyDec, marketID common.Hash) error {
 	if market == nil || markPrice.IsNil() {
 		return errors.Wrapf(types.ErrDerivativeMarketNotFound, "active derivative market for marketID %s not found", marketID.Hex())
+	}
+	return nil
+}
+
+func (k WasmKeeper) ensureSyntheticTradeMarketSupported(ctx sdk.Context, marketID common.Hash) error {
+	isEnabled := true
+	market := k.derivative.GetDerivativeOrBinaryOptionsMarket(ctx, marketID, &isEnabled)
+	if market != nil && market.GetMarketType() == types.MarketType_BinaryOption {
+		return errors.Wrapf(types.ErrInvalidTrade, "synthetic trades do not support binary options markets: %s", marketID.Hex())
 	}
 	return nil
 }
@@ -722,6 +829,8 @@ func (k WasmKeeper) applyPositionTransferMarketBalanceDelta(
 	market *v2.DerivativeMarket,
 	payout, closeExecutionMargin math.LegacyDec,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "applyPositionTransferMarketBalanceDelta")()
+
 	marketBalanceDelta := payout.Add(closeExecutionMargin).Neg()
 	chainFormattedMarketBalanceDelta := market.NotionalToChainFormat(marketBalanceDelta)
 
@@ -741,6 +850,8 @@ func (k WasmKeeper) applyPositionTransferDeposits(
 	market *v2.DerivativeMarket,
 	payout, closeExecutionMargin, receiverTradingFee math.LegacyDec,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "applyPositionTransferDeposits")()
+
 	chainFormattedDepositDeltaAmount := market.NotionalToChainFormat(payout.Add(closeExecutionMargin).Sub(receiverTradingFee))
 	chainFormattedReceiverTradingFee := market.NotionalToChainFormat(receiverTradingFee)
 
@@ -762,7 +873,13 @@ func (k WasmKeeper) initSyntheticTradeState(
 	totalFees map[string]math.LegacyDec,
 	caps map[common.Hash]*capState,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "initSyntheticTradeState")()
+
 	for _, marketID := range marketIDs {
+		if err := k.ensureSyntheticTradeMarketSupported(ctx, marketID); err != nil {
+			return err
+		}
+
 		m := k.derivative.GetDerivativeMarketInfo(ctx, marketID, true)
 		if m.Market == nil || m.MarkPrice.IsNil() {
 			return errors.Wrapf(types.ErrDerivativeMarketNotFound, "active derivative market for marketID %s not found", marketID.Hex())
@@ -800,6 +917,8 @@ func (k WasmKeeper) applySyntheticTrade(
 	totalFees map[string]math.LegacyDec,
 	trade *types.SyntheticTrade,
 ) (*syntheticTradeResult, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "applySyntheticTrade")()
+
 	m := markets[trade.MarketID]
 	market := m.Market
 	markPrice := m.MarkPrice
@@ -821,6 +940,10 @@ func (k WasmKeeper) applySyntheticTrade(
 	orderType := v2.OrderType_SELL
 	if trade.IsBuy {
 		orderType = v2.OrderType_BUY
+	}
+
+	if err := ensureSyntheticTradeMeetsMarketRequirements(trade, market); err != nil {
+		return nil, err
 	}
 
 	if err := ensureNotionalCapNotBreached(orderType, trade, markPrice, cs); err != nil {
@@ -975,6 +1098,22 @@ func ensureNotionalCapNotBreached(
 	return nil
 }
 
+func ensureSyntheticTradeMeetsMarketRequirements(trade *types.SyntheticTrade, market *v2.DerivativeMarket) error {
+	derivativeOrder := &v2.DerivativeOrder{
+		OrderInfo: v2.OrderInfo{
+			Price:    trade.Price,
+			Quantity: trade.Quantity,
+		},
+		Margin: trade.Margin,
+	}
+
+	if err := derivativeOrder.CheckTickSize(market.GetMinPriceTickSize(), market.GetMinQuantityTickSize()); err != nil {
+		return err
+	}
+
+	return derivativeOrder.CheckNotional(market.GetMinNotional())
+}
+
 func ensureSyntheticTradePositionPostDelta(
 	position *v2.Position,
 	market *v2.DerivativeMarket,
@@ -1012,6 +1151,8 @@ func (k WasmKeeper) ensureAndApplySyntheticTradeMarketBalanceDelta(
 	collateralizationMargin math.LegacyDec,
 	tradingFee math.LegacyDec,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ensureAndApplySyntheticTradeMarketBalanceDelta")()
+
 	marketBalanceDelta := v2.GetMarketBalanceDelta(payout, collateralizationMargin, tradingFee, trade.Margin.IsZero())
 	chainFormattedMarketBalanceDelta := market.NotionalToChainFormat(marketBalanceDelta)
 	availableMarketFunds := k.derivative.GetAvailableMarketFunds(ctx, trade.MarketID)
@@ -1043,6 +1184,8 @@ func (k WasmKeeper) transferSyntheticTradeFunds(
 	coinsToTransfer sdk.Coins,
 	totalFees map[string]math.LegacyDec,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "transferSyntheticTradeFunds")()
+
 	if coinsToTransfer.IsZero() {
 		return nil
 	}
@@ -1103,7 +1246,7 @@ func ensurePositionAboveInitialMarginRatio(
 }
 
 func GetSortedFeesKeys(p map[string]math.LegacyDec) []string {
-	denoms := make([]string, 0)
+	denoms := make([]string, 0, len(p))
 	for k := range p {
 		denoms = append(denoms, k)
 	}
@@ -1118,9 +1261,8 @@ func (k WasmKeeper) resolveSyntheticTradeROConflictsForMarket(
 	marketID common.Hash,
 	initialPositions,
 	finalPositions v2.ModifiedPositionCache,
-) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "resolveSyntheticTradeROConflictsForMarket")()
 
 	subaccountIDs := initialPositions.GetSortedSubaccountIDsByMarket(marketID)
 
@@ -1135,16 +1277,24 @@ func (k WasmKeeper) resolveSyntheticTradeROConflictsForMarket(
 
 		metadata := k.GetSubaccountOrderbookMetadata(ctx, marketID, subaccountID, !initialPosition.IsLong)
 		if initialPosition.IsLong != finalPosition.IsLong || finalPosition.Quantity.IsZero() {
-			k.cancelAllReduceOnlyOrders(ctx, marketID, subaccountID, metadata, !initialPosition.IsLong)
+			if err := k.cancelAllReduceOnlyOrders(ctx, marketID, subaccountID, metadata, !initialPosition.IsLong); err != nil {
+				return err
+			}
 			continue
 		}
 
 		// partial closing case
-		k.checkAndResolveReduceOnlyConflicts(ctx, marketID, subaccountID, finalPosition, !finalPosition.IsLong)
+		if err := k.checkAndResolveReduceOnlyConflicts(ctx, marketID, subaccountID, finalPosition, !finalPosition.IsLong); err != nil {
+			return err
+		}
 	}
+
+	return nil
 }
 
 func (k WasmKeeper) calculateFundsDifference(ctx sdk.Context, sender sdk.AccAddress, fundsBefore sdk.Coins) sdk.Coins {
+	defer k.Meter(ctx).FuncTiming(&ctx, "calculateFundsDifference")()
+
 	fundsAfter := sdk.Coins(make([]sdk.Coin, 0, len(fundsBefore)))
 
 	for _, coin := range fundsBefore {
@@ -1168,6 +1318,8 @@ func filterNonPositiveCoins(coins sdk.Coins) sdk.Coins {
 }
 
 func (k WasmKeeper) QueryMarketID(ctx sdk.Context, contractAddress string) (common.Hash, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "QueryMarketID")()
+
 	type getMarketIDQuery struct {
 	}
 

@@ -14,6 +14,8 @@ func (k *ProposalKeeper) HandleBinaryOptionsMarketLaunchProposal(
 	ctx sdk.Context,
 	p *v2.BinaryOptionsMarketLaunchProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleBinaryOptionsMarketLaunchProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -44,6 +46,8 @@ func (k *ProposalKeeper) HandleBinaryOptionsMarketLaunchProposal(
 }
 
 func (k *ProposalKeeper) HandleBinaryOptionsMarketParamUpdateProposal(ctx sdk.Context, p *v2.BinaryOptionsMarketParamUpdateProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleBinaryOptionsMarketParamUpdateProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -83,6 +87,8 @@ func (k *ProposalKeeper) HandleBinaryOptionsMarketParamUpdateProposal(ctx sdk.Co
 }
 
 func (k *ProposalKeeper) validateMarketExists(ctx sdk.Context, marketId string) (*v2.BinaryOptionsMarket, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.validateMarketExists")()
+
 	marketID := common.HexToHash(marketId)
 	market, _ := k.GetBinaryOptionsMarketAndStatus(ctx, marketID)
 
@@ -139,6 +145,7 @@ func validateTimestamps(
 }
 
 func (k *ProposalKeeper) validateAdmin(ctx sdk.Context, p *v2.BinaryOptionsMarketParamUpdateProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.validateAdmin")()
 	// Enforce that the admin account exists, if specified
 	if p.Admin != "" {
 		admin, _ := sdk.AccAddressFromBech32(p.Admin)
@@ -151,6 +158,8 @@ func (k *ProposalKeeper) validateAdmin(ctx sdk.Context, p *v2.BinaryOptionsMarke
 }
 
 func (k *ProposalKeeper) validateOracleParams(ctx sdk.Context, p *v2.BinaryOptionsMarketParamUpdateProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.validateOracleParams")()
+
 	if p.OracleParams != nil {
 		// Enforce that the provider exists, but not necessarily that the oracle price for the symbol exists
 		if k.oracle.GetProviderInfo(ctx, p.OracleParams.Provider) == nil {
@@ -166,6 +175,7 @@ func (k *ProposalKeeper) validateFeeRates(
 	market *v2.BinaryOptionsMarket,
 	p *v2.BinaryOptionsMarketParamUpdateProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.validateFeeRates")()
 	// Skip validation if no fee rates are being updated
 	if p.MakerFeeRate == nil && p.TakerFeeRate == nil && p.RelayerFeeShareRate == nil && p.HasDisabledMinimalProtocolFee == v2.DisableMinimalProtocolFeeUpdate_NoUpdate {
 		return nil
@@ -197,7 +207,7 @@ func (k *ProposalKeeper) validateFeeRates(
 
 	// must use `if` not `else` here due to `DisableMinimalProtocolFeeUpdate_NoUpdate`
 	if p.HasDisabledMinimalProtocolFee == v2.DisableMinimalProtocolFeeUpdate_False {
-		minimalProtocolFeeRate = k.GetParams(ctx).MinimalProtocolFeeRate
+		minimalProtocolFeeRate = k.GetCachedParams(ctx).MinimalProtocolFeeRate
 	}
 
 	discountSchedule := k.GetFeeDiscountSchedule(ctx)

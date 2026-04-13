@@ -15,11 +15,11 @@ import (
 var _ types.QueryServer = queryServer{}
 
 type queryServer struct {
-	Keeper
+	*Keeper
 }
 
 func NewQueryServerImpl(k Keeper) types.QueryServer {
-	return queryServer{Keeper: k}
+	return queryServer{Keeper: &k}
 }
 
 func (q queryServer) Params(c context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
@@ -27,6 +27,9 @@ func (q queryServer) Params(c context.Context, _ *types.QueryParamsRequest) (*ty
 }
 
 func (q queryServer) AllTokenPairs(c context.Context, req *types.QueryAllTokenPairsRequest) (*types.QueryAllTokenPairsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer q.Meter(ctx).FuncTiming(&ctx, "AllTokenPairs")()
+
 	if req == nil {
 		return nil, errors.Wrap(types.ErrInvalidQueryRequest, "no request provided")
 	}
@@ -43,7 +46,6 @@ func (q queryServer) AllTokenPairs(c context.Context, req *types.QueryAllTokenPa
 	if len(req.Pagination.Key) > 0 {
 		return nil, errors.Wrap(types.ErrInvalidQueryRequest, "pagination.key is unsupported for AllTokenPairs")
 	}
-	ctx := sdk.UnwrapSDKContext(c)
 
 	tokenPairs, count, err := q.getPaginatedTokenPairs(ctx, req.Pagination)
 	if err != nil {
@@ -186,6 +188,7 @@ func (q queryServer) getPaginatedERC20DenomMetadata(ctx sdk.Context, pageReq *qu
 
 func (q queryServer) TokenPairByDenom(c context.Context, req *types.QueryTokenPairByDenomRequest) (*types.QueryTokenPairByDenomResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer q.Meter(ctx).FuncTiming(&ctx, "TokenPairByDenom")()
 
 	pair, err := q.GetTokenPairForDenom(ctx, req.BankDenom)
 	if err != nil {
@@ -214,6 +217,7 @@ func (q queryServer) TokenPairByDenom(c context.Context, req *types.QueryTokenPa
 
 func (q queryServer) TokenPairByERC20Address(c context.Context, req *types.QueryTokenPairByERC20AddressRequest) (*types.QueryTokenPairByERC20AddressResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer q.Meter(ctx).FuncTiming(&ctx, "TokenPairByERC20Address")()
 
 	erc20Address := common.HexToAddress(req.Erc20Address)
 

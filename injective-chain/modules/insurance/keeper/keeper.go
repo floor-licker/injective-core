@@ -1,9 +1,12 @@
 package keeper
 
 import (
+	"context"
+
 	"cosmossdk.io/log"
+	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
@@ -11,6 +14,8 @@ import (
 
 	exchangekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/types"
+	"github.com/InjectiveLabs/injective-core/injective-chain/modules/common/vouchers"
+	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 )
 
 // Keeper of this module maintains collections of insurance.
@@ -22,9 +27,11 @@ type Keeper struct {
 	bankKeeper     types.BankKeeper
 	exchangeKeeper *exchangekeeper.Keeper
 
-	svcTags metrics.Tags
+	meter metrics.Meter
 
 	authority string
+
+	vouchersAssistant *vouchers.VouchersAssistant
 }
 
 // NewKeeper creates new instances of the insurance Keeper
@@ -35,17 +42,44 @@ func NewKeeper(
 	bk types.BankKeeper,
 	ek *exchangekeeper.Keeper,
 	authority string,
-) Keeper {
-	return Keeper{
+) *Keeper {
+	k := &Keeper{
 		storeKey:       storeKey,
 		cdc:            cdc,
 		accountKeeper:  ak,
 		bankKeeper:     bk,
 		exchangeKeeper: ek,
 		authority:      authority,
-		svcTags: metrics.Tags{
-			"svc": "insurance_k",
-		},
+	}
+	k.vouchersAssistant = vouchers.NewVouchersAssistant(k, bk)
+	return k
+}
+
+// GetVouchersStore returns the KV store prefixed for voucher storage (satisfies vouchers.VoucherKeeper).
+func (k Keeper) GetVouchersStore(ctx sdk.Context) storetypes.KVStore {
+	return prefix.NewStore(ctx.KVStore(k.storeKey), types.VouchersKey)
+}
+
+// ModuleName returns the insurance module name (satisfies vouchers.VoucherKeeper).
+func (Keeper) ModuleName() string { return types.ModuleName }
+
+// EmitSetVoucherEvent emits EventSetVoucher (satisfies vouchers.VoucherKeeper).
+func (Keeper) EmitSetVoucherEvent(ctx sdk.Context, addr string, voucher sdk.Coin) {
+	if err := ctx.EventManager().EmitTypedEvent(&types.EventSetVoucher{
+		Addr:    addr,
+		Voucher: voucher,
+	}); err != nil {
+		ctx.Logger().Error("failed to emit EventSetVoucher", "addr", addr, "voucher", voucher, "err", err)
+	}
+}
+
+// EmitDeleteVoucherEvent emits EventSetVoucher with a zero coin to signal deletion (satisfies vouchers.VoucherKeeper).
+func (Keeper) EmitDeleteVoucherEvent(ctx sdk.Context, addr, denom string) {
+	if err := ctx.EventManager().EmitTypedEvent(&types.EventSetVoucher{
+		Addr:    addr,
+		Voucher: types.NewEmptyVoucher(denom),
+	}); err != nil {
+		ctx.Logger().Error("failed to emit EventSetVoucher (delete)", "addr", addr, "denom", denom, "err", err)
 	}
 }
 
@@ -57,6 +91,14 @@ func (k *Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", types.ModuleName)
 }
 
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
+}
+
 // CreateModuleAccount creates a module account with minting and burning capabilities
 func (k *Keeper) CreateModuleAccount(ctx sdk.Context) {
 	baseAcc := authtypes.NewEmptyModuleAccount(types.ModuleName, authtypes.Minter, authtypes.Burner)
@@ -66,4 +108,30 @@ func (k *Keeper) CreateModuleAccount(ctx sdk.Context) {
 
 func (k *Keeper) SetExchangeKeeper(ek *exchangekeeper.Keeper) {
 	k.exchangeKeeper = ek
+}
+
+// BackfillRedemptionScheduleAddrIndex populates the (redeemer, marketID) secondary
+// index for all existing redemption schedules. This must be run once as a state
+// migration when upgrading to the version that introduced the secondary index.
+// Errors on individual schedules are logged and skipped to avoid blocking the upgrade.
+func (k *Keeper) BackfillRedemptionScheduleAddrIndex(ctx sdk.Context) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "BackfillRedemptionScheduleAddrIndex")()
+
+	store := ctx.KVStore(k.storeKey)
+
+	chaintypes.IterateSafe(k.globalRedemptionIterator(ctx), func(_, value []byte) bool {
+		schedule := k.unmarshalRedemptionSchedule(value)
+		if schedule == nil {
+			k.Logger(ctx).Error("skipping redemption schedule: unmarshal failure during backfill")
+			return false
+		}
+
+		addrKey, err := schedule.GetRedemptionScheduleByAddrKey()
+		if err != nil {
+			k.Logger(ctx).Error("skipping redemption schedule: failed to compute addr index key", "id", schedule.Id, "error", err)
+			return false
+		}
+		store.Set(addrKey, []byte{})
+		return false
+	})
 }

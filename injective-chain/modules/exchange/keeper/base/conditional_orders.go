@@ -4,7 +4,6 @@ import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -18,8 +17,7 @@ func (k *BaseKeeper) SetConditionalDerivativeMarketOrder(
 	marketID common.Hash,
 	markPrice math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetConditionalDerivativeMarketOrder")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeConditionalMarketOrdersPrefix)
@@ -44,8 +42,7 @@ func (k *BaseKeeper) SetConditionalDerivativeLimitOrder(
 	marketID common.Hash,
 	markPrice math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetConditionalDerivativeLimitOrder")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeConditionalLimitOrdersPrefix)
@@ -75,8 +72,8 @@ func (k *BaseKeeper) DeleteConditionalDerivativeOrder( //nolint:revive // ok
 	orderHash common.Hash,
 	orderCid string,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteConditionalDerivativeOrder")()
+
 	var (
 		ordersStore      prefix.Store
 		ordersIndexStore prefix.Store
@@ -111,8 +108,7 @@ func (k *BaseKeeper) GetConditionalDerivativeLimitOrderBySubaccountIDAndHash(
 	subaccountID common.Hash,
 	orderHash common.Hash,
 ) (order *v2.DerivativeLimitOrder, direction bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetConditionalDerivativeLimitOrderBySubaccountIDAndHash")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeConditionalLimitOrdersPrefix)
@@ -158,8 +154,7 @@ func (k *BaseKeeper) GetConditionalDerivativeMarketOrderBySubaccountIDAndHash( /
 	subaccountID common.Hash,
 	orderHash common.Hash,
 ) (order *v2.DerivativeMarketOrder, direction bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetConditionalDerivativeMarketOrderBySubaccountIDAndHash")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeConditionalMarketOrdersPrefix)
@@ -195,6 +190,8 @@ func (k *BaseKeeper) GetAllConditionalDerivativeMarketOrdersInMarketUpToPrice(
 	marketID common.Hash,
 	triggerPrice *math.LegacyDec,
 ) (marketBuyOrders, marketSellOrders []*v2.DerivativeMarketOrder) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllConditionalDerivativeMarketOrdersInMarketUpToPrice")()
+
 	marketBuyOrders = make([]*v2.DerivativeMarketOrder, 0)
 	marketSellOrders = make([]*v2.DerivativeMarketOrder, 0)
 
@@ -223,8 +220,7 @@ func (k *BaseKeeper) GetAllConditionalDerivativeLimitOrdersInMarketUpToPrice(
 	marketID common.Hash,
 	triggerPrice *math.LegacyDec,
 ) (limitBuyOrders, limitSellOrders []*v2.DerivativeLimitOrder) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllConditionalDerivativeLimitOrdersInMarketUpToPrice")()
 
 	limitBuyOrders = make([]*v2.DerivativeLimitOrder, 0)
 	limitSellOrders = make([]*v2.DerivativeLimitOrder, 0)
@@ -263,8 +259,7 @@ func (k *BaseKeeper) IterateConditionalOrdersBySubaccount(
 	isMarketOrders bool,
 	process func(orderHash common.Hash) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateConditionalOrdersBySubaccount")()
 
 	var (
 		iterator     storetypes.Iterator
@@ -303,8 +298,7 @@ func (k *BaseKeeper) IterateConditionalOrdersBySubaccount(
 // markForConditionalOrderInvalidation stores the flag in transient store that this subaccountID has invalid
 // RO conditional orders for the market it is supposed to be read in the EndBlocker
 func (k *BaseKeeper) markForConditionalOrderInvalidation(ctx sdk.Context, marketID, subaccountID common.Hash, isBuy bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "markForConditionalOrderInvalidation")()
 
 	store := k.getTransientStore(ctx)
 	flagsStore := prefix.NewStore(store, types.ConditionalOrderInvalidationFlagPrefix)
@@ -313,8 +307,7 @@ func (k *BaseKeeper) markForConditionalOrderInvalidation(ctx sdk.Context, market
 }
 
 func (k *BaseKeeper) removeConditionalOrderInvalidationFlag(ctx sdk.Context, marketID, subaccountID common.Hash, isBuy bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "removeConditionalOrderInvalidationFlag")()
 
 	store := k.getTransientStore(ctx)
 	flagsStore := prefix.NewStore(store, types.ConditionalOrderInvalidationFlagPrefix)
@@ -325,8 +318,7 @@ func (k *BaseKeeper) removeConditionalOrderInvalidationFlag(ctx sdk.Context, mar
 func (k *BaseKeeper) IterateInvalidConditionalOrderFlags(
 	ctx sdk.Context, process func(marketID, subaccountID common.Hash, isBuy bool) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateInvalidConditionalOrderFlags")()
 
 	store := k.getTransientStore(ctx)
 	flagsStore := prefix.NewStore(store, types.ConditionalOrderInvalidationFlagPrefix)
@@ -359,8 +351,7 @@ func (k *BaseKeeper) iterateConditionalDerivativeOrders(
 	triggerPrice *math.LegacyDec,
 	process func(orderKey []byte) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "iterateConditionalDerivativeOrders")()
 
 	var (
 		iterator     storetypes.Iterator

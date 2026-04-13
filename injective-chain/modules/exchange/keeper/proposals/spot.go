@@ -14,6 +14,8 @@ func (k *ProposalKeeper) HandleSpotMarketParamUpdateProposal(
 	ctx sdk.Context,
 	p *v2.SpotMarketParamUpdateProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleSpotMarketParamUpdateProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -66,7 +68,7 @@ func (k *ProposalKeeper) HandleSpotMarketParamUpdateProposal(
 
 	// must use `if` not `else` here due to `DisableMinimalProtocolFeeUpdate_NoUpdate`
 	if p.HasDisabledMinimalProtocolFee == v2.DisableMinimalProtocolFeeUpdate_False {
-		minimalProtocolFeeRate = k.GetParams(ctx).MinimalProtocolFeeRate
+		minimalProtocolFeeRate = k.GetCachedParams(ctx).MinimalProtocolFeeRate
 	}
 
 	discountSchedule := k.GetFeeDiscountSchedule(ctx)
@@ -89,6 +91,8 @@ func (k *ProposalKeeper) HandleSpotMarketLaunchProposal(
 	ctx sdk.Context,
 	p *v2.SpotMarketLaunchProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleSpotMarketLaunchProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}

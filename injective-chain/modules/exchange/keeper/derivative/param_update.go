@@ -5,7 +5,6 @@ import (
 
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,14 +16,12 @@ import (
 )
 
 func (k DerivativeKeeper) ExecuteDerivativeMarketParamUpdateProposal(ctx sdk.Context, p *v2.DerivativeMarketParamUpdateProposal) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteDerivativeMarketParamUpdateProposal")()
 
 	marketID := common.HexToHash(p.MarketId)
 	prevMarket := k.GetDerivativeMarketByID(ctx, marketID)
 
 	if prevMarket == nil {
-		metrics.ReportFuncCall(k.svcTags)
 		return fmt.Errorf("market is not available, market_id %s", p.MarketId)
 	}
 
@@ -63,6 +60,8 @@ func (k DerivativeKeeper) ExecuteDerivativeMarketParamUpdateProposal(ctx sdk.Con
 }
 
 func (k DerivativeKeeper) handleMarketStatusChange(ctx sdk.Context, status v2.MarketStatus, market *v2.DerivativeMarket) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleMarketStatusChange")()
+
 	switch status {
 	case v2.MarketStatus_Expired, v2.MarketStatus_Demolished:
 		k.CancelAllRestingDerivativeLimitOrders(ctx, market)
@@ -74,6 +73,8 @@ func (k DerivativeKeeper) handleMarketStatusChange(ctx sdk.Context, status v2.Ma
 func (k DerivativeKeeper) handleMakerFeeRateChange(
 	ctx sdk.Context, marketID common.Hash, prevRate math.LegacyDec, newRate *math.LegacyDec, market *v2.DerivativeMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleMakerFeeRateChange")()
+
 	if newRate == nil {
 		return
 	}
@@ -90,6 +91,8 @@ func (k DerivativeKeeper) handleMakerFeeRateChange(
 func (k DerivativeKeeper) handleTakerFeeRateChange(
 	ctx sdk.Context, marketID common.Hash, prevRate math.LegacyDec, newRate *math.LegacyDec, market *v2.DerivativeMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleTakerFeeRateChange")()
+
 	if newRate == nil {
 		return
 	}
@@ -111,6 +114,8 @@ func (k DerivativeKeeper) HandleDerivativeFeeDecrease(
 	newFeeRate math.LegacyDec,
 	market v2.DerivativeMarketI,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandleDerivativeFeeDecrease")()
+
 	isFeeRefundRequired := prevFeeRate.IsPositive()
 	if !isFeeRefundRequired {
 		return
@@ -140,6 +145,8 @@ func (k DerivativeKeeper) handleDerivativeFeeDecreaseForConditionals(
 	newFeeRate math.LegacyDec,
 	market v2.DerivativeMarketI,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleDerivativeFeeDecreaseForConditionals")()
+
 	isFeeRefundRequired := prevFeeRate.IsPositive()
 	if !isFeeRefundRequired {
 		return
@@ -176,6 +183,8 @@ func (k DerivativeKeeper) handleDerivativeFeeIncreaseForConditionals(
 	newFeeRate math.LegacyDec,
 	prevMarket v2.DerivativeMarketI,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleDerivativeFeeIncreaseForConditionals")()
+
 	isExtraFeeChargeRequired := newFeeRate.IsPositive()
 	if !isExtraFeeChargeRequired {
 		return
@@ -217,6 +226,8 @@ func (k DerivativeKeeper) tryChargeExtraFeeForDerivativeOrder(
 	denom string,
 	prevMarket v2.DerivativeMarketI,
 ) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "tryChargeExtraFeeForDerivativeOrder")()
+
 	if order.IsReduceOnly() {
 		return true
 	}
@@ -252,6 +263,8 @@ func (k DerivativeKeeper) HandleDerivativeFeeIncrease(
 	newMakerFeeRate math.LegacyDec,
 	prevMarket v2.DerivativeMarketI,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandleDerivativeFeeIncrease")()
+
 	isExtraFeeChargeRequired := newMakerFeeRate.IsPositive()
 	if !isExtraFeeChargeRequired {
 		return
@@ -274,6 +287,8 @@ func (k DerivativeKeeper) processOrderForFeeIncrease(
 	denom string,
 	prevMarket v2.DerivativeMarketI,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processOrderForFeeIncrease")()
+
 	if order.IsReduceOnly() {
 		return
 	}
@@ -309,6 +324,8 @@ func (k DerivativeKeeper) cancelDerivativeOrderDuringFeeIncrease(
 	prevMarket v2.DerivativeMarketI,
 	order *v2.DerivativeLimitOrder,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "cancelDerivativeOrderDuringFeeIncrease")()
+
 	subaccountID := order.SubaccountID()
 	isBuy := order.IsBuy()
 	if err := k.CancelRestingDerivativeLimitOrder(
@@ -355,8 +372,7 @@ func (k DerivativeKeeper) UpdateDerivativeMarketParam(
 	ticker string,
 	adminInfo *v2.AdminInfo,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateDerivativeMarketParam")()
 
 	market := k.GetDerivativeMarketByID(ctx, marketID)
 	originalMarketStatus := market.Status

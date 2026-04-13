@@ -7,6 +7,9 @@ import (
 )
 
 func (k *Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) {
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitGenesis")(&err)
+
 	k.SetParams(ctx, data.Params)
 
 	for _, priceFeedState := range data.PriceFeedPriceStates {
@@ -28,19 +31,17 @@ func (k *Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) {
 	}
 
 	for _, priceData := range data.CoinbasePriceStates {
-		if err := k.SetCoinbasePriceState(ctx, priceData); err != nil {
+		err = k.SetCoinbasePriceState(ctx, priceData)
+		if err != nil {
 			panic(err)
 		}
-	}
-
-	for _, priceState := range data.ChainlinkPriceStates {
-		k.SetChainlinkPriceState(ctx, priceState.FeedId, priceState)
 	}
 
 	for _, providerState := range data.ProviderStates {
 		info := providerState.ProviderInfo
 
-		if err := k.SetProviderInfo(ctx, info); err != nil {
+		err = k.SetProviderInfo(ctx, info)
+		if err != nil {
 			panic(err)
 		}
 
@@ -81,6 +82,8 @@ func (k *Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) {
 }
 
 func (k *Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExportGenesis")()
+
 	return &types.GenesisState{
 		Params:                          k.GetParams(ctx),
 		BandRelayers:                    k.GetAllBandRelayers(ctx),
@@ -93,7 +96,6 @@ func (k *Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		BandIbcLatestClientId:           k.GetBandIBCLatestClientID(ctx),
 		CalldataRecords:                 k.GetAllBandCalldataRecords(ctx),
 		BandIbcLatestRequestId:          k.GetBandIBCLatestRequestID(ctx),
-		ChainlinkPriceStates:            k.GetAllChainlinkPriceStates(ctx),
 		HistoricalPriceRecords:          k.GetAllHistoricalPriceRecords(ctx),
 		ProviderStates:                  k.GetAllProviderStates(ctx),
 		PythPriceStates:                 k.GetAllPythPriceStates(ctx),

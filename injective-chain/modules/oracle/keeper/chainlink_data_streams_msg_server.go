@@ -7,7 +7,6 @@ import (
 
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/smartcontractkit/data-streams-sdk/go/feed"
@@ -16,17 +15,13 @@ import (
 )
 
 type ChainlinkDataStreamsMsgServer struct {
-	Keeper
-	svcTags metrics.Tags
+	*Keeper
 }
 
 // NewChainlinkDataStreamsMsgServerImpl returns an implementation of the Chainlink Data Streams MsgServer interface.
 func NewChainlinkDataStreamsMsgServerImpl(keeper Keeper) ChainlinkDataStreamsMsgServer {
 	return ChainlinkDataStreamsMsgServer{
-		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "chainlink_data_stream_msg_h",
-		},
+		Keeper: &keeper,
 	}
 }
 
@@ -36,6 +31,7 @@ type decodedReportData struct {
 	price                 *big.Int
 	validFromTimestamp    uint32
 	observationsTimestamp uint32
+	expiresAt             uint32
 }
 
 var (
@@ -124,9 +120,8 @@ func init() {
 
 // RelayChainlinkPrices handles the MsgRelayChainlinkPrices message.
 func (k ChainlinkDataStreamsMsgServer) RelayChainlinkPrices(c context.Context, msg *types.MsgRelayChainlinkPrices) (*types.MsgRelayChainlinkPricesResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "RelayChainlinkPrices")()
 
 	if len(msg.Reports) == 0 {
 		return &types.MsgRelayChainlinkPricesResponse{}, nil
@@ -151,25 +146,6 @@ func (k ChainlinkDataStreamsMsgServer) RelayChainlinkPrices(c context.Context, m
 	}
 
 	return &types.MsgRelayChainlinkPricesResponse{}, nil
-}
-
-// decodeFullReportData extracts the report data bytes from a full report payload.
-func decodeFullReportData(fullReport []byte) ([]byte, error) {
-	decoded, err := fullReportArgs.Unpack(fullReport)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode full report: %w", err)
-	}
-	if len(decoded) < 2 {
-		return nil, fmt.Errorf("unexpected full report output size")
-	}
-	reportData, ok := decoded[1].([]byte)
-	if !ok {
-		return nil, fmt.Errorf("unexpected report data type: %T", decoded[1])
-	}
-	if len(reportData) == 0 {
-		return nil, fmt.Errorf("empty report data")
-	}
-	return reportData, nil
 }
 
 // decodeVerifiedReport decodes the verified report bytes into the fields we store.
@@ -212,6 +188,10 @@ func decodeVerifiedReport(feedID feed.ID, reportData []byte) (*decodedReportData
 	if err != nil {
 		return nil, err
 	}
+	expiresAt, err := toUint32(decoded[5])
+	if err != nil {
+		return nil, err
+	}
 	price, err := toBigInt(decoded[priceIndex])
 	if err != nil {
 		return nil, err
@@ -225,6 +205,7 @@ func decodeVerifiedReport(feedID feed.ID, reportData []byte) (*decodedReportData
 		price:                 price,
 		validFromTimestamp:    validFromTimestamp,
 		observationsTimestamp: observationsTimestamp,
+		expiresAt:             expiresAt,
 	}, nil
 }
 
@@ -284,6 +265,7 @@ func toBigInt(value any) (*big.Int, error) {
 
 // processChainlinkReport processes a single Chainlink report.
 func (k ChainlinkDataStreamsMsgServer) processChainlinkReport(ctx sdk.Context, chainlinkReport *types.ChainlinkReport) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processChainlinkReport")()
 	// Validate inputs
 	if chainlinkReport == nil || len(chainlinkReport.FeedId) == 0 || len(chainlinkReport.FullReport) == 0 {
 		return errors.Wrap(types.ErrInvalidOracleRequest, "empty chainlink report")
@@ -297,21 +279,10 @@ func (k ChainlinkDataStreamsMsgServer) processChainlinkReport(ctx sdk.Context, c
 	}
 	copy(feedID[:], chainlinkReport.FeedId)
 
-	params := k.GetParams(ctx)
-	var err error
-	var reportData []byte
-	if params.AcceptUnverifiedChainlinkDataStreamsReports {
-		reportData, err = decodeFullReportData(chainlinkReport.FullReport)
-		if err != nil {
-			k.Logger(ctx).Error("Chainlink report decode failed", "error", err)
-			return errors.Wrap(types.ErrInvalidOracleRequest, err.Error())
-		}
-	} else {
-		reportData, err = k.verifyChainlinkReport(ctx, chainlinkReport.FullReport)
-		if err != nil {
-			k.Logger(ctx).Error("Chainlink report verification failed", "error", err)
-			return err
-		}
+	reportData, err := k.verifyChainlinkReport(ctx, chainlinkReport.FullReport)
+	if err != nil {
+		k.Logger(ctx).Error("Chainlink report verification failed", "error", err)
+		return err
 	}
 
 	// Decode the verified report based on version
@@ -336,6 +307,11 @@ func (k ChainlinkDataStreamsMsgServer) processChainlinkReport(ctx sdk.Context, c
 	// Chainlink prices are expressed as integers with 18 decimal places
 	priceDecimal := math.LegacyNewDecFromBigIntWithPrec(decoded.price, 18)
 
+	if !priceDecimal.IsPositive() {
+		k.Logger(ctx).Error("Chainlink report price is not positive", "feed_id", decoded.feedIDStr)
+		return errors.Wrap(types.ErrInvalidOracleRequest, "price must be positive")
+	}
+
 	// Convert the raw price to math.Int for storage
 	reportPriceInt := math.NewIntFromBigInt(decoded.price)
 
@@ -346,6 +322,7 @@ func (k ChainlinkDataStreamsMsgServer) processChainlinkReport(ctx sdk.Context, c
 		reportPriceInt,
 		uint64(decoded.validFromTimestamp),
 		uint64(decoded.observationsTimestamp),
+		uint64(decoded.expiresAt),
 		priceDecimal,
 	)
 

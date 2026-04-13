@@ -1,31 +1,23 @@
 package oracle
 
 import (
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/keeper"
 )
 
 type BlockHandler struct {
-	k keeper.Keeper
-
-	svcTags metrics.Tags
+	k *keeper.Keeper
 }
 
 func NewBlockHandler(k keeper.Keeper) *BlockHandler {
 	return &BlockHandler{
-		k: k,
-
-		svcTags: metrics.Tags{
-			"svc": "oracle_b",
-		},
+		k: &k,
 	}
 }
 
 func (h *BlockHandler) BeginBlocker(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BeginBlocker")()
 
 	if ctx.BlockHeight()%100000 == 0 {
 		h.k.CleanupHistoricalPriceRecords(ctx)

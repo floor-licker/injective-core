@@ -11,10 +11,14 @@ func isNonPermissionedAdminBurn(sender, admin string) bool {
 }
 
 func (k msgServer) isPermissionedSuperBurn(ctx sdk.Context, denom string, sender sdk.AccAddress) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "isPermissionedSuperBurn")()
+
 	return k.permissionsKeeper.HasPermissionsForAction(ctx, denom, sender, permissionstypes.Action_SUPER_BURN)
 }
 
 func (k msgServer) verifyBurnFromPermissions(ctx sdk.Context, denom string, sender sdk.AccAddress, hasPermissionsNamespace bool) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "verifyBurnFromPermissions")()
+
 	authorityMetadata, err := k.GetAuthorityMetadata(ctx, denom)
 	if err != nil {
 		return err
@@ -48,6 +52,8 @@ func (k msgServer) verifySelfBurnPermissions(ctx sdk.Context, denom string, send
 }
 
 func (k msgServer) verifyBurnPermissions(ctx sdk.Context, denom string, sender, burnFromAddr sdk.AccAddress, hasPermissionsNamespace bool) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "verifyBurnPermissions")()
+
 	isSelfBurn := burnFromAddr.Equals(sender)
 
 	if isSelfBurn {

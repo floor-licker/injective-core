@@ -3,7 +3,7 @@ package derivative
 import (
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
+	"github.com/InjectiveLabs/metrics/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -17,14 +17,14 @@ type OrderBookI interface {
 
 type marketExecutionOrderbook struct {
 	isMarketBuy     bool
-	limitOrderbook  *limitOrderbook
-	marketOrderbook *marketOrderbook
+	limitOrderbook  *LimitOrderbook
+	marketOrderbook *MarketOrderbook
 }
 
 func newMarketExecutionOrderbook(
 	isMarketBuy bool,
-	limitOrderbook *limitOrderbook,
-	marketOrderbook *marketOrderbook,
+	limitOrderbook *LimitOrderbook,
+	marketOrderbook *MarketOrderbook,
 ) *marketExecutionOrderbook {
 	return &marketExecutionOrderbook{
 		isMarketBuy:     isMarketBuy,
@@ -34,8 +34,8 @@ func newMarketExecutionOrderbook(
 }
 
 func newMarketExecutionOrderbooks(
-	limitBuyOrderbook, limitSellOrderbook *limitOrderbook,
-	marketBuyOrderbook, marketSellOrderbook *marketOrderbook,
+	limitBuyOrderbook, limitSellOrderbook *LimitOrderbook,
+	marketBuyOrderbook, marketSellOrderbook *MarketOrderbook,
 ) []*marketExecutionOrderbook {
 	return []*marketExecutionOrderbook{
 		newMarketExecutionOrderbook(false, limitBuyOrderbook, marketSellOrderbook),
@@ -43,7 +43,7 @@ func newMarketExecutionOrderbooks(
 	}
 }
 
-type marketOrderbook struct {
+type MarketOrderbook struct {
 	k              DerivativeKeeper
 	isBuy          bool
 	isLiquidation  bool
@@ -69,7 +69,7 @@ type marketOrderbook struct {
 }
 
 //nolint:revive //ok
-func newDerivativeMarketOrderbook(
+func NewDerivativeMarketOrderbook(
 	k DerivativeKeeper,
 	isBuy bool,
 	isLiquidation bool,
@@ -81,7 +81,7 @@ func newDerivativeMarketOrderbook(
 	openNotionalCap v2.OpenNotionalCap,
 	positionStates map[common.Hash]*v2.PositionState,
 	positionCache map[common.Hash]*v2.Position,
-) *marketOrderbook {
+) *MarketOrderbook {
 	if len(derivativeMarketOrders) == 0 {
 		return nil
 	}
@@ -96,7 +96,7 @@ func newDerivativeMarketOrderbook(
 		markPrice = math.LegacyZeroDec()
 	}
 
-	orderGroup := marketOrderbook{
+	orderGroup := MarketOrderbook{
 		k:             k,
 		isBuy:         isBuy,
 		isLiquidation: isLiquidation,
@@ -123,15 +123,19 @@ func newDerivativeMarketOrderbook(
 	return &orderGroup
 }
 
-func (b *marketOrderbook) GetNotional() math.LegacyDec { return b.notional }
+func (b *MarketOrderbook) GetNotional() math.LegacyDec { return b.notional }
 
-func (b *marketOrderbook) GetTotalQuantityFilled() math.LegacyDec { return b.totalQuantity }
+func (b *MarketOrderbook) GetTotalQuantityFilled() math.LegacyDec { return b.totalQuantity }
 
-func (b *marketOrderbook) GetOrderbookFillQuantities() []math.LegacyDec {
+func (b *MarketOrderbook) GetOrderbookFillQuantities() []math.LegacyDec {
 	return b.fillQuantities
 }
 
-func (b *marketOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
+func (b *MarketOrderbook) GetOrders() []*v2.DerivativeMarketOrder {
+	return b.orders
+}
+
+func (b *MarketOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
 	// finished iterating
 	if b.orderIdx == len(b.orders) {
 		return nil
@@ -159,7 +163,9 @@ func (b *marketOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
 	}
 }
 
-func (b *marketOrderbook) shouldSkipOrder(ctx sdk.Context, order *v2.DerivativeMarketOrder) bool {
+func (b *MarketOrderbook) shouldSkipOrder(ctx sdk.Context, order *v2.DerivativeMarketOrder) bool {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.shouldSkipOrder", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	b.initializedPositionState(ctx, order.SubaccountID())
 
 	if b.shouldSkipForClosingPosition(ctx, order) {
@@ -174,7 +180,9 @@ func (b *marketOrderbook) shouldSkipOrder(ctx sdk.Context, order *v2.DerivativeM
 	return result
 }
 
-func (b *marketOrderbook) shouldSkipForClosingPosition(ctx sdk.Context, order *v2.DerivativeMarketOrder) bool {
+func (b *MarketOrderbook) shouldSkipForClosingPosition(ctx sdk.Context, order *v2.DerivativeMarketOrder) bool {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.shouldSkipForClosingPosition", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	subaccountID := order.SubaccountID()
 	position := b.getInitializedPositionState(ctx, subaccountID)
 
@@ -209,7 +217,9 @@ func (b *marketOrderbook) shouldSkipForClosingPosition(ctx sdk.Context, order *v
 	return err != nil
 }
 
-func (b *marketOrderbook) getTradeFeeRate(ctx sdk.Context, order *v2.DerivativeMarketOrder) math.LegacyDec {
+func (b *MarketOrderbook) getTradeFeeRate(ctx sdk.Context, order *v2.DerivativeMarketOrder) math.LegacyDec {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.getTradeFeeRate", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	takerFeeRate := b.market.GetTakerFeeRate()
 	if order.OrderType.IsAtomic() {
 		multiplier := b.k.GetMarketAtomicExecutionFeeMultiplier(ctx, b.marketID, b.market.GetMarketType())
@@ -219,7 +229,7 @@ func (b *marketOrderbook) getTradeFeeRate(ctx sdk.Context, order *v2.DerivativeM
 	return takerFeeRate
 }
 
-func (b *marketOrderbook) shouldSkipForMarginRequirement(order *v2.DerivativeMarketOrder) bool {
+func (b *MarketOrderbook) shouldSkipForMarginRequirement(order *v2.DerivativeMarketOrder) bool {
 	if !order.IsVanilla() || b.market.GetMarketType() == types.MarketType_BinaryOption {
 		return false
 	}
@@ -228,22 +238,24 @@ func (b *marketOrderbook) shouldSkipForMarginRequirement(order *v2.DerivativeMar
 	return err != nil
 }
 
-func (b *marketOrderbook) incrementCurrFillQuantities(incrQuantity math.LegacyDec) {
+func (b *MarketOrderbook) incrementCurrFillQuantities(incrQuantity math.LegacyDec) {
 	b.fillQuantities[b.orderIdx] = b.fillQuantities[b.orderIdx].Add(incrQuantity)
 }
 
-func (b *marketOrderbook) getCurrOrderFillableQuantity() math.LegacyDec {
+func (b *MarketOrderbook) getCurrOrderFillableQuantity() math.LegacyDec {
 	return b.orders[b.orderIdx].OrderInfo.Quantity.Sub(b.fillQuantities[b.orderIdx])
 }
 
-func (b *marketOrderbook) IsPerpetual() bool {
+func (b *MarketOrderbook) IsPerpetual() bool {
 	return b.funding != nil
 }
 
-func (b *marketOrderbook) getInitializedPositionState(
+func (b *MarketOrderbook) getInitializedPositionState(
 	ctx sdk.Context,
 	subaccountID common.Hash,
 ) *v2.Position {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.getInitializedPositionState", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	if b.positionStates[subaccountID] == nil {
 		position := b.k.GetPosition(ctx, b.marketID, subaccountID)
 
@@ -271,10 +283,10 @@ func (b *marketOrderbook) getInitializedPositionState(
 	return b.positionCache[subaccountID]
 }
 
-func (b *marketOrderbook) doesBreachOpenNotionalCapForMarketOrderbook(currOrder *v2.DerivativeMarketOrder) bool {
+func (b *MarketOrderbook) doesBreachOpenNotionalCapForMarketOrderbook(currOrder *v2.DerivativeMarketOrder) bool {
 	doesBreachCap, notionalDelta := DoesBreachOpenNotionalCap(
 		currOrder.OrderType,
-		currOrder.OrderInfo.Quantity,
+		b.getCurrOrderFillableQuantity(),
 		b.markPrice,
 		b.getTotalOpenNotional(),
 		getSignedPositionQuantity(b.positionCache[currOrder.SubaccountID()]),
@@ -312,7 +324,9 @@ func isValidReduceOnlyOrder(
 	return true
 }
 
-func (b *marketOrderbook) updateNotionalCapValuesAfterFill(ctx sdk.Context, currOrder *v2.DerivativeMarketOrder, fillQuantity math.LegacyDec) {
+func (b *MarketOrderbook) updateNotionalCapValuesAfterFill(ctx sdk.Context, currOrder *v2.DerivativeMarketOrder, fillQuantity math.LegacyDec) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.updateNotionalCapValuesAfterFill", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	notionalDelta, quantityDelta, _ := GetValuesForNotionalCapChecks(
 		currOrder.OrderType,
 		fillQuantity,
@@ -337,32 +351,34 @@ func (b *marketOrderbook) updateNotionalCapValuesAfterFill(ctx sdk.Context, curr
 	b.cachedAddedOpenNotional = math.LegacyZeroDec()
 }
 
-func (b *marketOrderbook) shouldSkipForOpenNotionalCapAndUpdateState(
+func (b *MarketOrderbook) shouldSkipForOpenNotionalCapAndUpdateState(
 	currOrder *v2.DerivativeMarketOrder,
 ) bool {
 	return b.doesBreachOpenNotionalCapForMarketOrderbook(currOrder)
 }
 
-func (b *marketOrderbook) SetOppositeSideDerivativeOrderbook(opposite OrderBookI) {
+func (b *MarketOrderbook) SetOppositeSideDerivativeOrderbook(opposite OrderBookI) {
 	b.oppositeSideDerivativeOrderbook = opposite
 }
 
-func (b *marketOrderbook) GetAddedOpenNotional() math.LegacyDec {
+func (b *MarketOrderbook) GetAddedOpenNotional() math.LegacyDec {
 	return b.addedOpenNotional.Add(b.cachedAddedOpenNotional)
 }
 
-func (b *marketOrderbook) GetOpenInterestDelta() math.LegacyDec {
+func (b *MarketOrderbook) GetOpenInterestDelta() math.LegacyDec {
 	return b.openInterestDelta
 }
 
-func (b *marketOrderbook) getTotalOpenNotional() math.LegacyDec {
+func (b *MarketOrderbook) getTotalOpenNotional() math.LegacyDec {
 	return b.currentOpenNotional.Add(b.addedOpenNotional).Add(b.oppositeSideDerivativeOrderbook.GetAddedOpenNotional())
 }
 
-func (b *marketOrderbook) initializedPositionState(
+func (b *MarketOrderbook) initializedPositionState(
 	ctx sdk.Context,
 	subaccountID common.Hash,
 ) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.initializedPositionState", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	if b.positionStates[subaccountID] != nil {
 		return
 	}
@@ -391,7 +407,9 @@ func (b *marketOrderbook) initializedPositionState(
 	}
 }
 
-func (b *marketOrderbook) Fill(ctx sdk.Context, fillQuantity math.LegacyDec) {
+func (b *MarketOrderbook) Fill(ctx sdk.Context, fillQuantity math.LegacyDec) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "MarketOrderbook.Fill", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	order := b.orders[b.orderIdx]
 
 	b.incrementCurrFillQuantities(fillQuantity)
@@ -401,7 +419,12 @@ func (b *marketOrderbook) Fill(ctx sdk.Context, fillQuantity math.LegacyDec) {
 	b.updateNotionalCapValuesAfterFill(ctx, order, fillQuantity)
 }
 
-type limitOrderbook struct {
+func (*MarketOrderbook) Close() error {
+	// Added for consistency with limit orderbooks interface
+	return nil
+}
+
+type LimitOrderbook struct {
 	k DerivativeKeeper
 
 	isBuy         bool
@@ -409,10 +432,10 @@ type limitOrderbook struct {
 	notional      math.LegacyDec
 
 	totalQuantity           math.LegacyDec
-	transientOrderbookFills *orderbookFills
+	transientOrderbookFills *OrderbookFills
 
 	transientOrderIdx     int
-	restingOrderbookFills *orderbookFills
+	restingOrderbookFills *OrderbookFills
 
 	restingOrderIterator    storetypes.Iterator
 	orderCancelHashes       map[common.Hash]struct{}
@@ -421,7 +444,7 @@ type limitOrderbook struct {
 	transientOrdersToCancel []*v2.DerivativeLimitOrder
 
 	// pointers to the current OrderbookFills
-	currState                       *orderbookFills
+	currState                       *OrderbookFills
 	market                          v2.DerivativeMarketI
 	markPrice                       math.LegacyDec
 	marketID                        common.Hash
@@ -437,7 +460,7 @@ type limitOrderbook struct {
 }
 
 //nolint:revive //ok
-func newLimitOrderbook(
+func NewLimitOrderbook(
 	k DerivativeKeeper,
 	ctx sdk.Context,
 	isBuy bool,
@@ -450,9 +473,8 @@ func newLimitOrderbook(
 	openNotionalCap v2.OpenNotionalCap,
 	positionStates map[common.Hash]*v2.PositionState,
 	positionCache map[common.Hash]*v2.Position,
-) *limitOrderbook {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+) *LimitOrderbook {
+	defer k.Meter(ctx).FuncTiming(&ctx, "NewLimitOrderbook", metrics.Tag("market_id", market.MarketID().Hex()))()
 
 	iterator := k.DerivativeLimitOrdersIterator(ctx, market.MarketID(), isBuy)
 	// return early if there are no limit orders in this direction
@@ -462,23 +484,23 @@ func newLimitOrderbook(
 		return nil
 	}
 
-	var transientOrderbookState *orderbookFills
+	var transientOrderbookState *OrderbookFills
 	if len(transientOrders) != 0 {
 		transientOrderFillQuantities := make([]math.LegacyDec, len(transientOrders))
 		// pre-initialize to zero dec for convenience
 		for idx := range transientOrderFillQuantities {
 			transientOrderFillQuantities[idx] = math.LegacyZeroDec()
 		}
-		transientOrderbookState = &orderbookFills{
+		transientOrderbookState = &OrderbookFills{
 			Orders:         transientOrders,
 			FillQuantities: transientOrderFillQuantities,
 		}
 	}
 
-	var restingOrderbookState *orderbookFills
+	var restingOrderbookState *OrderbookFills
 
 	if iterator.Valid() {
-		restingOrderbookState = &orderbookFills{
+		restingOrderbookState = &OrderbookFills{
 			Orders:         make([]*v2.DerivativeLimitOrder, 0),
 			FillQuantities: make([]math.LegacyDec, 0),
 		}
@@ -489,7 +511,7 @@ func newLimitOrderbook(
 		markPrice = math.LegacyZeroDec()
 	}
 
-	orderbook := limitOrderbook{
+	orderbook := LimitOrderbook{
 		k:             k,
 		isBuy:         isBuy,
 		isLiquidation: isLiquidation,
@@ -526,17 +548,17 @@ func newLimitOrderbook(
 	return &orderbook
 }
 
-func (b *limitOrderbook) GetNotional() math.LegacyDec { return b.notional }
+func (b *LimitOrderbook) GetNotional() math.LegacyDec { return b.notional }
 
-func (b *limitOrderbook) GetTotalQuantityFilled() math.LegacyDec { return b.totalQuantity }
+func (b *LimitOrderbook) GetTotalQuantityFilled() math.LegacyDec { return b.totalQuantity }
 
-func (b *limitOrderbook) GetTransientOrderbookFills() *orderbookFills {
+func (b *LimitOrderbook) GetTransientOrderbookFills() *OrderbookFills {
 	if len(b.transientOrdersToCancel) == 0 {
 		return b.transientOrderbookFills
 	}
 
 	capacity := len(b.transientOrderbookFills.Orders) - len(b.transientOrdersToCancel)
-	filteredFills := &orderbookFills{
+	filteredFills := &OrderbookFills{
 		Orders:         make([]*v2.DerivativeLimitOrder, 0, capacity),
 		FillQuantities: make([]math.LegacyDec, 0, capacity),
 	}
@@ -550,14 +572,14 @@ func (b *limitOrderbook) GetTransientOrderbookFills() *orderbookFills {
 	return filteredFills
 }
 
-func (b *limitOrderbook) GetRestingOrderbookFills() *orderbookFills {
+func (b *LimitOrderbook) GetRestingOrderbookFills() *OrderbookFills {
 	if len(b.restingOrdersToCancel) == 0 {
 		return b.restingOrderbookFills
 	}
 
 	capacity := len(b.restingOrderbookFills.Orders) - len(b.restingOrdersToCancel)
 
-	filteredFills := &orderbookFills{
+	filteredFills := &OrderbookFills{
 		Orders:         make([]*v2.DerivativeLimitOrder, 0, capacity),
 		FillQuantities: make([]math.LegacyDec, 0, capacity),
 	}
@@ -572,26 +594,28 @@ func (b *limitOrderbook) GetRestingOrderbookFills() *orderbookFills {
 	return filteredFills
 }
 
-func (b *limitOrderbook) GetRestingOrderbookCancels() []*v2.DerivativeLimitOrder {
+func (b *LimitOrderbook) GetRestingOrderbookCancels() []*v2.DerivativeLimitOrder {
 	return b.restingOrdersToCancel
 }
 
-func (b *limitOrderbook) GetTransientOrderbookCancels() []*v2.DerivativeLimitOrder {
+func (b *LimitOrderbook) GetTransientOrderbookCancels() []*v2.DerivativeLimitOrder {
 	return b.transientOrdersToCancel
 }
 
-func (b *limitOrderbook) GetPartialCancelOrders() map[common.Hash]struct{} {
+func (b *LimitOrderbook) GetPartialCancelOrders() map[common.Hash]struct{} {
 	return b.partialCancelOrders
 }
 
-func (b *limitOrderbook) IsPerpetual() bool {
+func (b *LimitOrderbook) IsPerpetual() bool {
 	return b.funding != nil
 }
 
-func (b *limitOrderbook) checkAndInitializePosition(
+func (b *LimitOrderbook) checkAndInitializePosition(
 	ctx sdk.Context,
 	subaccountID common.Hash,
 ) *v2.Position {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "LimitOrderbook.checkAndInitializePosition", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	if b.positionStates[subaccountID] == nil {
 		position := b.k.GetPosition(ctx, b.marketID, subaccountID)
 
@@ -619,7 +643,7 @@ func (b *limitOrderbook) checkAndInitializePosition(
 	return b.positionCache[subaccountID]
 }
 
-func (b *limitOrderbook) getCurrOrderAndInitializeCurrState() *v2.DerivativeLimitOrder {
+func (b *LimitOrderbook) getCurrOrderAndInitializeCurrState() *v2.DerivativeLimitOrder {
 	restingOrder := b.getRestingOrder()
 	transientOrder := b.getTransientOrder()
 
@@ -651,7 +675,8 @@ func (b *limitOrderbook) getCurrOrderAndInitializeCurrState() *v2.DerivativeLimi
 	return currOrder
 }
 
-func (b *limitOrderbook) addInvalidOrderToCancelsAndAdvanceToNextOrder(ctx sdk.Context, currOrder *v2.DerivativeLimitOrder) {
+func (b *LimitOrderbook) addInvalidOrderToCancelsAndAdvanceToNextOrder(ctx sdk.Context, currOrder *v2.DerivativeLimitOrder) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "LimitOrderbook.addInvalidOrderToCancelsAndAdvanceToNextOrder", metrics.Tag("market_id", b.marketID.Hex()))()
 	// Check if this order already has fills
 	// This can happen when an order passes validation initially, receives fills during matching,
 	// but then fails validation on a subsequent Peek() due to changed position state.
@@ -690,7 +715,10 @@ func (b *limitOrderbook) addInvalidOrderToCancelsAndAdvanceToNextOrder(ctx sdk.C
 	b.advanceNewOrder(ctx)
 }
 
-func (b *limitOrderbook) advanceNewOrder(ctx sdk.Context) {
+//revive:disable:cyclomatic // this code has been like this for a long time. Needs refactoring and proper regression testing.
+func (b *LimitOrderbook) advanceNewOrder(ctx sdk.Context) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "LimitOrderbook.advanceNewOrder", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	currOrder := b.getCurrOrderAndInitializeCurrState()
 
 	if b.currState == nil {
@@ -757,13 +785,14 @@ func getSignedPositionQuantity(position *v2.Position) math.LegacyDec {
 	return position.Quantity
 }
 
-func (b *limitOrderbook) doesBreachOpenNotionalCapForLimitOrderbook(currOrder *v2.DerivativeLimitOrder) bool {
+func (b *LimitOrderbook) doesBreachOpenNotionalCapForLimitOrderbook(currOrder *v2.DerivativeLimitOrder) bool {
 	if b.isLiquidation {
 		return false
 	}
+
 	doesBreachCap, notionalDelta := DoesBreachOpenNotionalCap(
 		currOrder.OrderType,
-		currOrder.OrderInfo.Quantity,
+		b.getCurrFillableQuantity(),
 		b.markPrice,
 		b.getTotalOpenNotional(),
 		getSignedPositionQuantity(b.positionCache[currOrder.SubaccountID()]),
@@ -780,7 +809,8 @@ func (b *limitOrderbook) doesBreachOpenNotionalCapForLimitOrderbook(currOrder *v
 	return doesBreachCap
 }
 
-func (b *limitOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
+func (b *LimitOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "LimitOrderbook.Peek", metrics.Tag("market_id", b.marketID.Hex()))()
 	// Sets currState to the orderbook (transientOrderbook or restingOrderbook) with the next best priced order
 	b.advanceNewOrder(ctx)
 
@@ -788,16 +818,24 @@ func (b *limitOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
 		return nil
 	}
 
+	remainingFillableQuantity := b.getCurrFillableQuantity()
+
+	// Skip orders with zero remaining fillable quantity
+	if remainingFillableQuantity.IsZero() {
+		b.currState = nil  // Mark current state as exhausted to advance to next order
+		return b.Peek(ctx) // Recursively peek next order
+	}
+
 	priceLevel := &v2.PriceLevel{
 		Price:    b.getCurrPrice(),
-		Quantity: b.getCurrFillableQuantity(),
+		Quantity: remainingFillableQuantity,
 	}
 
 	return priceLevel
 }
 
 // NOTE: b.currState must NOT be nil!
-func (b *limitOrderbook) getCurrIndex() int {
+func (b *LimitOrderbook) getCurrIndex() int {
 	var idx int
 	// obtain index according to the currState
 	if b.currState == b.restingOrderbookFills {
@@ -808,7 +846,9 @@ func (b *limitOrderbook) getCurrIndex() int {
 	return idx
 }
 
-func (b *limitOrderbook) Fill(fillQuantity math.LegacyDec) {
+func (b *LimitOrderbook) Fill(ctx sdk.Context, fillQuantity math.LegacyDec) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "LimitOrderbook.Fill", metrics.Tag("market_id", b.marketID.Hex()))()
+
 	idx := b.getCurrIndex()
 
 	orderCumulativeFillQuantity := b.currState.FillQuantities[idx].Add(fillQuantity)
@@ -830,15 +870,16 @@ func (b *limitOrderbook) Fill(fillQuantity math.LegacyDec) {
 	}
 }
 
-func (b *limitOrderbook) Close() {
+func (b *LimitOrderbook) Close() error {
 	b.restingOrderIterator.Close()
+	return nil
 }
 
-func (b *limitOrderbook) isCurrOrderResting() bool {
+func (b *LimitOrderbook) isCurrOrderResting() bool {
 	return b.currState == b.restingOrderbookFills
 }
 
-func (b *limitOrderbook) isCurrRestingOrderCancelled() bool {
+func (b *LimitOrderbook) isCurrRestingOrderCancelled() bool {
 	idx := len(b.restingOrdersToCancel) - 1
 	if idx == -1 {
 		return false
@@ -847,7 +888,7 @@ func (b *limitOrderbook) isCurrRestingOrderCancelled() bool {
 	return b.restingOrderbookFills.Orders[len(b.restingOrderbookFills.Orders)-1] == b.restingOrdersToCancel[idx]
 }
 
-func (b *limitOrderbook) getRestingFillableQuantity() math.LegacyDec {
+func (b *LimitOrderbook) getRestingFillableQuantity() math.LegacyDec {
 	idx := len(b.restingOrderbookFills.Orders) - 1
 	if idx == -1 || b.isCurrRestingOrderCancelled() {
 		return math.LegacyZeroDec()
@@ -856,12 +897,12 @@ func (b *limitOrderbook) getRestingFillableQuantity() math.LegacyDec {
 	return b.restingOrderbookFills.Orders[idx].Fillable.Sub(b.restingOrderbookFills.FillQuantities[idx])
 }
 
-func (b *limitOrderbook) getTransientFillableQuantity() math.LegacyDec {
+func (b *LimitOrderbook) getTransientFillableQuantity() math.LegacyDec {
 	idx := b.transientOrderIdx
 	return b.transientOrderbookFills.Orders[idx].Fillable.Sub(b.transientOrderbookFills.FillQuantities[idx])
 }
 
-func (b *limitOrderbook) getCurrOrderTradeFeeRate() (tradeFeeRate math.LegacyDec) {
+func (b *LimitOrderbook) getCurrOrderTradeFeeRate() (tradeFeeRate math.LegacyDec) {
 	if b.isCurrOrderResting() {
 		tradeFeeRate = b.market.GetMakerFeeRate()
 	} else {
@@ -871,17 +912,17 @@ func (b *limitOrderbook) getCurrOrderTradeFeeRate() (tradeFeeRate math.LegacyDec
 	return tradeFeeRate
 }
 
-func (b *limitOrderbook) getCurrFillableQuantity() math.LegacyDec {
+func (b *LimitOrderbook) getCurrFillableQuantity() math.LegacyDec {
 	idx := b.getCurrIndex()
 	return b.currState.Orders[idx].Fillable.Sub(b.currState.FillQuantities[idx])
 }
 
-func (b *limitOrderbook) getCurrPrice() math.LegacyDec {
+func (b *LimitOrderbook) getCurrPrice() math.LegacyDec {
 	idx := b.getCurrIndex()
 	return b.currState.Orders[idx].OrderInfo.Price
 }
 
-func (b *limitOrderbook) getRestingOrder() *v2.DerivativeLimitOrder {
+func (b *LimitOrderbook) getRestingOrder() *v2.DerivativeLimitOrder {
 	// if no more orders to iterate + fully filled, return nil
 	if !b.restingOrderIterator.Valid() && (b.restingOrderbookFills == nil || b.getRestingFillableQuantity().IsZero()) {
 		return nil
@@ -902,7 +943,7 @@ func (b *limitOrderbook) getRestingOrder() *v2.DerivativeLimitOrder {
 	return b.restingOrderbookFills.Orders[idx]
 }
 
-func (b *limitOrderbook) getTransientOrder() *v2.DerivativeLimitOrder {
+func (b *LimitOrderbook) getTransientOrder() *v2.DerivativeLimitOrder {
 	if b.transientOrderbookFills == nil {
 		return nil
 	}
@@ -918,23 +959,27 @@ func (b *limitOrderbook) getTransientOrder() *v2.DerivativeLimitOrder {
 	return b.transientOrderbookFills.Orders[b.transientOrderIdx]
 }
 
-func (b *limitOrderbook) SetOppositeSideDerivativeOrderbook(opposite OrderBookI) {
+func (b *LimitOrderbook) SetOppositeSideDerivativeOrderbook(opposite OrderBookI) {
 	b.oppositeSideDerivativeOrderbook = opposite
 }
 
-func (b *limitOrderbook) GetAddedOpenNotional() math.LegacyDec {
+func (b *LimitOrderbook) GetAddedOpenNotional() math.LegacyDec {
 	return b.addedOpenNotional.Add(b.cachedAddedOpenNotional)
 }
 
-func (b *limitOrderbook) GetOpenInterestDelta() math.LegacyDec {
+func (b *LimitOrderbook) GetOpenInterestDelta() math.LegacyDec {
 	return b.openInterestDelta
 }
 
-func (b *limitOrderbook) getTotalOpenNotional() math.LegacyDec {
+func (b *LimitOrderbook) GetPositionStates() map[common.Hash]*v2.PositionState {
+	return b.positionStates
+}
+
+func (b *LimitOrderbook) getTotalOpenNotional() math.LegacyDec {
 	return b.currentOpenNotional.Add(b.addedOpenNotional).Add(b.oppositeSideDerivativeOrderbook.GetAddedOpenNotional())
 }
 
-func (b *limitOrderbook) updateNotionalCapValuesAfterFill(currOrder *v2.DerivativeLimitOrder, fillQuantity math.LegacyDec) {
+func (b *LimitOrderbook) updateNotionalCapValuesAfterFill(currOrder *v2.DerivativeLimitOrder, fillQuantity math.LegacyDec) {
 	notionalDelta, quantityDelta, _ := GetValuesForNotionalCapChecks(
 		currOrder.OrderType,
 		fillQuantity,
@@ -959,33 +1004,33 @@ func (b *limitOrderbook) updateNotionalCapValuesAfterFill(currOrder *v2.Derivati
 	b.cachedAddedOpenNotional = math.LegacyZeroDec()
 }
 
-type orderbookFills struct {
+type OrderbookFills struct {
 	Orders         []*v2.DerivativeLimitOrder
 	FillQuantities []math.LegacyDec
 }
 
-type orderbookFill struct {
+type OrderbookFill struct {
 	Order        *v2.DerivativeLimitOrder
 	FillQuantity math.LegacyDec
 	IsTransient  bool
 }
 
-func (f *orderbookFill) GetPrice() math.LegacyDec {
+func (f *OrderbookFill) GetPrice() math.LegacyDec {
 	return f.Order.OrderInfo.Price
 }
 
-type mergedOrderbookFills struct {
+type MergedOrderbookFills struct {
 	IsBuy          bool
-	TransientFills *orderbookFills
-	RestingFills   *orderbookFills
+	TransientFills *OrderbookFills
+	RestingFills   *OrderbookFills
 
 	transientIdx int
 	restingIdx   int
 }
 
 // CONTRACT: orderbook fills must be sorted by price descending for buys and ascending for sells
-func newMergedDerivativeOrderbookFills(isBuy bool, transientFills, restingFills *orderbookFills) *mergedOrderbookFills {
-	return &mergedOrderbookFills{
+func NewMergedDerivativeOrderbookFills(isBuy bool, transientFills, restingFills *OrderbookFills) *MergedOrderbookFills {
+	return &MergedOrderbookFills{
 		IsBuy:          isBuy,
 		TransientFills: transientFills,
 		RestingFills:   restingFills,
@@ -994,7 +1039,7 @@ func newMergedDerivativeOrderbookFills(isBuy bool, transientFills, restingFills 
 	}
 }
 
-func (m *mergedOrderbookFills) GetTransientFillsLength() int {
+func (m *MergedOrderbookFills) GetTransientFillsLength() int {
 	if m.TransientFills == nil {
 		return 0
 	}
@@ -1002,7 +1047,7 @@ func (m *mergedOrderbookFills) GetTransientFillsLength() int {
 	return len(m.TransientFills.Orders)
 }
 
-func (m *mergedOrderbookFills) GetRestingFillsLength() int {
+func (m *MergedOrderbookFills) GetRestingFillsLength() int {
 	if m.RestingFills == nil {
 		return 0
 	}
@@ -1011,11 +1056,11 @@ func (m *mergedOrderbookFills) GetRestingFillsLength() int {
 }
 
 // Done returns true if there are no more transient or resting fills to iterate over.
-func (m *mergedOrderbookFills) Done() bool {
+func (m *MergedOrderbookFills) Done() bool {
 	return m.transientIdx == m.GetTransientFillsLength() && m.restingIdx == m.GetRestingFillsLength()
 }
 
-func (m *mergedOrderbookFills) Peek() *orderbookFill {
+func (m *MergedOrderbookFills) Peek() *OrderbookFill {
 	currTransientFill := m.getTransientFillAtIndex(m.transientIdx)
 	currRestingFill := m.getRestingFillAtIndex(m.restingIdx)
 
@@ -1037,7 +1082,7 @@ func (m *mergedOrderbookFills) Peek() *orderbookFill {
 	return currTransientFill
 }
 
-func (m *mergedOrderbookFills) Next() *orderbookFill {
+func (m *MergedOrderbookFills) Next() *OrderbookFill {
 	if m.Done() {
 		return nil
 	}
@@ -1056,24 +1101,24 @@ func (m *mergedOrderbookFills) Next() *orderbookFill {
 	return fill
 }
 
-func (m *mergedOrderbookFills) getTransientFillAtIndex(idx int) *orderbookFill {
+func (m *MergedOrderbookFills) getTransientFillAtIndex(idx int) *OrderbookFill {
 	if m.TransientFills == nil || idx > len(m.TransientFills.Orders)-1 {
 		return nil
 	}
 
-	return &orderbookFill{
+	return &OrderbookFill{
 		Order:        m.TransientFills.Orders[idx],
 		FillQuantity: m.TransientFills.FillQuantities[idx],
 		IsTransient:  true,
 	}
 }
 
-func (m *mergedOrderbookFills) getRestingFillAtIndex(idx int) *orderbookFill {
+func (m *MergedOrderbookFills) getRestingFillAtIndex(idx int) *OrderbookFill {
 	if m.RestingFills == nil || idx > len(m.RestingFills.Orders)-1 {
 		return nil
 	}
 
-	return &orderbookFill{
+	return &OrderbookFill{
 		Order:        m.RestingFills.Orders[idx],
 		FillQuantity: m.RestingFills.FillQuantities[idx],
 		IsTransient:  false,

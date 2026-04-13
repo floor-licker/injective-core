@@ -8,7 +8,6 @@ import (
 	"cosmossdk.io/errors"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
 	wasmtypes "github.com/CosmWasm/wasmd/x/wasm/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
@@ -18,24 +17,20 @@ import (
 var _ types.MsgServer = msgServer{}
 
 type msgServer struct {
-	Keeper
-	svcTags metrics.Tags
+	*Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the bank MsgServer interface
 // for the provided Keeper.
 func NewMsgServerImpl(keeper Keeper) types.MsgServer {
 	return &msgServer{
-		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "wasmx_h",
-		},
+		Keeper: &keeper,
 	}
 }
 
 func (m msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, m.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
 
 	if msg.Authority != m.authority {
 		return nil, errors.Wrapf(govtypes.ErrInvalidSigner, "invalid authority: expected %s, got %s", m.authority, msg.Authority)
@@ -45,14 +40,14 @@ func (m msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (
 		return nil, err
 	}
 
-	m.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	m.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }
 
-func (m msgServer) ExecuteContractCompat(goCtx context.Context, msg *types.MsgExecuteContractCompat) (*types.MsgExecuteContractCompatResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, m.svcTags)
-	defer doneFn()
+func (m msgServer) ExecuteContractCompat(c context.Context, msg *types.MsgExecuteContractCompat) (*types.MsgExecuteContractCompatResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "ExecuteContractCompat")()
 
 	wasmMsgServer := wasmkeeper.NewMsgServerImpl(&m.wasmKeeper)
 
@@ -68,7 +63,7 @@ func (m msgServer) ExecuteContractCompat(goCtx context.Context, msg *types.MsgEx
 		Funds:    funds,
 	}
 
-	res, err := wasmMsgServer.ExecuteContract(goCtx, oMsg)
+	res, err := wasmMsgServer.ExecuteContract(ctx, oMsg)
 	if err != nil {
 		return nil, err
 	}
@@ -78,17 +73,37 @@ func (m msgServer) ExecuteContractCompat(goCtx context.Context, msg *types.MsgEx
 	}, nil
 }
 
-func (m msgServer) UpdateRegistryContractParams(goCtx context.Context, msg *types.MsgUpdateContract) (*types.MsgUpdateContractResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, m.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (m msgServer) UpdateRegistryContractParams(c context.Context, msg *types.MsgUpdateContract) (*types.MsgUpdateContractResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "UpdateRegistryContractParams")()
 
 	contractAddr := sdk.MustAccAddressFromBech32(msg.ContractAddress)
 
 	contract, err := m.fetchContractAndCheckAccessControl(ctx, contractAddr, msg)
 	if err != nil {
 		return nil, err
+	}
+
+	params := m.GetParams(ctx)
+	maxContractGasLimit := min(params.MaxContractGasLimit, types.MaxSafeExecutionGasLimit)
+
+	if msg.GasLimit < types.MinExecutionGasLimit || msg.GasLimit > maxContractGasLimit {
+		return nil, errors.Wrapf(
+			types.ErrInvalidGasLimit,
+			"the gasLimit (%d) must be within the range (%d) - (%d)",
+			msg.GasLimit,
+			types.MinExecutionGasLimit,
+			maxContractGasLimit,
+		)
+	}
+
+	if msg.GasPrice < params.MinGasPrice {
+		return nil, errors.Wrapf(
+			types.ErrInvalidGasPrice,
+			"the gasPrice (%d) must be greater than or equal to (%d)",
+			msg.GasPrice,
+			params.MinGasPrice,
+		)
 	}
 
 	m.updateRegisteredContractData(ctx, contractAddr, contract, func(contract *types.RegisteredContract) {
@@ -99,11 +114,10 @@ func (m msgServer) UpdateRegistryContractParams(goCtx context.Context, msg *type
 	return &types.MsgUpdateContractResponse{}, nil
 }
 
-func (m msgServer) ActivateRegistryContract(goCtx context.Context, msg *types.MsgActivateContract) (*types.MsgActivateContractResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, m.svcTags)
-	defer doneFn()
+func (m msgServer) ActivateRegistryContract(c context.Context, msg *types.MsgActivateContract) (*types.MsgActivateContractResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "ActivateRegistryContract")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	contractAddr := sdk.MustAccAddressFromBech32(msg.ContractAddress)
 
 	contract, err := m.fetchContractAndCheckAccessControl(ctx, contractAddr, msg)
@@ -118,11 +132,9 @@ func (m msgServer) ActivateRegistryContract(goCtx context.Context, msg *types.Ms
 	return &types.MsgActivateContractResponse{}, nil
 }
 
-func (m msgServer) DeactivateRegistryContract(goCtx context.Context, msg *types.MsgDeactivateContract) (*types.MsgDeactivateContractResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, m.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (m msgServer) DeactivateRegistryContract(c context.Context, msg *types.MsgDeactivateContract) (*types.MsgDeactivateContractResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "DeactivateRegistryContract")()
 
 	contractAddr := sdk.MustAccAddressFromBech32(msg.ContractAddress)
 
@@ -136,11 +148,10 @@ func (m msgServer) DeactivateRegistryContract(goCtx context.Context, msg *types.
 	return &types.MsgDeactivateContractResponse{}, nil
 }
 
-func (m msgServer) RegisterContract(goCtx context.Context, msg *types.MsgRegisterContract) (*types.MsgRegisterContractResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, m.svcTags)
-	defer doneFn()
+func (m msgServer) RegisterContract(c context.Context, msg *types.MsgRegisterContract) (*types.MsgRegisterContractResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.Meter(ctx).FuncTiming(&ctx, "RegisterContract")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	params := m.Keeper.GetParams(ctx)
 
 	sender := sdk.MustAccAddressFromBech32(msg.Sender)
@@ -160,8 +171,7 @@ func (m msgServer) RegisterContract(goCtx context.Context, msg *types.MsgRegiste
 }
 
 func (m msgServer) fetchContractAndCheckAccessControl(ctx sdk.Context, contractAddr sdk.AccAddress, msg sdk.LegacyMsg) (*types.RegisteredContract, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, m.svcTags)
-	defer doneFn()
+	defer m.Meter(ctx).FuncTiming(&ctx, "fetchContractAndCheckAccessControl")()
 
 	contract := m.Keeper.GetContractByAddress(ctx, contractAddr)
 	if contract == nil {
@@ -182,8 +192,7 @@ func (m msgServer) updateRegisteredContractData(
 	registeredContract *types.RegisteredContract,
 	updateFn func(contract *types.RegisteredContract),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, m.svcTags)
-	defer doneFn()
+	defer m.Meter(ctx).FuncTiming(&ctx, "updateRegisteredContractData")()
 
 	updateFn(registeredContract)
 	m.Keeper.SetContract(ctx, contractAddr, *registeredContract)

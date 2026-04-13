@@ -9,6 +9,8 @@ import (
 // InitGenesis initializes the permissions module's state from a provided genesis
 // state.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitGenesis")()
+
 	k.SetParams(ctx, genState.Params)
 
 	for _, pair := range genState.GetTokenPairs() {
@@ -18,6 +20,9 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 
 // ExportGenesis returns the permissions module's exported genesis.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExportGenesis")(&err)
+
 	pairs, err := k.GetAllTokenPairs(ctx)
 	if err != nil {
 		panic(err)

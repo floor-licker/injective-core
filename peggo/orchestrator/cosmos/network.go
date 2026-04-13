@@ -1,6 +1,7 @@
 package cosmos
 
 import (
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/cosmos/cosmos-sdk/crypto/keyring"
 	sdktypes "github.com/cosmos/cosmos-sdk/types"
 	"github.com/pkg/errors"
@@ -30,7 +31,14 @@ func NewNetwork(
 	k Keyring,
 	ethSignFn keystore.PersonalSignFn,
 	cfg NetworkConfig,
+	meter metrics.Meter,
 ) (Network, error) {
+	if meter == nil {
+		meter = metrics.NewNilMeter()
+	}
+
+	meter = meter.SubMeter("cosmos", metrics.Tag("svc", "cosmos"))
+
 	addr, err := sdktypes.AccAddressFromBech32(cfg.ValidatorAddress)
 
 	var record *keyring.Record
@@ -74,9 +82,9 @@ func NewNetwork(
 	}
 
 	var (
-		query = peggy.NewQueryClient(peggytypes.NewQueryClient(clientCtx.GRPCClient))
-		tx    = peggy.NewBroadcastClient(chainClient, ethSignFn)
-		tm    = tendermint.NewRPCClient(cfg.TendermintRPC)
+		query = peggy.NewQueryClient(peggytypes.NewQueryClient(clientCtx.GRPCClient), meter)
+		tx    = peggy.NewBroadcastClient(chainClient, ethSignFn, meter)
+		tm    = tendermint.NewRPCClient(cfg.TendermintRPC, meter)
 	)
 
 	net := struct {

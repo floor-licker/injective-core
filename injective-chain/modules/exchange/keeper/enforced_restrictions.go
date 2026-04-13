@@ -11,6 +11,8 @@ import (
 // OnEnforcedRestrictionsEVMContractPause pauses all derivative and binary options markets
 // denominated in the token corresponding to the given EVM contract.
 func (k *Keeper) OnEnforcedRestrictionsEVMContractPause(ctx sdk.Context, contract common.Address) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "OnEnforcedRestrictionsEVMContractPause")()
+
 	tokenBankDenom := erc20types.DenomPrefix + contract.Hex()
 	derivativeMarkets := k.GetAllActiveDerivativeAndBinaryOptionsMarkets(ctx)
 
@@ -38,6 +40,8 @@ func (k *Keeper) OnEnforcedRestrictionsEVMContractPause(ctx sdk.Context, contrac
 // OnEnforcedRestrictionsEVMContractBlacklist cancels all spot and derivative orders for the blacklisted address
 // across all markets denominated in the token corresponding to the given EVM contract.
 func (k *Keeper) OnEnforcedRestrictionsEVMContractBlacklist(ctx sdk.Context, contract, user common.Address) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "OnEnforcedRestrictionsEVMContractBlacklist")()
+
 	tokenBankDenom := erc20types.DenomPrefix + contract.Hex()
 	accountAddress := sdk.AccAddress(user.Bytes())
 

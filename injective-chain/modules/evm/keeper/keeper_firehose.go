@@ -14,6 +14,8 @@ import (
 )
 
 func BlocksBloom(k *Keeper, ctx sdk.Context) *big.Int {
+	defer k.Meter(ctx).FuncTiming(&ctx, "BlocksBloom")()
+
 	store := prefix.NewObjStore(ctx.ObjectStore(k.objectKey), types.KeyPrefixObjectBloom)
 	it := store.Iterator(nil, nil)
 	defer it.Close()
@@ -26,6 +28,8 @@ func BlocksBloom(k *Keeper, ctx sdk.Context) *big.Int {
 }
 
 func ToCosmosStartBlockEvent(k *Keeper, ctx sdk.Context, coinbaseAddr common.Address, blockHeader cmtproto.Header) tracing.CosmosStartBlockEvent {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ToCosmosStartBlockEvent")()
+
 	// ignore the errors as we are sure that the block header is valid
 	h, _ := cosmostypes.HeaderFromProto(&blockHeader)
 	h.ValidatorsHash = ctx.CometInfo().GetValidatorsHash()
@@ -50,6 +54,8 @@ func ToCosmosStartBlockEvent(k *Keeper, ctx sdk.Context, coinbaseAddr common.Add
 }
 
 func ToCosmosEndBlockEvent(k *Keeper, ctx sdk.Context) tracing.CosmosEndBlockEvent {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ToCosmosEndBlockEvent")()
+
 	return tracing.CosmosEndBlockEvent{
 		LogsBloom: BlocksBloom(k, ctx).Bytes(),
 	}

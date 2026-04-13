@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -23,8 +22,7 @@ func (k *Keeper) GetPricePairStateForUSD(ctx sdk.Context, basePriceState types.P
 }
 
 func (k *Keeper) GetPriceState(ctx sdk.Context, key string, oracletype types.OracleType) *types.PriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPriceState")()
 
 	// price feed has no single denom price points
 	if oracletype == types.OracleType_PriceFeed {
@@ -40,12 +38,6 @@ func (k *Keeper) GetPriceState(ctx sdk.Context, key string, oracletype types.Ora
 		return &priceState.PriceState
 	case types.OracleType_Coinbase:
 		priceState := k.GetCoinbasePriceState(ctx, key)
-		if priceState == nil {
-			return nil
-		}
-		return &priceState.PriceState
-	case types.OracleType_Chainlink:
-		priceState := k.GetChainlinkPriceState(ctx, key)
 		if priceState == nil {
 			return nil
 		}

@@ -9,12 +9,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/pprof"
 	"time"
 
 	pruningtypes "cosmossdk.io/store/pruning/types"
-	"github.com/InjectiveLabs/metrics"
+	"github.com/InjectiveLabs/metrics/v2"
+	"github.com/InjectiveLabs/metrics/v2/flightrecorder"
 	cmtcmd "github.com/cometbft/cometbft/cmd/cometbft/commands"
 	cmtconfig "github.com/cometbft/cometbft/config"
 	cmtcrypto "github.com/cometbft/cometbft/crypto"
@@ -52,7 +52,6 @@ import (
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"gopkg.in/DataDog/dd-trace-go.v1/profiler"
 
 	"github.com/InjectiveLabs/injective-core/cmd/injectived/config"
 	injectivechain "github.com/InjectiveLabs/injective-core/injective-chain/app"
@@ -61,7 +60,6 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/server/jsonrpc"
 	chainstreamserver "github.com/InjectiveLabs/injective-core/injective-chain/stream/server"
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
-	"github.com/InjectiveLabs/injective-core/version"
 )
 
 const (
@@ -221,6 +219,10 @@ func start(svrCtx *server.Context, clientCtx client.Context, appCreator types.Ap
 		return err
 	}
 	defer appCleanupFn()
+
+	if err := startMetrics(svrCtx, app.(*injectivechain.InjectiveApp)); err != nil {
+		return err
+	}
 
 	telemetryMetrics, err := startTelemetry(svrCfg)
 	if err != nil {
@@ -433,6 +435,7 @@ func startCmtNode(
 		cmtconfig.DefaultDBProvider,
 		node.DefaultMetricsProvider(cfg.Instrumentation),
 		servercmtlog.CometLoggerWrapper{Logger: svrCtx.Logger},
+		getCometMeter(app),
 	)
 	if err != nil {
 		return tmNode, cleanupFn, err
@@ -449,6 +452,20 @@ func startCmtNode(
 	}
 
 	return tmNode, cleanupFn, nil
+}
+
+func getCometMeter(app types.Application) metrics.Meter {
+	meteredApp, ok := app.(interface{ Meter() metrics.Meter })
+	if !ok {
+		return metrics.NewNilMeter()
+	}
+
+	appMeter := meteredApp.Meter()
+	if appMeter == nil {
+		return metrics.NewNilMeter()
+	}
+
+	return appMeter.SubMeter("cometbft")
 }
 
 func getAndValidateConfig(svrCtx *server.Context) (serverconfig.Config, error) {
@@ -679,62 +696,55 @@ func startWebsocketServer(
 	return nil
 }
 
-func startStatsdMetrics(ctx *server.Context, app *injectivechain.InjectiveApp) error {
-	envName := "chain-" + ctx.Viper.GetString(flags.FlagChainID)
-	if env := os.Getenv("APP_ENV"); env != "" {
-		envName = env
+func startMetrics(ctx *server.Context, app *injectivechain.InjectiveApp) error {
+	// metrics and traces
+	stuckFuncTimeout, err := time.ParseDuration(metricsStuckFunc)
+	if err != nil {
+		return err
 	}
 
-	if statsdEnabled {
-		hostname, _ := os.Hostname()
-		err := metrics.Init(statsdAddress, statsdPrefix, &metrics.StatterConfig{
-			Agent:                statsdAgent,
-			EnvName:              envName,
-			HostName:             hostname,
-			StuckFunctionTimeout: duration(statsdStuckFunc, 5*time.Minute),
-			MockingEnabled:       false,
-			TracingEnabled:       statsdTracingEnabled,
-		})
-		if err != nil {
-			return err
-		}
-
-		if statsdProfilingEnabled {
-			runtime.SetMutexProfileFraction(5)
-			runtime.SetBlockProfileRate(5)
-			err := profiler.Start(
-				profiler.WithService("injectived"),
-				profiler.WithVersion(version.AppVersion),
-				profiler.WithTags("hostname:"+os.Getenv("HOSTNAME")),
-				profiler.WithProfileTypes(
-					profiler.CPUProfile,
-					profiler.HeapProfile,
-					profiler.BlockProfile,
-					profiler.MutexProfile,
-					// profiler.GoroutineProfile,
-				),
-			)
-			if err != nil {
-				return err
-			}
-		}
-		closer.Bind(func() {
-			metrics.Close()
-			profiler.Stop()
-		})
+	cfg := metrics.Config{
+		Endpoint:         metricsEndpoint,
+		InsecureEndpoint: metricsInsecure,
+		MetricsEnabled:   metricsEnabled,
+		TracingEnabled:   tracingEnabled,
+		StuckFuncTimeout: stuckFuncTimeout,
+		ExportInterval:   1 * time.Second, // todo: needs cli fix
 	}
 
+	appMetrics, err := metrics.NewMetrics(cfg,
+		metrics.Tag("chain-id", app.ChainID()),
+		metrics.Tag(metrics.ServiceNameKey, "injective-core"),
+	)
+	if err != nil {
+		return err
+	}
+
+	appMeter, err := appMetrics.NewMeter("app")
+	if err != nil {
+		return err
+	}
+
+	app.SetMeter(appMeter)
+	closer.Bind(func() {
+		appMetrics.Shutdown() //nolint:errcheck //ok
+	})
+
+	// Trace Flight Recorder
 	if traceRecorderThreshold > 0 {
-		tr := metrics.NewTraceRecorder(time.Minute, time.Duration(traceRecorderThreshold)*time.Second, 1024*1024*1024*4)
+		tr := flightrecorder.NewTraceRecorder(time.Minute, time.Duration(traceRecorderThreshold)*time.Second, 1024*1024*1024*4)
 		if err := tr.Start(); err != nil {
 			return err
 		}
+
 		ctx.Logger.Info("Started Trace Flight Recorder", "threshold", traceRecorderThreshold)
 		closer.Bind(func() {
-			_ = tr.Stop()
+			tr.Stop()
 		})
+
 		app.SetTraceFlightRecorder(tr)
 	}
+
 	return nil
 }
 
@@ -752,20 +762,15 @@ func startInProcess(
 		ExitCodeErr: closer.ExitCodeErr,
 		ExitSignals: closer.DebugSignalSet,
 	})
-
 	cmtCfg := svrCtx.Config
-
-	if err := startStatsdMetrics(svrCtx, app.(*injectivechain.InjectiveApp)); err != nil {
-		return err
-	}
-
 	g, ctx := getCtx(svrCtx, true)
-
 	svrCtx.Logger.Info("starting node with ABCI CometBFT in-process")
+
 	tmNode, cleanupFn, err := startCmtNode(ctx, cmtCfg, app, svrCtx)
 	if err != nil {
 		return err
 	}
+
 	defer cleanupFn()
 
 	clientCtx = registerTxServices(tmNode, clientCtx, svrCfg, app)

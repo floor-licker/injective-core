@@ -29,6 +29,8 @@ func New(k *base.BaseKeeper) *CachedMarketFinder {
 }
 
 func (mf *CachedMarketFinder) FindSpotMarket(ctx sdk.Context, marketId string) (*v2.SpotMarket, error) {
+	defer mf.Meter(ctx).FuncTiming(&ctx, "FindSpotMarket")()
+
 	market, found := mf.spotMarkets[marketId]
 	if !found {
 		market = mf.GetSpotMarketByID(ctx, common.HexToHash(marketId))
@@ -42,6 +44,8 @@ func (mf *CachedMarketFinder) FindSpotMarket(ctx sdk.Context, marketId string) (
 }
 
 func (mf *CachedMarketFinder) FindDerivativeMarket(ctx sdk.Context, marketId string) (*v2.DerivativeMarket, error) {
+	defer mf.Meter(ctx).FuncTiming(&ctx, "FindDerivativeMarket")()
+
 	market, found := mf.derivativeMarkets[marketId]
 	if !found {
 		market = mf.GetDerivativeMarketByID(ctx, common.HexToHash(marketId))
@@ -55,6 +59,8 @@ func (mf *CachedMarketFinder) FindDerivativeMarket(ctx sdk.Context, marketId str
 }
 
 func (mf *CachedMarketFinder) FindBinaryOptionsMarket(ctx sdk.Context, marketId string) (*v2.BinaryOptionsMarket, error) {
+	defer mf.Meter(ctx).FuncTiming(&ctx, "FindBinaryOptionsMarket")()
+
 	market, found := mf.binaryOptionsMarkets[marketId]
 	if !found {
 		market = mf.GetBinaryOptionsMarketByID(ctx, common.HexToHash(marketId))
@@ -68,6 +74,8 @@ func (mf *CachedMarketFinder) FindBinaryOptionsMarket(ctx sdk.Context, marketId 
 }
 
 func (mf *CachedMarketFinder) FindMarket(ctx sdk.Context, marketId string) (v2.MarketI, error) {
+	defer mf.Meter(ctx).FuncTiming(&ctx, "FindMarket")()
+
 	var market v2.MarketI
 	var err error
 	var found bool
@@ -86,6 +94,8 @@ func (mf *CachedMarketFinder) FindMarket(ctx sdk.Context, marketId string) (v2.M
 }
 
 func (mf *CachedMarketFinder) FindDerivativeOrBinaryOptionsMarket(ctx sdk.Context, marketId string) (v2.DerivativeMarketI, error) {
+	defer mf.Meter(ctx).FuncTiming(&ctx, "FindDerivativeOrBinaryOptionsMarket")()
+
 	var market v2.DerivativeMarketI
 	var err error
 	var found bool

@@ -6,7 +6,6 @@ import (
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,16 +16,12 @@ import (
 
 type AccountsMsgServer struct {
 	*Keeper
-	svcTags metrics.Tags
 }
 
 // AccountsMsgServerImpl returns an implementation of the bank MsgServer interface for the provided Keeper for account functions.
 func AccountsMsgServerImpl(keeper *Keeper) AccountsMsgServer {
 	return AccountsMsgServer{
 		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "acc_msg_h",
-		},
 	}
 }
 
@@ -34,10 +29,9 @@ func (k AccountsMsgServer) Deposit(
 	c context.Context,
 	msg *v2.MsgDeposit,
 ) (*v2.MsgDepositResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.svcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Deposit")()
+
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgDeposit")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -54,10 +48,9 @@ func (k AccountsMsgServer) Withdraw(
 	c context.Context,
 	msg *v2.MsgWithdraw,
 ) (*v2.MsgWithdrawResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.svcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Withdraw")()
+
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgWithdraw")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -71,11 +64,11 @@ func (k AccountsMsgServer) Withdraw(
 }
 
 func (k AccountsMsgServer) SubaccountTransfer(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgSubaccountTransfer,
 ) (*v2.MsgSubaccountTransferResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "SubaccountTransfer")()
 
 	var (
 		denom           = msg.Amount.Denom
@@ -85,14 +78,13 @@ func (k AccountsMsgServer) SubaccountTransfer(
 		dstSubaccountID = types.MustGetSubaccountIDOrDeriveFromNonce(sender, msg.DestinationSubaccountId)
 	)
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgSubaccountTransfer")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
 	}
 
 	if err := k.Keeper.DecrementDeposit(ctx, srcSubaccountID, denom, amount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, err
 	}
 
@@ -110,11 +102,11 @@ func (k AccountsMsgServer) SubaccountTransfer(
 }
 
 func (k AccountsMsgServer) ExternalTransfer(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgExternalTransfer,
 ) (*v2.MsgExternalTransferResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExternalTransfer")()
 
 	var (
 		denom           = msg.Amount.Denom
@@ -125,7 +117,6 @@ func (k AccountsMsgServer) ExternalTransfer(
 		recipientAddr   = types.SubaccountIDToSdkAddress(dstSubaccountID)
 	)
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgExternalTransfer")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -139,7 +130,7 @@ func (k AccountsMsgServer) ExternalTransfer(
 	}
 
 	if err := k.Keeper.DecrementDeposit(ctx, srcSubaccountID, denom, amount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, err
 	}
 
@@ -167,13 +158,12 @@ func (k AccountsMsgServer) ExternalTransfer(
 }
 
 func (k AccountsMsgServer) RewardsOptOut(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgRewardsOptOut,
 ) (*v2.MsgRewardsOptOutResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "RewardsOptOut")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	account, _ := sdk.AccAddressFromBech32(msg.Sender)
 	if isAlreadyOptedOut := k.GetIsOptedOutOfRewards(ctx, account); isAlreadyOptedOut {
 		return nil, types.ErrAlreadyOptedOutOfRewards
@@ -185,12 +175,11 @@ func (k AccountsMsgServer) RewardsOptOut(
 }
 
 func (k AccountsMsgServer) AuthorizeStakeGrants(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgAuthorizeStakeGrants,
 ) (*v2.MsgAuthorizeStakeGrantsResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "AuthorizeStakeGrants")()
 
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err
@@ -239,11 +228,11 @@ func (k AccountsMsgServer) AuthorizeStakeGrants(
 }
 
 func (k AccountsMsgServer) ActivateStakeGrant(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgActivateStakeGrant,
 ) (*v2.MsgActivateStakeGrantResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ActivateStakeGrant")()
 
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err

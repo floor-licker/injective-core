@@ -5,7 +5,6 @@ import (
 
 	"cosmossdk.io/math"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/go-test/deep"
@@ -19,13 +18,12 @@ type MetadataInvariantCheckOption func(*MetadataInvariantCheckConfig)
 
 // IsMetadataInvariantValid should only be used by tests to verify data integrity
 func (k *Keeper) IsMetadataInvariantValid(ctx sdk.Context, options ...MetadataInvariantCheckOption) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsMetadataInvariantValid")()
+
 	config := MetadataInvariantCheckConfig{ShouldCheckSubaccountsBalance: true}
 	for _, option := range options {
 		option(&config)
 	}
-
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
 
 	m1 := k.getAllSubaccountOrderbookMetadata(ctx)
 	m2 := k.getAllSubaccountMetadataFromLimitOrders(ctx)
@@ -106,8 +104,7 @@ func (k *Keeper) IsMetadataInvariantValid(ctx sdk.Context, options ...MetadataIn
 func (k *Keeper) getAllSubaccountOrderbookMetadata(
 	ctx sdk.Context,
 ) map[common.Hash]map[bool]map[common.Hash]*v2.SubaccountOrderbookMetadata {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getAllSubaccountOrderbookMetadata")()
 
 	// marketID => isBuy => subaccountID => metadata
 	metadatas := make(map[common.Hash]map[bool]map[common.Hash]*v2.SubaccountOrderbookMetadata)
@@ -155,8 +152,7 @@ func (k *Keeper) getAllSubaccountOrderbookMetadata(
 func (k *Keeper) getAllSubaccountMetadataFromLimitOrders(
 	ctx sdk.Context,
 ) map[common.Hash]map[bool]map[common.Hash]*v2.SubaccountOrderbookMetadata {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getAllSubaccountMetadataFromLimitOrders")()
 
 	orderbooks := k.GetAllDerivativeAndBinaryOptionsLimitOrderbook(ctx)
 
@@ -202,8 +198,7 @@ func (k *Keeper) getAllSubaccountMetadataFromLimitOrders(
 func (k *Keeper) getAllSubaccountMetadataFromSubaccountOrders(
 	ctx sdk.Context,
 ) map[common.Hash]map[bool]map[common.Hash]*v2.SubaccountOrderbookMetadata {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getAllSubaccountMetadataFromSubaccountOrders")()
 
 	// marketID => isBuy => subaccountID => metadata
 	metadatas := make(map[common.Hash]map[bool]map[common.Hash]*v2.SubaccountOrderbookMetadata)
@@ -237,6 +232,8 @@ func (k *Keeper) getAllSubaccountMetadataFromSubaccountOrders(
 
 // IsMarketAggregateVolumeValid should only be used by tests to verify data integrity
 func (k *Keeper) IsMarketAggregateVolumeValid(ctx sdk.Context) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsMarketAggregateVolumeValid")()
+
 	aggregateVolumesList := k.GetAllMarketAggregateVolumes(ctx)
 	aggregateVolumes := make(map[common.Hash]v2.VolumeRecord)
 

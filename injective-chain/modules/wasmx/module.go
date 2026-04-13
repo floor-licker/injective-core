@@ -18,8 +18,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 
-	"github.com/InjectiveLabs/metrics"
-
 	exchangekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/wasmx/client/cli"
 	wasmxkeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/wasmx/keeper"
@@ -90,7 +88,6 @@ func (AppModuleBasic) GetQueryCmd() *cobra.Command {
 type AppModule struct {
 	AppModuleBasic
 
-	svcTags        metrics.Tags
 	keeper         wasmxkeeper.Keeper
 	accountKeeper  authkeeper.AccountKeeper
 	bankKeeper     bankkeeper.Keeper
@@ -112,9 +109,6 @@ func NewAppModule(
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{},
 
-		svcTags: metrics.Tags{
-			"svc": "wasmx_m",
-		},
 		keeper:         keeper,
 		accountKeeper:  accountKeeper,
 		bankKeeper:     bankKeeper,

@@ -31,7 +31,9 @@ func (k *Keeper) GetEthIntrinsicGas(msg *core.Message, rules params.Rules, isCon
 // RefundGas transfers the leftover gas to the sender of the message
 //
 //nolint:all
-func (k *Keeper) RefundGas(ctx sdk.Context, msg *core.Message, leftoverGas uint64, denom string) error {
+func (k *Keeper) RefundGas(ctx sdk.Context, msg *core.Message, leftoverGas uint64, denom string) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "RefundGas")(&err)
+
 	// DISABLED: due to DoS attack possibility by filling up whole block gas space almost for free due to refunds
 	return nil
 	// Return EVM tokens for remaining gas, exchanged at the original rate.
@@ -61,6 +63,8 @@ func (k *Keeper) RefundGas(ctx sdk.Context, msg *core.Message, leftoverGas uint6
 // ResetGasMeterAndConsumeGas reset first the gas meter consumed value to zero and set it back to the new value
 // 'gasUsed'
 func (k *Keeper) ResetGasMeterAndConsumeGas(ctx sdk.Context, gasUsed uint64) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ResetGasMeterAndConsumeGas")()
+
 	// reset the gas count
 	ctx.GasMeter().RefundGas(ctx.GasMeter().GasConsumed(), "reset the gas count")
 	ctx.GasMeter().ConsumeGas(gasUsed, "apply evm transaction")

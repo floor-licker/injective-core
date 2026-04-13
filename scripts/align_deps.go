@@ -75,10 +75,8 @@ func extractDepsMap(name, path string) *DepsMap {
 func compareDeps(parent, child *DepsMap) {
 	fmt.Println("====================DEPS COMPARISON====================")
 	for n, v := range parent.Deps {
-		if child.Deps[n] != "" {
-			if !strings.HasPrefix(v, child.Deps[n]) && !strings.HasPrefix(child.Deps[n], v) {
-				fmt.Printf("PACKAGE: %s --- %s %s >< %s %s\n", n, parent.Repo, v, child.Repo, child.Deps[n])
-			}
+		if child.Deps[n] != "" && v != child.Deps[n] {
+			fmt.Printf("PACKAGE: %s --- %s %s >< %s %s\n", n, parent.Repo, v, child.Repo, child.Deps[n])
 		}
 	}
 }

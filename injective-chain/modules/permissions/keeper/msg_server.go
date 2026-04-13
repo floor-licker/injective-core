@@ -14,12 +14,12 @@ import (
 )
 
 type msgServer struct {
-	Keeper
+	*Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the MsgServer interface
 // for the provided Keeper.
-func NewMsgServerImpl(keeper Keeper) types.MsgServer {
+func NewMsgServerImpl(keeper *Keeper) types.MsgServer {
 	return &msgServer{Keeper: keeper}
 }
 
@@ -30,7 +30,10 @@ func (k msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (
 		return nil, errors.Wrapf(govtypes.ErrInvalidSigner, "invalid authority: expected %s, got %s", k.authority, msg.Authority)
 	}
 
-	k.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
+
+	k.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }
@@ -44,6 +47,7 @@ func (k msgServer) checkSenderPermissions(sender, denomAdmin sdk.AccAddress) err
 
 func (k msgServer) CreateNamespace(c context.Context, msg *types.MsgCreateNamespace) (*types.MsgCreateNamespaceResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateNamespace")()
 
 	sender := sdk.MustAccAddressFromBech32(msg.Sender)
 	namespace := msg.Namespace
@@ -76,12 +80,12 @@ func (k msgServer) CreateNamespace(c context.Context, msg *types.MsgCreateNamesp
 	}
 
 	if namespace.EvmHook != "" {
-		if err := k.validateEvmHook(c, gethtypes.HexToAddress(namespace.EvmHook)); err != nil {
+		if err := k.validateEvmHook(ctx, gethtypes.HexToAddress(namespace.EvmHook)); err != nil {
 			return nil, err
 		}
 	}
 	if namespace.WasmHook != "" {
-		if err := k.validateWasmHook(c, sdk.MustAccAddressFromBech32(namespace.WasmHook)); err != nil {
+		if err := k.validateWasmHook(ctx, sdk.MustAccAddressFromBech32(namespace.WasmHook)); err != nil {
 			return nil, err
 		}
 	}
@@ -99,6 +103,7 @@ func (k msgServer) CreateNamespace(c context.Context, msg *types.MsgCreateNamesp
 
 func (k msgServer) UpdateNamespace(c context.Context, msg *types.MsgUpdateNamespace) (*types.MsgUpdateNamespaceResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateNamespace")()
 
 	sender := sdk.MustAccAddressFromBech32(msg.Sender)
 	denom := msg.Denom
@@ -122,7 +127,7 @@ func (k msgServer) UpdateNamespace(c context.Context, msg *types.MsgUpdateNamesp
 		if msg.WasmHook != nil {
 			if msg.WasmHook.NewValue != "" {
 				wasmContract := sdk.MustAccAddressFromBech32(msg.WasmHook.NewValue)
-				if err := k.validateWasmHook(c, wasmContract); err != nil {
+				if err := k.validateWasmHook(ctx, wasmContract); err != nil {
 					return nil, err
 				}
 				namespace.WasmHook = wasmContract.String()
@@ -134,7 +139,7 @@ func (k msgServer) UpdateNamespace(c context.Context, msg *types.MsgUpdateNamesp
 		if msg.EvmHook != nil {
 			if msg.EvmHook.NewValue != "" {
 				evmContract := gethtypes.HexToAddress(msg.EvmHook.NewValue)
-				if err := k.validateEvmHook(c, evmContract); err != nil {
+				if err := k.validateEvmHook(ctx, evmContract); err != nil {
 					return nil, err
 				}
 				namespace.EvmHook = evmContract.String()
@@ -187,6 +192,8 @@ func (k msgServer) UpdateNamespace(c context.Context, msg *types.MsgUpdateNamesp
 
 func (k msgServer) UpdateActorRoles(c context.Context, msg *types.MsgUpdateActorRoles) (*types.MsgUpdateActorRolesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateActorRoles")()
+
 	sender := sdk.MustAccAddressFromBech32(msg.Sender)
 	denom := msg.Denom
 
@@ -230,25 +237,17 @@ func (k msgServer) UpdateActorRoles(c context.Context, msg *types.MsgUpdateActor
 	return &types.MsgUpdateActorRolesResponse{}, nil
 }
 
-func (k msgServer) ClaimVoucher(c context.Context, msg *types.MsgClaimVoucher) (*types.MsgClaimVoucherResponse, error) {
+func (k msgServer) ClaimVoucher(c context.Context, msg *types.MsgClaimVoucher) (res *types.MsgClaimVoucherResponse, err error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ClaimVoucher")(&err)
 
 	receiver := sdk.MustAccAddressFromBech32(msg.Sender)
 
-	voucher, err := k.GetVoucherForAddress(ctx, msg.Denom, receiver)
+	err = k.vouchersAssistant.ClaimVoucher(ctx, receiver, msg.Denom)
 	if err != nil {
 		return nil, err
 	}
-	if voucher.IsZero() {
-		return nil, types.ErrVoucherNotFound
-	}
 
-	// now claim voucher by sending funds from permissions module to receiver and then removing the voucher
-	// please note the user will not be able to claim if he still does not have permissions, since transfer hook will be called on this send again
-	if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, receiver, sdk.NewCoins(voucher)); err != nil {
-		return nil, err
-	}
-	k.deleteVoucher(ctx, receiver, msg.Denom)
-
-	return &types.MsgClaimVoucherResponse{}, nil
+	res = &types.MsgClaimVoucherResponse{}
+	return res, nil
 }

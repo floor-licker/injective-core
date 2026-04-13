@@ -20,8 +20,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/client/cli"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/keeper"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
@@ -92,7 +90,6 @@ func (AppModuleBasic) GetQueryCmd() *cobra.Command {
 type AppModule struct {
 	AppModuleBasic
 
-	svcTags        metrics.Tags
 	keeper         keeper.Keeper
 	accountKeeper  authkeeper.AccountKeeper
 	bankKeeper     bankkeeper.Keeper
@@ -118,9 +115,6 @@ func NewAppModule(
 	return AppModule{
 		AppModuleBasic: AppModuleBasic{},
 
-		svcTags: metrics.Tags{
-			"svc": "oracle_m",
-		},
 		keeper:         k,
 		accountKeeper:  accountKeeper,
 		bankKeeper:     bankKeeper,

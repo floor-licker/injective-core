@@ -3,7 +3,7 @@ package orchestrator
 import (
 	"context"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	log "github.com/xlab/suplog"
 
@@ -18,7 +18,7 @@ func (s *Orchestrator) runSigner(ctx context.Context, peggyID gethcommon.Hash) e
 	signer := signer{
 		Orchestrator: s,
 		peggyID:      peggyID,
-		svcTags:      coretracer.NewTag("svc", "signer"),
+		meter:        s.meter.SubMeter("signer", metrics.Tag("svc", "signer")),
 	}
 
 	s.logger.WithField("loop_duration", s.cfg.LoopDuration.String()).Debugln("starting Signer...")
@@ -31,15 +31,16 @@ func (s *Orchestrator) runSigner(ctx context.Context, peggyID gethcommon.Hash) e
 type signer struct {
 	*Orchestrator
 	peggyID gethcommon.Hash
-	svcTags coretracer.Tags
+	meter   metrics.Meter
 }
 
 func (l *signer) Log() log.Logger {
 	return l.logger.WithField("loop", "Signer")
 }
 
-func (l *signer) sign(ctx context.Context) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *signer) sign(ctx context.Context) (err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "sign")
+	defer done(&err)
 
 	if err := l.signValidatorSets(ctx); err != nil {
 		return err
@@ -52,8 +53,9 @@ func (l *signer) sign(ctx context.Context) error {
 	return nil
 }
 
-func (l *signer) signValidatorSets(ctx context.Context) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *signer) signValidatorSets(ctx context.Context) (err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "signValidatorSets")
+	defer done(&err)
 
 	var valsets []*peggytypes.Valset
 	fn := func() error {
@@ -62,7 +64,6 @@ func (l *signer) signValidatorSets(ctx context.Context) error {
 	}
 
 	if err := l.retry(ctx, fn); err != nil {
-		coretracer.TraceError(ctx, err)
 		return err
 	}
 
@@ -75,7 +76,6 @@ func (l *signer) signValidatorSets(ctx context.Context) error {
 		if err := l.retry(ctx, func() error {
 			return l.injective.SendValsetConfirm(ctx, l.cfg.EthereumAddr, l.peggyID, vs)
 		}); err != nil {
-			coretracer.TraceError(ctx, err)
 			return err
 		}
 
@@ -88,8 +88,9 @@ func (l *signer) signValidatorSets(ctx context.Context) error {
 	return nil
 }
 
-func (l *signer) signNewBatch(ctx context.Context) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *signer) signNewBatch(ctx context.Context) (err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "signNewBatch")
+	defer done(&err)
 
 	var oldestUnsignedBatch *peggytypes.OutgoingTxBatch
 	getBatchFn := func() error {

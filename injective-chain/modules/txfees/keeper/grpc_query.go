@@ -3,7 +3,6 @@ package keeper
 import (
 	"context"
 
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	osmosistypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/txfees/osmosis/types"
@@ -15,24 +14,19 @@ var _ types.QueryServer = queryServer{}
 // queryServer defines a wrapper around the x/txfees keeper providing gRPC method
 // handlers.
 type queryServer struct {
-	k       *Keeper
-	svcTags metrics.Tags
+	k *Keeper
 }
 
 func NewQueryServer(k *Keeper) types.QueryServer {
 	return queryServer{
 		k: k,
-		svcTags: metrics.Tags{
-			"svc": "txfees_query",
-		},
 	}
 }
 
 func (q queryServer) Params(c context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, q.svcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer q.k.Meter(ctx).FuncTiming(&ctx, "Params")()
+
 	params := q.k.GetParams(ctx)
 
 	res := &types.QueryParamsResponse{
@@ -44,11 +38,10 @@ func (q queryServer) Params(c context.Context, _ *types.QueryParamsRequest) (*ty
 
 // since we only store current baseFee, this query can only return current BaseFee values, even if requested for historic blocks
 func (q queryServer) GetEipBaseFee(c context.Context, _ *types.QueryEipBaseFeeRequest) (*types.QueryEipBaseFeeResponse, error) {
-	_, doneFn := metrics.ReportFuncCallAndTimingCtx(c, q.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer q.k.Meter(ctx).FuncTiming(&ctx, "GetEipBaseFee")()
 
-	sdkCtx := sdk.UnwrapSDKContext(c)
-	if sdkCtx.BlockHeight() < q.k.CurFeeState.GetCurrentBlockHeight()-2 { // we do not support historical queries since we only have current BaseFee in memory
+	if ctx.BlockHeight() < q.k.CurFeeState.GetCurrentBlockHeight()-2 { // we do not support historical queries since we only have current BaseFee in memory
 		return nil, types.ErrUnsupportedQueryParams
 	}
 
@@ -59,24 +52,22 @@ func (q queryServer) GetEipBaseFee(c context.Context, _ *types.QueryEipBaseFeeRe
 var _ osmosistypes.QueryServer = osmosisQueryServer{}
 
 type osmosisQueryServer struct {
-	k       *Keeper
-	svcTags metrics.Tags
+	k *Keeper
 }
 
 func NewOsmosisQueryServer(k *Keeper) osmosistypes.QueryServer {
 	return osmosisQueryServer{
 		k: k,
-		svcTags: metrics.Tags{
-			"svc": "txfees_query",
-		},
 	}
 }
 
 func (q osmosisQueryServer) GetEipBaseFee(
 	c context.Context, _ *osmosistypes.QueryEipBaseFeeRequest,
 ) (*osmosistypes.QueryEipBaseFeeResponse, error) {
-	sdkCtx := sdk.UnwrapSDKContext(c)
-	if sdkCtx.BlockHeight() < q.k.CurFeeState.GetCurrentBlockHeight()-2 { // we do not support historical queries since we only have current BaseFee in memory
+	ctx := sdk.UnwrapSDKContext(c)
+	defer q.k.Meter(ctx).FuncTiming(&ctx, "osmosisQueryServer.GetEipBaseFee")()
+
+	if ctx.BlockHeight() < q.k.CurFeeState.GetCurrentBlockHeight()-2 { // we do not support historical queries since we only have current BaseFee in memory
 		return nil, types.ErrUnsupportedQueryParams
 	}
 

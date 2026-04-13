@@ -2,7 +2,6 @@ package base
 
 import (
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -11,8 +10,7 @@ import (
 )
 
 func (k *BaseKeeper) GetDerivativeMarketByID(ctx sdk.Context, marketID common.Hash) *v2.DerivativeMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketByID")()
 
 	market := k.GetDerivativeMarket(ctx, marketID, true)
 	if market != nil {
@@ -24,8 +22,7 @@ func (k *BaseKeeper) GetDerivativeMarketByID(ctx sdk.Context, marketID common.Ha
 
 // IsDerivativesExchangeEnabled returns true if Derivatives Exchange is enabled
 func (k *BaseKeeper) IsDerivativesExchangeEnabled(ctx sdk.Context) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsDerivativesExchangeEnabled")()
 
 	store := k.getStore(ctx)
 	return store.Has(types.DerivativeExchangeEnabledKey)
@@ -33,8 +30,7 @@ func (k *BaseKeeper) IsDerivativesExchangeEnabled(ctx sdk.Context) bool {
 
 // SetDerivativesExchangeEnabled sets the indicator to enable derivatives exchange
 func (k *BaseKeeper) SetDerivativesExchangeEnabled(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetDerivativesExchangeEnabled")()
 
 	store := k.getStore(ctx)
 	store.Set(types.DerivativeExchangeEnabledKey, []byte{1})
@@ -42,8 +38,7 @@ func (k *BaseKeeper) SetDerivativesExchangeEnabled(ctx sdk.Context) {
 
 // HasDerivativeMarket returns true the if the derivative market exists in the store.
 func (k *BaseKeeper) HasDerivativeMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasDerivativeMarket")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.GetDerivativeMarketPrefix(isEnabled))
@@ -52,8 +47,7 @@ func (k *BaseKeeper) HasDerivativeMarket(ctx sdk.Context, marketID common.Hash, 
 
 // GetDerivativeMarket fetches the Derivative Market from the store by marketID.
 func (k *BaseKeeper) GetDerivativeMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) *v2.DerivativeMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarket")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.GetDerivativeMarketPrefix(isEnabled))
@@ -71,8 +65,7 @@ func (k *BaseKeeper) GetDerivativeMarket(ctx sdk.Context, marketID common.Hash, 
 
 // SetDerivativeMarket saves derivative market in keeper.
 func (k *BaseKeeper) SetDerivativeMarket(ctx sdk.Context, market *v2.DerivativeMarket) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetDerivativeMarket")()
 
 	store := k.getStore(ctx)
 
@@ -91,8 +84,7 @@ func (k *BaseKeeper) SetDerivativeMarket(ctx sdk.Context, market *v2.DerivativeM
 
 // DeleteDerivativeMarket deletes DerivativeMarket from the markets store (needed for moving to another hash).
 func (k *BaseKeeper) DeleteDerivativeMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteDerivativeMarket")()
 
 	store := k.getStore(ctx)
 
@@ -107,8 +99,7 @@ func (k *BaseKeeper) DeleteDerivativeMarket(ctx sdk.Context, marketID common.Has
 
 // IterateDerivativeMarkets iterates over derivative markets calling process on each market.
 func (k *BaseKeeper) IterateDerivativeMarkets(ctx sdk.Context, isEnabled *bool, process func(*v2.DerivativeMarket) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateDerivativeMarkets")()
 
 	store := k.getStore(ctx)
 	var marketStore prefix.Store
@@ -126,8 +117,7 @@ func (k *BaseKeeper) IterateDerivativeMarkets(ctx sdk.Context, isEnabled *bool, 
 }
 
 func (k *BaseKeeper) ScheduleDerivativeMarketParamUpdate(ctx sdk.Context, p *v2.DerivativeMarketParamUpdateProposal) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ScheduleDerivativeMarketParamUpdate")()
 
 	store := k.getTransientStore(ctx)
 	marketID := common.HexToHash(p.MarketId)
@@ -141,8 +131,7 @@ func (k *BaseKeeper) IterateDerivativeMarketParamUpdates(
 	ctx sdk.Context,
 	process func(*v2.DerivativeMarketParamUpdateProposal,
 	) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateDerivativeMarketParamUpdates")()
 
 	store := k.getTransientStore(ctx)
 	paramUpdateStore := prefix.NewStore(store, types.DerivativeMarketParamUpdateScheduleKey)
@@ -168,8 +157,7 @@ func (k *BaseKeeper) IterateScheduledSettlementDerivativeMarkets(
 	ctx sdk.Context,
 	process func(v2.DerivativeMarketSettlementInfo) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateScheduledSettlementDerivativeMarkets")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.DerivativeMarketScheduledSettlementInfo)
@@ -183,8 +171,7 @@ func (k *BaseKeeper) IterateScheduledSettlementDerivativeMarkets(
 
 // GetDerivativesMarketScheduledSettlementInfo gets the DerivativeMarketSettlementInfo from the keeper.
 func (k *BaseKeeper) GetDerivativesMarketScheduledSettlementInfo(ctx sdk.Context, marketID common.Hash) *v2.DerivativeMarketSettlementInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativesMarketScheduledSettlementInfo")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.DerivativeMarketScheduledSettlementInfo)
@@ -201,8 +188,7 @@ func (k *BaseKeeper) GetDerivativesMarketScheduledSettlementInfo(ctx sdk.Context
 
 // SetDerivativesMarketScheduledSettlementInfo saves the DerivativeMarketSettlementInfo to the keeper.
 func (k *BaseKeeper) SetDerivativesMarketScheduledSettlementInfo(ctx sdk.Context, settlementInfo *v2.DerivativeMarketSettlementInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetDerivativesMarketScheduledSettlementInfo")()
 
 	store := k.getStore(ctx)
 	marketID := common.HexToHash(settlementInfo.MarketId)
@@ -214,8 +200,7 @@ func (k *BaseKeeper) SetDerivativesMarketScheduledSettlementInfo(ctx sdk.Context
 
 // DeleteDerivativesMarketScheduledSettlementInfo deletes the DerivativeMarketSettlementInfo from the keeper.
 func (k *BaseKeeper) DeleteDerivativesMarketScheduledSettlementInfo(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteDerivativesMarketScheduledSettlementInfo")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.DerivativeMarketScheduledSettlementInfo)
@@ -229,8 +214,7 @@ func (k *BaseKeeper) DeleteDerivativesMarketScheduledSettlementInfo(ctx sdk.Cont
 }
 
 func (k *BaseKeeper) GetAllDerivativeMarkets(ctx sdk.Context) []*v2.DerivativeMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllDerivativeMarkets")()
 
 	markets := make([]*v2.DerivativeMarket, 0)
 	k.IterateDerivativeMarkets(ctx, nil, func(p *v2.DerivativeMarket) (stop bool) {
@@ -243,8 +227,7 @@ func (k *BaseKeeper) GetAllDerivativeMarkets(ctx sdk.Context) []*v2.DerivativeMa
 
 // GetAllActiveDerivativeAndBinaryOptionsMarkets returns all active derivative markets and binary options markets.
 func (k *BaseKeeper) GetAllActiveDerivativeAndBinaryOptionsMarkets(ctx sdk.Context) []v2.DerivativeMarketI {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllActiveDerivativeAndBinaryOptionsMarkets")()
 
 	derivativeMarkets := k.GetAllActiveDerivativeMarkets(ctx)
 	binaryOptionsMarkets := k.GetAllActiveBinaryOptionsMarkets(ctx)

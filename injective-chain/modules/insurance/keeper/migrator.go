@@ -7,18 +7,20 @@ import (
 )
 
 type Migrator struct {
-	keeper   Keeper
+	keeper   *Keeper
 	subspace exported.Subspace
 }
 
-func NewMigrator(k Keeper, ss exported.Subspace) Migrator {
+func NewMigrator(k *Keeper, ss exported.Subspace) Migrator {
 	return Migrator{
 		keeper:   k,
 		subspace: ss,
 	}
 }
 
-func (m Migrator) Migrate1to2(ctx sdk.Context) error {
+func (m Migrator) Migrate1to2(ctx sdk.Context) (err error) {
+	defer m.keeper.Meter(ctx).FuncTiming(&ctx, "Migrate1to2")(&err)
+
 	return v2.Migrate(
 		ctx,
 		ctx.KVStore(m.keeper.storeKey),

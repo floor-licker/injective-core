@@ -71,5 +71,5 @@ func GetExponentiatedDec(value, expo int64) math.LegacyDec {
 	}
 
 	// price * 10^expo
-	return math.LegacyNewDec(value).Power(uint64(expo))
+	return math.LegacyNewDec(value).Mul(math.LegacyNewDec(10).Power(uint64(expo)))
 }

@@ -1,7 +1,6 @@
 package txfees
 
 import (
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/txfees/keeper"
@@ -9,23 +8,17 @@ import (
 )
 
 type BlockHandler struct {
-	keeper  *keeper.Keeper
-	svcTags metrics.Tags
+	keeper *keeper.Keeper
 }
 
 func NewBlockHandler(k *keeper.Keeper) *BlockHandler {
 	return &BlockHandler{
 		keeper: k,
-
-		svcTags: metrics.Tags{
-			"svc": "txfees_b",
-		},
 	}
 }
 
 func (h *BlockHandler) BeginBlocker(ctx sdk.Context) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.keeper.Meter(ctx).FuncTiming(&ctx, "BeginBlocker")()
 
 	h.keeper.RefreshMempool1559Parameters(ctx)
 	h.keeper.CurFeeState.StartBlock(h.keeper.Logger(ctx), ctx.BlockHeight())
@@ -46,8 +39,7 @@ func (h *BlockHandler) BeginBlocker(ctx sdk.Context) error {
 }
 
 func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.keeper.Meter(ctx).FuncTiming(&ctx, "EndBlocker")()
 
 	h.keeper.CurFeeState.UpdateBaseFee(h.keeper.Logger(ctx), ctx.BlockHeight())
 }

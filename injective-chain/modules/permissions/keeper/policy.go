@@ -8,6 +8,8 @@ import (
 )
 
 func (k Keeper) GetAllPolicyStatuses(ctx sdk.Context, denom string) ([]*types.PolicyStatus, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllPolicyStatuses")()
+
 	store := k.getPolicyStatusStore(ctx, denom)
 	iter := store.Iterator(nil, nil)
 	defer iter.Close()
@@ -25,6 +27,8 @@ func (k Keeper) GetAllPolicyStatuses(ctx sdk.Context, denom string) ([]*types.Po
 }
 
 func (k Keeper) GetPolicyStatus(ctx sdk.Context, denom string, action types.Action) (*types.PolicyStatus, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPolicyStatus")()
+
 	store := k.getPolicyStatusStore(ctx, denom)
 	key := types.Uint32ToLittleEndian(uint32(action))
 
@@ -42,6 +46,8 @@ func (k Keeper) GetPolicyStatus(ctx sdk.Context, denom string, action types.Acti
 }
 
 func (k Keeper) TryUpdatePolicyStatus(ctx sdk.Context, sender sdk.AccAddress, denom string, newPolicyStatus *types.PolicyStatus) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "TryUpdatePolicyStatus")()
+
 	action := newPolicyStatus.Action
 	oldPolicyStatus, err := k.GetPolicyStatus(ctx, denom, action)
 	if err != nil {
@@ -70,6 +76,8 @@ func (k Keeper) TryUpdatePolicyStatus(ctx sdk.Context, sender sdk.AccAddress, de
 
 // setPolicyStatus sets the policy status for a given action
 func (k Keeper) setPolicyStatus(ctx sdk.Context, denom string, policyStatus *types.PolicyStatus) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setPolicyStatus")()
+
 	store := k.getPolicyStatusStore(ctx, denom)
 	key := types.Uint32ToLittleEndian(uint32(policyStatus.Action))
 
@@ -83,6 +91,8 @@ func (k Keeper) setPolicyStatus(ctx sdk.Context, denom string, policyStatus *typ
 }
 
 func (k Keeper) IsActionDisabledByPolicy(ctx sdk.Context, denom string, action types.Action) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsActionDisabledByPolicy")()
+
 	policyStatus, err := k.GetPolicyStatus(ctx, denom, action)
 	if err != nil {
 		// should never happen, defensive programming
@@ -92,9 +102,14 @@ func (k Keeper) IsActionDisabledByPolicy(ctx sdk.Context, denom string, action t
 	return policyStatus.IsDisabled
 }
 
-func (k Keeper) updatePolicyManagerCapability(ctx sdk.Context, denom string, capability *types.PolicyManagerCapability) error {
+func (k Keeper) updatePolicyManagerCapability(ctx sdk.Context, denom string, capability *types.PolicyManagerCapability) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updatePolicyManagerCapability")(&err)
+
 	if !capability.CanSeal && !capability.CanDisable {
-		manager := sdk.MustAccAddressFromBech32(capability.Manager)
+		manager, err := sdk.AccAddressFromBech32(capability.Manager)
+		if err != nil {
+			return err
+		}
 		k.deletePolicyManagerCapability(ctx, denom, manager, capability.Action)
 		return nil
 	}
@@ -102,9 +117,14 @@ func (k Keeper) updatePolicyManagerCapability(ctx sdk.Context, denom string, cap
 }
 
 // setPolicyManagerCapability sets the policy manager capability for a given action
-func (k Keeper) setPolicyManagerCapability(ctx sdk.Context, denom string, capability *types.PolicyManagerCapability) error {
+func (k Keeper) setPolicyManagerCapability(ctx sdk.Context, denom string, capability *types.PolicyManagerCapability) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setPolicyManagerCapability")(&err)
+
 	store := k.getPolicyManagerCapabilitiesStore(ctx, denom)
-	manager := sdk.MustAccAddressFromBech32(capability.Manager)
+	manager, err := sdk.AccAddressFromBech32(capability.Manager)
+	if err != nil {
+		return err
+	}
 	// This is defined as key = manager + Action
 	key := append(manager.Bytes(), types.Uint32ToLittleEndian(uint32(capability.Action))...)
 
@@ -118,12 +138,16 @@ func (k Keeper) setPolicyManagerCapability(ctx sdk.Context, denom string, capabi
 }
 
 func (k Keeper) deletePolicyManagerCapability(ctx sdk.Context, denom string, manager sdk.AccAddress, action types.Action) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "deletePolicyManagerCapability")()
+
 	store := k.getPolicyManagerCapabilitiesStore(ctx, denom)
 	key := append(manager.Bytes(), types.Uint32ToLittleEndian(uint32(action))...)
 	store.Delete(key)
 }
 
 func (k Keeper) getPolicyManagerCapability(ctx sdk.Context, denom string, manager sdk.AccAddress, action types.Action) (*types.PolicyManagerCapability, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getPolicyManagerCapability")()
+
 	store := k.getPolicyManagerCapabilitiesStore(ctx, denom)
 	key := append(manager.Bytes(), types.Uint32ToLittleEndian(uint32(action))...)
 
@@ -141,6 +165,8 @@ func (k Keeper) getPolicyManagerCapability(ctx sdk.Context, denom string, manage
 }
 
 func (k Keeper) GetAllPolicyManagerCapabilities(ctx sdk.Context, denom string) ([]*types.PolicyManagerCapability, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllPolicyManagerCapabilities")()
+
 	store := k.getPolicyManagerCapabilitiesStore(ctx, denom)
 	iter := store.Iterator(nil, nil)
 	defer iter.Close()

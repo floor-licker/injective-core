@@ -11,7 +11,6 @@ import (
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
 	wasmkeeper "github.com/CosmWasm/wasmd/x/wasm/keeper"
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
@@ -61,7 +60,6 @@ type Keeper struct {
 	DowntimeKeeper       types.DowntimeKeeper
 	permissionsKeeper    types.PermissionsKeeper
 
-	svcTags   metrics.Tags
 	authority string
 
 	// cached value from params (false by default)
@@ -73,6 +71,7 @@ func NewKeeper(
 	cdc codec.BinaryCodec,
 	storeKey storetypes.StoreKey,
 	tStoreKey storetypes.StoreKey,
+	objectStoreKey storetypes.StoreKey,
 	ak authkeeper.AccountKeeper,
 	bk bankkeeper.Keeper,
 	ok types.OracleKeeper,
@@ -84,7 +83,7 @@ func NewKeeper(
 	authority string,
 ) *Keeper {
 	var (
-		b            = base.NewBaseKeeper(cdc, storeKey, tStoreKey)
+		b            = base.NewBaseKeeper(cdc, storeKey, tStoreKey, objectStoreKey)
 		subacc       = subaccount.New(b, ak, bk, pk)
 		feeDiscounts = feediscounts.New(b, sk)
 		trade        = rewards.New(b, bk, feeDiscounts, dk)
@@ -107,10 +106,7 @@ func NewKeeper(
 		OracleKeeper:       ok,
 		bankKeeper:         bk,
 		authority:          authority,
-		svcTags: metrics.Tags{
-			"svc": "exchange_k",
-		},
-		fixedGas: false,
+		fixedGas:           false,
 	}
 }
 
@@ -172,8 +168,7 @@ func (k *Keeper) CreateModuleAccount(ctx sdk.Context) {
 
 // GetAllDerivativeAndBinaryOptionsLimitOrderbook returns all orderbooks for all derivative markets.
 func (k *Keeper) GetAllDerivativeAndBinaryOptionsLimitOrderbook(ctx sdk.Context) []v2.DerivativeOrderBook {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllDerivativeAndBinaryOptionsLimitOrderbook")()
 
 	derivativeMarkets := k.GetAllDerivativeMarkets(ctx)
 	binaryOptionsMarkets := k.GetAllBinaryOptionsMarkets(ctx)
@@ -223,8 +218,7 @@ func (k *Keeper) ExecuteBatchUpdateOrders(
 	derivativeMarketOrdersToCreate []*v2.DerivativeOrder,
 	binaryOptionsMarketOrdersToCreate []*v2.DerivativeOrder,
 ) (*v2.MsgBatchUpdateOrdersResponse, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteBatchUpdateOrders")()
 
 	var (
 		spotMarkets          = make(map[common.Hash]*v2.SpotMarket)
@@ -380,8 +374,7 @@ func (k *Keeper) ExecuteBatchUpdateOrders(
 
 // ProcessExpiredDOrders processes all expired orders at the current block height
 func (k *Keeper) ProcessExpiredOrders(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessExpiredOrders")()
 
 	defer func() {
 		if r := recover(); r != nil {
@@ -410,19 +403,22 @@ func (k *Keeper) ProcessExpiredOrders(ctx sdk.Context) {
 }
 
 func (k *Keeper) processMarketExpiredOrders(ctx sdk.Context, market v2.MarketI, blockHeight int64) {
-	defer k.DeleteMarketWithOrderExpirations(ctx, market.MarketID(), blockHeight)
+	defer k.Meter(ctx).FuncTiming(&ctx, "processMarketExpiredOrders")()
 
-	orders, err := k.GetOrdersByExpiration(ctx, market.MarketID(), blockHeight)
-	if err != nil {
-		ctx.Logger().Error("failed to get expired orders", "error", err, "marketID", market.MarketID())
-		return
-	}
+	k.IterateOrderExpirationEntries(ctx, market.MarketID(), blockHeight, func(orderHashKey []byte, value []byte) bool {
+		order, err := k.UnmarshalOrderData(value)
+		if err != nil {
+			ctx.Logger().Error(
+				"failed to decode expired order, deleting malformed expiration entry",
+				"error", err,
+				"marketID", market.MarketID(),
+				"blockHeight", blockHeight,
+				"orderHashKey", fmt.Sprintf("0x%x", orderHashKey),
+			)
+			k.DeleteOrderExpirationByKey(ctx, market.MarketID(), blockHeight, orderHashKey)
+			return false
+		}
 
-	if len(orders) == 0 {
-		return
-	}
-
-	for _, order := range orders {
 		spotMarket, ok := market.(*v2.SpotMarket)
 		if ok {
 			if err := k.cancelSpotLimitOrderWithIdentifier(
@@ -459,8 +455,11 @@ func (k *Keeper) processMarketExpiredOrders(ctx sdk.Context, market v2.MarketI, 
 			}
 		}
 
-		k.DeleteOrderExpiration(ctx, market.MarketID(), blockHeight, common.HexToHash(order.OrderHash))
-	}
+		k.DeleteOrderExpirationByKey(ctx, market.MarketID(), blockHeight, orderHashKey)
+		return false
+	})
+
+	k.DeleteMarketWithOrderExpirations(ctx, market.MarketID(), blockHeight)
 }
 
 func (k *Keeper) processCancelAllSpotOrders(
@@ -469,6 +468,8 @@ func (k *Keeper) processCancelAllSpotOrders(
 	subaccountID common.Hash,
 	spotMarkets map[common.Hash]*v2.SpotMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCancelAllSpotOrders")()
+
 	for _, spotMarketIdToCancelAll := range spotMarketIDsToCancelAll {
 		marketID := common.HexToHash(spotMarketIdToCancelAll)
 		market := k.GetSpotMarketByID(ctx, marketID)
@@ -492,6 +493,8 @@ func (k *Keeper) processCancelAllDerivativeOrders(
 	subaccountID common.Hash,
 	derivativeMarkets map[common.Hash]*v2.DerivativeMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCancelAllDerivativeOrders")()
+
 	for _, derivativeMarketIdToCancelAll := range derivativeMarketIDsToCancelAll {
 		marketID := common.HexToHash(derivativeMarketIdToCancelAll)
 		market := k.GetDerivativeMarketByID(ctx, marketID)
@@ -521,6 +524,8 @@ func (k *Keeper) processCancelAllBinaryOptionsOrders(
 	subaccountID common.Hash,
 	binaryOptionsMarkets map[common.Hash]*v2.BinaryOptionsMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCancelAllBinaryOptionsOrders")()
+
 	for _, binaryOptionsMarketIdToCancelAll := range binaryOptionsMarketIDsToCancelAll {
 		marketID := common.HexToHash(binaryOptionsMarketIdToCancelAll)
 		market := k.GetBinaryOptionsMarketByID(ctx, marketID)
@@ -551,6 +556,8 @@ func (k *Keeper) processCancelSpotOrders(
 	spotCancelSuccesses []bool,
 	spotMarkets map[common.Hash]*v2.SpotMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCancelSpotOrders")()
+
 	for idx, spotOrderToCancel := range spotOrdersToCancel {
 		marketID := common.HexToHash(spotOrderToCancel.MarketId)
 
@@ -586,6 +593,8 @@ func (k *Keeper) processCancelDerivativeOrders(
 	derivativeCancelSuccesses []bool,
 	derivativeMarkets map[common.Hash]*v2.DerivativeMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCancelDerivativeOrders")()
+
 	for idx, derivativeOrderToCancel := range derivativeOrdersToCancel {
 		marketID := common.HexToHash(derivativeOrderToCancel.MarketId)
 
@@ -629,6 +638,8 @@ func (k *Keeper) processCancelBinaryOptionsOrders(
 	binaryOptionsCancelSuccesses []bool,
 	binaryOptionsMarkets map[common.Hash]*v2.BinaryOptionsMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCancelBinaryOptionsOrders")()
+
 	for idx, binaryOptionsOrderToCancel := range binaryOptionsOrdersToCancel {
 		marketID := common.HexToHash(binaryOptionsOrderToCancel.MarketId)
 
@@ -671,6 +682,8 @@ func (k *Keeper) processCreateSpotOrders(
 	spotMarkets map[common.Hash]*v2.SpotMarket,
 	orderCreator func(ctx sdk.Context, sender sdk.AccAddress, order *v2.SpotOrder, market *v2.SpotMarket) (common.Hash, error),
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCreateSpotOrders")()
+
 	for idx, spotOrder := range spotOrdersToCreate {
 		marketID := common.HexToHash(spotOrder.MarketId)
 		market := k.getSpotMarketForOrder(ctx, marketID, spotMarkets)
@@ -702,6 +715,8 @@ func (k *Keeper) getSpotMarketForOrder(
 	marketID common.Hash,
 	spotMarkets map[common.Hash]*v2.SpotMarket,
 ) *v2.SpotMarket {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getSpotMarketForOrder")()
+
 	if m, ok := spotMarkets[marketID]; ok {
 		return m
 	}
@@ -728,6 +743,8 @@ func (k *Keeper) processSpotOrderCreation(
 	failedSpotOrdersCids *[]string,
 	orderCreator func(ctx sdk.Context, sender sdk.AccAddress, order *v2.SpotOrder, market *v2.SpotMarket) (common.Hash, error),
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processSpotOrderCreation")()
+
 	if orderHash, err := orderCreator(ctx, sender, spotOrder, market); err != nil {
 		sdkerror := &sdkerrors.Error{}
 		if errors.As(err, &sdkerror) {
@@ -755,6 +772,8 @@ func (k *Keeper) processCreateDerivativeOrders(
 		ctx sdk.Context, sender sdk.AccAddress, order *v2.DerivativeOrder, market v2.DerivativeMarketI, markPrice math.LegacyDec,
 	) (common.Hash, error),
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCreateDerivativeOrders")()
+
 	for idx, derivativeOrder := range derivativeOrdersToCreate {
 		marketID := derivativeOrder.MarketID()
 
@@ -785,6 +804,8 @@ func (k *Keeper) getDerivativeMarketForOrder(
 	derivativeMarkets map[common.Hash]*v2.DerivativeMarket,
 	markPrices map[common.Hash]math.LegacyDec,
 ) (*v2.DerivativeMarket, math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getDerivativeMarketForOrder")()
+
 	var market *v2.DerivativeMarket
 	var markPrice math.LegacyDec
 
@@ -811,7 +832,7 @@ func (k *Keeper) getDerivativeMarketForOrder(
 		)
 		if err != nil {
 			k.Logger(ctx).Debug("failed to create derivative order for market with no mark price", "marketID", marketID.Hex())
-			metrics.ReportFuncError(k.svcTags)
+
 			return nil, math.LegacyDec{}
 		}
 		markPrices[marketID] = *price
@@ -835,6 +856,8 @@ func (k *Keeper) processDerivativeOrderCreation(
 		ctx sdk.Context, sender sdk.AccAddress, order *v2.DerivativeOrder, market v2.DerivativeMarketI, markPrice math.LegacyDec,
 	) (common.Hash, error),
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processDerivativeOrderCreation")()
+
 	if orderHash, err := orderCreator(ctx, sender, derivativeOrder, market, markPrice); err != nil {
 		sdkerror := &sdkerrors.Error{}
 		if errors.As(err, &sdkerror) {
@@ -861,6 +884,8 @@ func (k *Keeper) processCreateBinaryOptionsOrders(
 		ctx sdk.Context, sender sdk.AccAddress, order *v2.DerivativeOrder, market v2.DerivativeMarketI, markPrice math.LegacyDec,
 	) (common.Hash, error),
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processCreateBinaryOptionsOrders")()
+
 	for idx, order := range binaryOptionsOrdersToCreate {
 		marketID := order.MarketID()
 
@@ -894,6 +919,8 @@ func (k *Keeper) getBinaryOptionsMarketForOrder(
 	marketID common.Hash,
 	binaryOptionsMarkets map[common.Hash]*v2.BinaryOptionsMarket,
 ) *v2.BinaryOptionsMarket {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getBinaryOptionsMarketForOrder")()
+
 	if m, ok := binaryOptionsMarkets[marketID]; ok {
 		return m
 	}
@@ -927,6 +954,8 @@ func (k *Keeper) processBinaryOptionsOrderCreation(
 		ctx sdk.Context, sender sdk.AccAddress, order *v2.DerivativeOrder, market v2.DerivativeMarketI, markPrice math.LegacyDec,
 	) (common.Hash, error),
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processBinaryOptionsOrderCreation")()
+
 	if orderHash, err := orderCreator(ctx, sender, order, market, math.LegacyDec{}); err != nil {
 		sdkerror := &sdkerrors.Error{}
 		if errors.As(err, &sdkerror) {
@@ -947,6 +976,8 @@ func (k *Keeper) createDerivativeMarketOrderWithoutResultsForAtomicExecution(
 	market v2.DerivativeMarketI,
 	markPrice math.LegacyDec,
 ) (orderHash common.Hash, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "createDerivativeMarketOrderWithoutResultsForAtomicExecution")()
+
 	orderHash, _, err = k.CreateDerivativeMarketOrder(ctx, sender, derivativeOrder, market, markPrice)
 	return orderHash, err
 }
@@ -956,7 +987,9 @@ func (k *Keeper) IsGovernanceAuthorityAddress(address string) bool {
 }
 
 func (k *Keeper) IsAdmin(ctx sdk.Context, addr string) bool {
-	for _, adminAddress := range k.GetParams(ctx).ExchangeAdmins {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsAdmin")()
+
+	for _, adminAddress := range k.GetCachedParams(ctx).ExchangeAdmins {
 		if adminAddress == addr {
 			return true
 		}
@@ -974,8 +1007,7 @@ func (k *Keeper) SetFixedGasEnabled(enabled bool) {
 
 // GetAllPerpetualMarketFundingStates returns all perpetual market funding states
 func (k *Keeper) GetAllPerpetualMarketFundingStates(ctx sdk.Context) []v2.PerpetualMarketFundingState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllPerpetualMarketFundingStates")()
 
 	fundingStates := make([]v2.PerpetualMarketFundingState, 0)
 	k.IteratePerpetualMarketFundings(ctx, func(p *v2.PerpetualMarketFunding, marketID common.Hash) (stop bool) {
@@ -991,6 +1023,7 @@ func (k *Keeper) GetAllPerpetualMarketFundingStates(ctx sdk.Context) []v2.Perpet
 }
 
 func (k *Keeper) checkDenomMinNotional(ctx sdk.Context, sender sdk.AccAddress, denom string, minNotional math.LegacyDec) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "checkDenomMinNotional")()
 	// governance and exchange admins can set any min notional values
 	if sender.String() == k.authority {
 		return nil
@@ -1017,8 +1050,7 @@ func (k *Keeper) checkIfMarketLaunchProposalExist(
 	marketID common.Hash,
 	proposalTypes ...string,
 ) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "checkIfMarketLaunchProposalExist")()
 
 	exists := false
 	params, _ := k.govKeeper.Params.Get(ctx)
@@ -1039,6 +1071,8 @@ func (k *Keeper) checkIfMarketLaunchProposalExist(
 }
 
 func (k *Keeper) GetMarketType(ctx sdk.Context, marketID common.Hash, isEnabled bool) (*types.MarketType, error) { //nolint:revive // ok
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMarketType")()
+
 	if k.HasSpotMarket(ctx, marketID, isEnabled) {
 		tp := types.MarketType_Spot
 		return &tp, nil

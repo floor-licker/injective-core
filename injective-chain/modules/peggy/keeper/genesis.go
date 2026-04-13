@@ -3,6 +3,7 @@ package keeper
 import (
 	"sort"
 
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -46,6 +47,18 @@ func NormalizeGenesis(data *types.GenesisState) {
 
 	for _, token := range data.Erc20ToDenoms {
 		token.Erc20 = common.HexToAddress(token.Erc20).Hex()
+	}
+
+	for _, mintAmount := range data.MintAmounts {
+		mintAmount.Token = common.HexToAddress(mintAmount.Token).Hex()
+	}
+
+	for _, rateLimit := range data.RateLimits {
+		rateLimit.TokenAddress = common.HexToAddress(rateLimit.TokenAddress).Hex()
+	}
+
+	for _, transfers := range data.RateLimitTransfers {
+		transfers.Token = common.HexToAddress(transfers.Token).Hex()
 	}
 }
 
@@ -153,6 +166,28 @@ func InitGenesis(ctx sdk.Context, k Keeper, data *types.GenesisState) {
 	for _, limit := range data.RateLimits {
 		k.SetRateLimit(ctx, limit)
 	}
+
+	for _, mintAmount := range data.MintAmounts {
+		k.SetMintAmountERC20(ctx, common.HexToAddress(mintAmount.Token), mintAmount.Amount)
+	}
+
+	// Rebuild the per-block flow records and the aggregate net-outflow gauge.
+	for _, transfers := range data.RateLimitTransfers {
+		tokenAddress := common.HexToAddress(transfers.Token)
+		netOutflow := sdkmath.ZeroInt()
+
+		for _, inflow := range transfers.Inflows {
+			k.SetInflowByBlock(ctx, tokenAddress, inflow.BlockNumber, inflow.Amount)
+			netOutflow = netOutflow.Sub(inflow.Amount)
+		}
+
+		for _, outflow := range transfers.Outflows {
+			k.SetOutflowByBlock(ctx, tokenAddress, outflow.BlockNumber, outflow.Amount)
+			netOutflow = netOutflow.Add(outflow.Amount)
+		}
+
+		k.SetNetOutflow(ctx, tokenAddress, netOutflow)
+	}
 }
 
 // ExportGenesis exports all the state needed to restart the chain
@@ -173,6 +208,8 @@ func ExportGenesis(ctx sdk.Context, k Keeper) types.GenesisState {
 		unbatchedTransfers              = k.GetPoolTransactions(ctx)
 		ethereumBlacklistAddresses      = k.GetAllEthereumBlacklistAddresses(ctx)
 		rateLimits                      = k.GetRateLimits(ctx)
+		mintAmounts                     = k.GetMintAmounts(ctx)
+		rateLimitTransfers              = k.GetAllRateLimitTransfers(ctx)
 	)
 
 	// export valset confirmations from state
@@ -225,5 +262,7 @@ func ExportGenesis(ctx sdk.Context, k Keeper) types.GenesisState {
 		LastObservedValset:         *lastObservedValset,
 		EthereumBlacklist:          ethereumBlacklistAddresses,
 		RateLimits:                 rateLimits,
+		MintAmounts:                mintAmounts,
+		RateLimitTransfers:         rateLimitTransfers,
 	}
 }

@@ -1,0 +1,6 @@
+# Benchmark generated files
+*.prof
+*.svg
+*.log
+reports/
+bench_reports/

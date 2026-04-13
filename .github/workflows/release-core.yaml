@@ -6,7 +6,7 @@ on:
         description: Release tag
         required: true
       release_name:
-        description: Release name e.g. `v1.17.0` or  `v1.18.0-beta`
+        description: Release name e.g. `v1.19.0` or  `v1.19.0-beta`
         required: true
       body_file_path:
         description: Path where to get the body file for the release (./injective-core-prerelease/.github/RELEASE_TEMPLATE.md)

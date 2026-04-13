@@ -45,6 +45,8 @@ type EVMConfig struct {
 
 // EVMBlockConfig creates the EVMBlockConfig based on current state
 func (k *Keeper) EVMBlockConfig(ctx sdk.Context) (*EVMBlockConfig, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "EVMBlockConfig")()
+
 	objStore := ctx.ObjectStore(k.objectKey)
 	v := objStore.Get(types.KeyPrefixObjectParams)
 	if v != nil {
@@ -80,11 +82,15 @@ func (k *Keeper) EVMBlockConfig(ctx sdk.Context) (*EVMBlockConfig, error) {
 }
 
 func (k *Keeper) RemoveParamsCache(ctx sdk.Context) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "RemoveParamsCache")()
+
 	ctx.ObjectStore(k.objectKey).Delete(types.KeyPrefixObjectParams)
 }
 
 // EVMConfig creates the EVMConfig based on current state
 func (k *Keeper) EVMConfig(ctx sdk.Context, txHash common.Hash) (*EVMConfig, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "EVMConfig")()
+
 	blockCfg, err := k.EVMBlockConfig(ctx)
 	if err != nil {
 		return nil, err

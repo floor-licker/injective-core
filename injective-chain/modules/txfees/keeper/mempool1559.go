@@ -10,6 +10,8 @@ import (
 )
 
 func (k *Keeper) RefreshMempool1559Parameters(ctx sdk.Context) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "RefreshMempool1559Parameters")()
+
 	params := k.GetParams(ctx)
 
 	if k.CurFeeState == nil {
@@ -33,6 +35,7 @@ func (k *Keeper) RefreshMempool1559Parameters(ctx sdk.Context) {
 // If they have, we unmarshal the current consensus params, update the target gas, and cache the value.
 // This is done to improve performance by not having to fetch and unmarshal the consensus params on every block.
 func (k *Keeper) CheckAndSetTargetGas(ctx sdk.Context) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "CheckAndSetTargetGas")()
 	// Check if the block gas limit has changed.
 	// If it has, update the target gas for eip1559.
 	consParams, err := k.GetConsParams(ctx)

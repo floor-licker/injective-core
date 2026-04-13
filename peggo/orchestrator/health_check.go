@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/InjectiveLabs/coretracer"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 )
 
@@ -74,36 +73,32 @@ func (s *Orchestrator) RunHealthCheckServer(port uint64) error {
 	return err
 }
 
-func (s *Orchestrator) checkHealthStatus(ctx context.Context) (Status, error) {
-	defer coretracer.Trace(&ctx, s.svcTags)()
+func (s *Orchestrator) checkHealthStatus(ctx context.Context) (status Status, err error) {
+	ctx, done := s.meter.FuncTimingCtx(ctx, "checkHealthStatus")
+	defer done(&err)
 
 	state, err := s.injective.ModuleState(ctx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return Status{}, fmt.Errorf("failed to get module state: %w", err)
 	}
 
 	claim, err := s.injective.LastClaimEventByAddr(ctx, s.cfg.CosmosAddr)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return Status{}, fmt.Errorf("failed to get last claim event: %w", err)
 	}
 
 	unsignedBatch, err := s.injective.OldestUnsignedTransactionBatch(ctx, s.cfg.CosmosAddr)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return Status{}, fmt.Errorf("failed to get oldest unsigned batch: %w", err)
 	}
 
 	unsignedValsets, err := s.injective.OldestUnsignedValsets(ctx, s.cfg.CosmosAddr)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return Status{}, fmt.Errorf("failed to get oldest unsigned valsets: %w", err)
 	}
 
 	vs, err := s.injective.CurrentValset(ctx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return Status{}, fmt.Errorf("failed to get active validator set on Injective: %w", err)
 	}
 
@@ -114,7 +109,7 @@ func (s *Orchestrator) checkHealthStatus(ctx context.Context) (Status, error) {
 		}
 	}
 
-	status := Status{
+	status = Status{
 		LastObservedEventNonceByNetwork:      state.LastObservedNonce,
 		LastObservedEventNonceByOrchestrator: claim.EthereumEventNonce,
 		IsPartOfTheCurrentSet:                bonded,

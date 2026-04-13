@@ -11,6 +11,7 @@ import (
 	storetypes "cosmossdk.io/store/types"
 
 	"cosmossdk.io/errors"
+	"github.com/InjectiveLabs/metrics/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -35,6 +36,8 @@ type Keeper struct {
 
 	moduleAddress string
 	authority     string
+
+	meter metrics.Meter
 }
 
 // NewKeeper returns a new instance of the x/tokenfactory keeper
@@ -66,7 +69,17 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))
 }
 
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
+}
+
 func (k Keeper) createTokenPair(ctx sdk.Context, sender sdk.AccAddress, pair *types.TokenPair) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "createTokenPair")()
+
 	switch types.GetDenomType(pair.BankDenom) {
 	case types.DenomTypeTokenFactory:
 		return k.createTokenPairTokenFactory(ctx, sender, pair)
@@ -84,6 +97,7 @@ func (k Keeper) createTokenPair(ctx sdk.Context, sender sdk.AccAddress, pair *ty
 // If the denom has permissions with disabled minting/burning/superBurning actions, then fix the implementation to FixedSupplyERC20.
 func (k Keeper) createTokenPairTokenFactory(c context.Context, sender sdk.AccAddress, pair *types.TokenPair) error {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "createTokenPairTokenFactory")()
 	// check rights
 	metadata, err := k.tfKeeper.GetAuthorityMetadata(ctx, pair.BankDenom)
 	if err != nil {
@@ -136,6 +150,7 @@ func (k Keeper) createTokenPairTokenFactory(c context.Context, sender sdk.AccAdd
 // Only support deploying owner-less ERC-20 implementation.
 func (k Keeper) createTokenPairPeggy(c context.Context, sender sdk.AccAddress, pair *types.TokenPair) error {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "createTokenPairPeggy")()
 
 	// we do not allow custom ERC-20 implementations due to this msg being permissionless
 	if pair.Erc20Address != "" {
@@ -158,6 +173,7 @@ func (k Keeper) createTokenPairPeggy(c context.Context, sender sdk.AccAddress, p
 // Only support deploying owner-less ERC-20 implementation.
 func (k Keeper) createTokenPairIBC(c context.Context, sender sdk.AccAddress, pair *types.TokenPair) error {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "createTokenPairIBC")()
 
 	// we do not allow custom ERC-20 implementations due to this msg being permissionless
 	if pair.Erc20Address != "" {
@@ -177,6 +193,9 @@ func (k Keeper) createTokenPairIBC(c context.Context, sender sdk.AccAddress, pai
 }
 
 func (k Keeper) DeploySmartContract(c context.Context, metadata *bind.MetaData, from sdk.AccAddress, args ...any) (common.Address, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeploySmartContract")()
+
 	abi, err := metadata.GetAbi()
 	if err != nil {
 		return common.Address{}, err
@@ -189,7 +208,7 @@ func (k Keeper) DeploySmartContract(c context.Context, metadata *bind.MetaData, 
 	data := common.FromHex(metadata.Bin)
 	data = append(data, ctorArgs...)
 
-	nonce, err := k.accountKeeper.GetSequence(c, from)
+	nonce, err := k.accountKeeper.GetSequence(ctx, from)
 	if err != nil {
 		return common.Address{}, err
 	}
@@ -208,7 +227,7 @@ func (k Keeper) DeploySmartContract(c context.Context, metadata *bind.MetaData, 
 	)
 	msg.From = from.Bytes()
 
-	response, err := k.evmKeeper.ApplyTransaction(sdk.UnwrapSDKContext(c), msg)
+	response, err := k.evmKeeper.ApplyTransaction(ctx, msg)
 	if err != nil {
 		return common.Address{}, err
 	}

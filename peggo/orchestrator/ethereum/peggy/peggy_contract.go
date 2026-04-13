@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -79,7 +79,12 @@ func NewPeggyContract(
 	peggyAddress common.Address,
 	pendingTxInputList PendingTxInputList,
 	pendingTxWaitDuration time.Duration,
+	meter metrics.Meter,
 ) (PeggyContract, error) {
+	if meter == nil {
+		meter = metrics.NewNilMeter()
+	}
+
 	ethPeggy, err := wrappers.NewPeggy(peggyAddress, ethCommitter.Provider())
 	if err != nil {
 		return nil, err
@@ -87,11 +92,12 @@ func NewPeggyContract(
 
 	svc := &peggyContract{
 		EVMCommitter:          ethCommitter,
+		ethProvider:           ethCommitter.Provider(),
 		peggyAddress:          peggyAddress,
 		ethPeggy:              ethPeggy,
 		pendingTxInputList:    pendingTxInputList,
 		pendingTxWaitDuration: pendingTxWaitDuration,
-		svcTags:               coretracer.NewTag("svc", "peggy_contract"),
+		meter:                 meter.SubMeter("peggy_contract", metrics.Tag("svc", "peggy_contract")),
 	}
 
 	return svc, nil
@@ -107,7 +113,7 @@ type peggyContract struct {
 	pendingTxInputList    PendingTxInputList
 	pendingTxWaitDuration time.Duration
 
-	svcTags coretracer.Tags
+	meter metrics.Meter
 }
 
 func (s *peggyContract) Address() common.Address {

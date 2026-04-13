@@ -5,14 +5,12 @@ import (
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 type WasmV1MsgServer struct {
 	Keeper
-	server  v2.MsgServer
-	svcTags metrics.Tags
+	server v2.MsgServer
 }
 
 // NewWasmV1MsgServerImpl returns an implementation of the exchange MsgServer interface for the provided Keeper for exchange wasm functions.
@@ -20,9 +18,6 @@ func NewWasmV1MsgServerImpl(keeper Keeper, server v2.MsgServer) WasmV1MsgServer 
 	return WasmV1MsgServer{
 		Keeper: keeper,
 		server: server,
-		svcTags: metrics.Tags{
-			"svc": "exch_v1_wasm_msg_h",
-		},
 	}
 }
 
@@ -30,9 +25,6 @@ func (k WasmV1MsgServer) PrivilegedExecuteContract(
 	goCtx context.Context,
 	msg *types.MsgPrivilegedExecuteContract,
 ) (*types.MsgPrivilegedExecuteContractResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
-
 	v2Msg := &v2.MsgPrivilegedExecuteContract{
 		Sender:          msg.Sender,
 		Funds:           msg.Funds,

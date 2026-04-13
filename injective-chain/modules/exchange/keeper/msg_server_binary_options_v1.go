@@ -10,13 +10,11 @@ import (
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 )
 
 type BinaryOptionsV1MsgServer struct {
-	keeper  Keeper
-	server  v2.MsgServer
-	svcTags metrics.Tags
+	keeper Keeper
+	server v2.MsgServer
 }
 
 // NewBinaryOptionsV1MsgServerImpl returns an implementation of the exchange MsgServer interface for the provided
@@ -25,25 +23,21 @@ func NewBinaryOptionsV1MsgServerImpl(keeper Keeper, server v2.MsgServer) BinaryO
 	return BinaryOptionsV1MsgServer{
 		keeper: keeper,
 		server: server,
-		svcTags: metrics.Tags{
-			"svc": "bin_v1_msg_h",
-		},
 	}
 }
 
 func (k BinaryOptionsV1MsgServer) InstantBinaryOptionsMarketLaunch(
 	goCtx context.Context, msg *types.MsgInstantBinaryOptionsMarketLaunch,
 ) (*types.MsgInstantBinaryOptionsMarketLaunchResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
 	if !k.keeper.IsDenomValid(ctx, msg.QuoteDenom) {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrInvalidQuoteDenom, "denom %s does not exist in supply", msg.QuoteDenom)
 	}
 	quoteDecimals, err := k.keeper.TokenDenomDecimals(ctx, msg.QuoteDenom)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, err
 	}
 
@@ -89,7 +83,6 @@ func (k BinaryOptionsV1MsgServer) InstantBinaryOptionsMarketLaunch(
 func (k BinaryOptionsV1MsgServer) CreateBinaryOptionsLimitOrder(
 	goCtx context.Context, msg *types.MsgCreateBinaryOptionsLimitOrder,
 ) (*types.MsgCreateBinaryOptionsLimitOrderResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 
@@ -122,7 +115,6 @@ func (k BinaryOptionsV1MsgServer) CreateBinaryOptionsLimitOrder(
 func (k BinaryOptionsV1MsgServer) CreateBinaryOptionsMarketOrder(
 	goCtx context.Context, msg *types.MsgCreateBinaryOptionsMarketOrder,
 ) (*types.MsgCreateBinaryOptionsMarketOrderResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 
@@ -180,7 +172,6 @@ func (k BinaryOptionsV1MsgServer) CreateBinaryOptionsMarketOrder(
 func (k BinaryOptionsV1MsgServer) CancelBinaryOptionsOrder(
 	goCtx context.Context, msg *types.MsgCancelBinaryOptionsOrder,
 ) (*types.MsgCancelBinaryOptionsOrderResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	v2Msg := &v2.MsgCancelBinaryOptionsOrder{
 		Sender:       msg.Sender,
@@ -206,7 +197,6 @@ func (k BinaryOptionsV1MsgServer) CancelBinaryOptionsOrder(
 func (k BinaryOptionsV1MsgServer) AdminUpdateBinaryOptionsMarket(
 	goCtx context.Context, msg *types.MsgAdminUpdateBinaryOptionsMarket,
 ) (*types.MsgAdminUpdateBinaryOptionsMarketResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	v2Msg := &v2.MsgAdminUpdateBinaryOptionsMarket{
 		Sender:              msg.Sender,
@@ -232,7 +222,6 @@ func (k BinaryOptionsV1MsgServer) AdminUpdateBinaryOptionsMarket(
 func (k BinaryOptionsV1MsgServer) BatchCancelBinaryOptionsOrders(
 	goCtx context.Context, msg *types.MsgBatchCancelBinaryOptionsOrders,
 ) (*types.MsgBatchCancelBinaryOptionsOrdersResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	v2OrderDataList := make([]v2.OrderData, 0, len(msg.Data))
 	for _, orderData := range msg.Data {

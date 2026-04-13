@@ -3,30 +3,23 @@ package downtimedetector
 import (
 	"time"
 
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/downtime-detector/types"
 )
 
 type BlockHandler struct {
-	keeper  *Keeper
-	svcTags metrics.Tags
+	keeper *Keeper
 }
 
 func NewBlockHandler(k *Keeper) *BlockHandler {
 	return &BlockHandler{
 		keeper: k,
-
-		svcTags: metrics.Tags{
-			"svc": "downtimedetector_b",
-		},
 	}
 }
 
 func (h *BlockHandler) BeginBlocker(ctx sdk.Context) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.keeper.Meter(ctx).FuncTiming(&ctx, "BeginBlocker")()
 
 	curTime := ctx.BlockTime()
 	lastBlockTime, err := h.keeper.GetLastBlockTime(ctx)

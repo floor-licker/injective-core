@@ -5,7 +5,6 @@ import (
 
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
@@ -22,17 +21,29 @@ const (
 	LiquidationModeEmergencySettle
 )
 
+func getLiquidatorRewardShareRate(
+	params v2.Params,
+	//revive:disable:flag-parameter
+	hasLiquidatorProvidedOrder bool,
+	isWhiteKnightLiquidator bool,
+) math.LegacyDec {
+	if hasLiquidatorProvidedOrder && isWhiteKnightLiquidator {
+		return params.WhiteKnightLiquidatorRewardShareRate
+	}
+
+	return params.LiquidatorRewardShareRate
+}
+
 func (k DerivativesMsgServer) handlePositiveLiquidationPayout(
 	ctx sdk.Context,
 	market *v2.DerivativeMarket,
 	surplusAmount math.LegacyDec,
 	liquidatorAddr sdk.AccAddress,
 	positionSubaccountID common.Hash,
+	liquidatorRewardShareRate math.LegacyDec,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "handlePositiveLiquidationPayout")()
 
-	liquidatorRewardShareRate := k.GetParams(ctx).LiquidatorRewardShareRate
 	insuranceFundOrAuctionPaymentAmount := surplusAmount.Mul(math.LegacyOneDec().Sub(liquidatorRewardShareRate)).TruncateInt()
 	liquidatorPayout := surplusAmount.Sub(insuranceFundOrAuctionPaymentAmount.ToLegacyDec())
 
@@ -44,6 +55,30 @@ func (k DerivativesMsgServer) handlePositiveLiquidationPayout(
 		AvailableBalanceDelta: surplusAmount.Neg(),
 		TotalBalanceDelta:     surplusAmount.Neg(),
 	})
+
+	if !insuranceFundOrAuctionPaymentAmount.IsPositive() {
+		return nil
+	}
+
+	return k.MoveCoinsIntoInsuranceFund(ctx, market, insuranceFundOrAuctionPaymentAmount)
+}
+
+func (k DerivativesMsgServer) handlePositiveOffsettingLiquidationPayout(
+	ctx sdk.Context,
+	market *v2.DerivativeMarket,
+	surplusAmount math.LegacyDec,
+	liquidatorAddr sdk.AccAddress,
+	liquidatorRewardShareRate math.LegacyDec,
+	depositDeltas types.DepositDeltas,
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handlePositiveOffsettingLiquidationPayout")()
+
+	insuranceFundOrAuctionPaymentAmount := surplusAmount.Mul(math.LegacyOneDec().Sub(liquidatorRewardShareRate)).TruncateInt()
+	liquidatorPayout := surplusAmount.Sub(insuranceFundOrAuctionPaymentAmount.ToLegacyDec())
+
+	if liquidatorPayout.IsPositive() {
+		depositDeltas.ApplyUniformDelta(types.SdkAddressToSubaccountID(liquidatorAddr), liquidatorPayout)
+	}
 
 	if !insuranceFundOrAuctionPaymentAmount.IsPositive() {
 		return nil
@@ -64,8 +99,7 @@ func (k DerivativesMsgServer) handleNegativeLiquidationPayout(
 	lostFundsFromAvailableDuringPayout math.LegacyDec,
 	isAllowingInsuranceFund bool,
 ) (shouldSettleMarket bool, err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleNegativeLiquidationPayout")()
 
 	shouldSettleMarket = false
 
@@ -110,7 +144,6 @@ func (k DerivativesMsgServer) handleNegativeLiquidationPayout(
 	}
 
 	if absoluteDeficitAmount, err = k.PayDeficitFromInsuranceFund(ctx, marketID, absoluteDeficitAmount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return shouldSettleMarket, err
 	}
 
@@ -123,14 +156,18 @@ func (k DerivativesMsgServer) handleNegativeLiquidationPayout(
 }
 
 func (k DerivativesMsgServer) EmergencySettleMarket(
-	goCtx context.Context, msg *v2.MsgEmergencySettleMarket,
+	c context.Context, msg *v2.MsgEmergencySettleMarket,
 ) (*v2.MsgEmergencySettleMarketResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "EmergencySettleMarket")()
+
+	if !k.IsAdmin(ctx, msg.Sender) {
+		return nil, sdkerrors.ErrUnauthorized
+	}
 
 	liquidatorAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	_, err := k.liquidatePosition(
-		goCtx,
+		ctx,
 		liquidatorAddr,
 		common.HexToHash(msg.SubaccountId),
 		common.HexToHash(msg.MarketId),
@@ -142,19 +179,18 @@ func (k DerivativesMsgServer) EmergencySettleMarket(
 }
 
 func (k DerivativesMsgServer) OffsetPosition(
-	goCtx context.Context, msg *v2.MsgOffsetPosition,
+	c context.Context, msg *v2.MsgOffsetPosition,
 ) (*v2.MsgOffsetPositionResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "OffsetPosition")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if !k.IsAdmin(ctx, msg.Sender) {
 		return nil, sdkerrors.ErrUnauthorized
 	}
 
 	liquidatorAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	_, err := k.liquidatePosition(
-		goCtx,
+		ctx,
 		liquidatorAddr,
 		common.HexToHash(msg.SubaccountId),
 		common.HexToHash(msg.MarketId),
@@ -167,14 +203,14 @@ func (k DerivativesMsgServer) OffsetPosition(
 }
 
 func (k DerivativesMsgServer) LiquidatePosition(
-	goCtx context.Context, msg *v2.MsgLiquidatePosition,
+	c context.Context, msg *v2.MsgLiquidatePosition,
 ) (*v2.MsgLiquidatePositionResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LiquidatePosition")()
 
 	liquidatorAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
 	return k.liquidatePosition(
-		goCtx,
+		ctx,
 		liquidatorAddr,
 		common.HexToHash(msg.SubaccountId),
 		common.HexToHash(msg.MarketId),
@@ -191,22 +227,16 @@ func (k DerivativesMsgServer) prepareLiquidationMarketOrder(
 	position *v2.Position,
 	positionSubaccountID common.Hash,
 	liquidatorAddr sdk.AccAddress,
-	liquidationMode LiquidationMode,
 ) (*v2.DerivativeMarketOrder, error) {
-	var marketOrderWorstPrice *math.LegacyDec
+	defer k.Meter(ctx).FuncTiming(&ctx, "prepareLiquidationMarketOrder")()
 
-	if liquidationMode == LiquidationModeOffsetting {
-		marketOrderWorstPrice = position.GetOffsettingMarketOrderWorstPrice(funding)
-	} else {
-		marketOrderWorstPrice = position.GetLiquidationMarketOrderWorstPrice(markPrice, funding)
-	}
+	marketOrderWorstPrice := position.GetLiquidationMarketOrderWorstPrice(markPrice, funding)
 
 	liquidationMarketOrder := v2.NewMarketOrderForLiquidation(position, positionSubaccountID, liquidatorAddr, *marketOrderWorstPrice)
 
 	subaccountNonce := k.IncrementSubaccountTradeNonce(ctx, positionSubaccountID)
 	orderHash, err := liquidationMarketOrder.ComputeOrderHash(subaccountNonce.Nonce, market.MarketId)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, err
 	}
 
@@ -223,6 +253,8 @@ func (k DerivativesMsgServer) prepareLiquidatorOrder(
 	liquidatorAddr sdk.AccAddress,
 	liquidationMode LiquidationMode,
 ) (common.Hash, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "prepareLiquidatorOrder")()
+
 	liquidatorSubaccountID := types.MustGetSubaccountIDOrDeriveFromNonce(liquidatorAddr, liquidatorOrder.OrderInfo.SubaccountId)
 	liquidatorOrder.OrderInfo.SubaccountId = liquidatorSubaccountID.Hex()
 	metadata := k.GetSubaccountOrderbookMetadata(ctx, market.MarketID(), liquidatorSubaccountID, liquidatorOrder.IsBuy())
@@ -232,7 +264,6 @@ func (k DerivativesMsgServer) prepareLiquidatorOrder(
 
 	// for emergency settling markets, we allow an invalid order, all order state changes are reverted later anyways
 	if err != nil && liquidationMode != LiquidationModeEmergencySettle {
-		metrics.ReportFuncError(k.svcTags)
 		return common.Hash{}, err
 	}
 
@@ -249,6 +280,8 @@ func (k DerivativesMsgServer) handleLiquidatorOrderPostExecution(
 	liquidatorOrder *v2.DerivativeOrder,
 	liquidatorOrderHash common.Hash,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleLiquidatorOrderPostExecution")()
+
 	isBuy := liquidatorOrder.IsBuy()
 	subaccountID := liquidatorOrder.SubaccountID()
 	orderAfterLiquidation := k.GetDerivativeLimitOrderBySubaccountIDAndHash(ctx, marketID, &isBuy, subaccountID, liquidatorOrderHash)
@@ -302,6 +335,33 @@ func calculateLostFundsFromAvailable(
 	return math.LegacyZeroDec()
 }
 
+func getOffsettingSettlementPrice(
+	position *v2.Position,
+	markPrice math.LegacyDec,
+	funding *v2.PerpetualMarketFunding,
+) (settlementPrice math.LegacyDec, isBankrupt bool) {
+	bankruptcyPrice := position.GetBankruptcyPrice(funding)
+	isBankrupt = (position.IsLong && markPrice.LTE(bankruptcyPrice)) || (position.IsShort() && markPrice.GTE(bankruptcyPrice))
+	if isBankrupt {
+		return bankruptcyPrice, true
+	}
+
+	return markPrice, false
+}
+
+func shouldHandlePositiveOffsettingLiquidationPayout(payout math.LegacyDec) (bool, error) {
+	// defensive programming check
+	if payout.IsNegative() {
+		return false, errors.Wrapf(
+			types.ErrPositionNotOffsettable,
+			"non-bankrupt offsetting liquidation payout must be non-negative: %s",
+			payout.String(),
+		)
+	}
+
+	return payout.IsPositive(), nil
+}
+
 func parseSubaccountIDHashes(offsettingSubaccountIDs []string) []common.Hash {
 	hashes := make([]common.Hash, 0, len(offsettingSubaccountIDs))
 	for _, idStr := range offsettingSubaccountIDs {
@@ -326,6 +386,8 @@ func (k DerivativesMsgServer) processOffsettingSubaccounts(
 	position *v2.Position,
 	offsetIDs []common.Hash,
 ) (offsetProcessResult, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processOffsettingSubaccounts")()
+
 	marketID := market.MarketID()
 	remaining := position.Quantity
 
@@ -341,39 +403,41 @@ func (k DerivativesMsgServer) processOffsettingSubaccounts(
 			break
 		}
 
-		k.CancelAllRestingDerivativeLimitOrdersForSubaccount(ctx, market, id, true, true)
-
 		pos := k.GetPosition(ctx, marketID, id)
 		if pos == nil || pos.Quantity.IsZero() {
 			continue
 		}
 		if pos.IsLong == position.IsLong {
-			metrics.ReportFuncError(k.svcTags)
 			return offsetProcessResult{}, errors.Wrapf(types.ErrPositionNotOffsettable,
 				"cannot offset same‑direction position %s in market %s", id.Hex(), marketID.Hex())
 		}
 
-		pos.ApplyFunding(funding)
+		offsettingPosition := pos.Copy()
+		offsettingPosition.ApplyFunding(funding)
 
-		qty := math.LegacyMinDec(remaining, pos.Quantity)
-		remaining = remaining.Sub(qty)
+		qty := math.LegacyMinDec(remaining, offsettingPosition.Quantity)
+		if !qty.IsPositive() {
+			continue
+		}
 
 		delta := &v2.PositionDelta{
-			IsLong:            !pos.IsLong,
+			IsLong:            !offsettingPosition.IsLong,
 			ExecutionQuantity: qty,
 			ExecutionMargin:   math.LegacyZeroDec(),
 			ExecutionPrice:    settlementPrice,
 		}
-		payout, _, _, pnl := pos.ApplyPositionDelta(delta, math.LegacyZeroDec())
+		payout, _, _, pnl := offsettingPosition.ApplyPositionDelta(delta, math.LegacyZeroDec())
 		if payout.IsNegative() {
-			metrics.ReportFuncError(k.svcTags)
-			return offsetProcessResult{}, errors.Wrapf(types.ErrPositionNotOffsettable,
-				"negative payout for position %s", id.Hex())
+			continue
 		}
 
-		chain := market.NotionalToChainFormat(payout)
-		res.marketBalanceDelta = res.marketBalanceDelta.Add(chain.Neg())
-		res.depositDeltas.ApplyUniformDelta(id, chain)
+		k.CancelAllRestingDerivativeLimitOrdersForSubaccount(ctx, market, id, true, true)
+
+		remaining = remaining.Sub(qty)
+
+		chainPayout := market.NotionalToChainFormat(payout)
+		res.marketBalanceDelta = res.marketBalanceDelta.Add(chainPayout.Neg())
+		res.depositDeltas.ApplyUniformDelta(id, chainPayout)
 
 		log := &v2.DerivativeTradeLog{
 			SubaccountId:        id.Bytes(),
@@ -384,20 +448,19 @@ func (k DerivativesMsgServer) processOffsettingSubaccounts(
 			FeeRecipientAddress: common.Address{}.Bytes(),
 			Pnl:                 pnl,
 		}
-		if pos.IsLong {
+		if offsettingPosition.IsLong {
 			res.sellTrades = append(res.sellTrades, log)
 		} else {
 			res.buyTrades = append(res.buyTrades, log)
 		}
 
-		k.SavePosition(ctx, marketID, id, pos)
+		k.SavePosition(ctx, marketID, id, offsettingPosition)
 	}
 
 	res.remainingQuantity = remaining
 
 	// Validate that at least some of the position was offset
 	if remaining.Equal(position.Quantity) {
-		metrics.ReportFuncError(k.svcTags)
 		offsetIDsStr := make([]string, len(offsetIDs))
 		for i, id := range offsetIDs {
 			offsetIDsStr[i] = id.Hex()
@@ -417,31 +480,58 @@ func (k DerivativesMsgServer) handleLiquidatedPosition(
 	position *v2.Position,
 	positionSubaccountID common.Hash,
 	liquidatorAddr sdk.AccAddress,
+	liquidatorRewardShareRate math.LegacyDec,
+	isBankrupt bool,
 	res offsetProcessResult,
-) (bool, error) {
-	buyTrades, sellTrades, deltas, mktBalDelta, offsetQty :=
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleLiquidatedPosition")()
+
+	buyTrades, sellTrades, deltas, mktBalDelta, remainingQty :=
 		res.buyTrades, res.sellTrades, res.depositDeltas, res.marketBalanceDelta, res.remainingQuantity
 
-	liqDelta := &v2.PositionDelta{
-		IsLong:            !position.IsLong,
-		ExecutionQuantity: position.Quantity.Sub(offsetQty),
-		ExecutionMargin:   math.LegacyZeroDec(),
-		ExecutionPrice:    settlementPrice,
+	wasLong := position.IsLong
+	closingQuantity := position.Quantity.Sub(remainingQty)
+	var (
+		payout   math.LegacyDec
+		pnl      math.LegacyDec
+		liqDelta *v2.PositionDelta
+	)
+	if isBankrupt {
+		pnl, liqDelta = position.ApplyBankruptCloseWithoutPayouts(settlementPrice, closingQuantity)
+		payout = math.LegacyZeroDec()
+	} else {
+		liqDelta = &v2.PositionDelta{
+			IsLong:            !position.IsLong,
+			ExecutionQuantity: closingQuantity,
+			ExecutionMargin:   math.LegacyZeroDec(),
+			ExecutionPrice:    settlementPrice,
+		}
+		payout, _, _, pnl = position.ApplyPositionDelta(liqDelta, math.LegacyZeroDec())
+		shouldHandlePositivePayout, err := shouldHandlePositiveOffsettingLiquidationPayout(payout)
+		if err != nil {
+			return err
+		}
+		if shouldHandlePositivePayout {
+			chainPayout := market.NotionalToChainFormat(payout)
+			mktBalDelta = mktBalDelta.Add(chainPayout.Neg())
+			if err := k.handlePositiveOffsettingLiquidationPayout(
+				ctx,
+				market,
+				chainPayout,
+				liquidatorAddr,
+				liquidatorRewardShareRate,
+				deltas,
+			); err != nil {
+				return err
+			}
+		}
 	}
-	payout, _, _, pnl := position.ApplyPositionDelta(liqDelta, math.LegacyZeroDec())
-	payoutChain := market.NotionalToChainFormat(payout)
 
-	// if payout is negative, market balance is accounted for in negative payout handling
-	if payout.IsPositive() {
-		mktBalDelta = mktBalDelta.Sub(payoutChain)
-	}
-
-	deltas.ApplyUniformDelta(positionSubaccountID, payoutChain)
 	trade := &v2.DerivativeTradeLog{
 		SubaccountId: positionSubaccountID.Bytes(), PositionDelta: liqDelta, Payout: payout, Pnl: pnl,
 		Fee: math.LegacyZeroDec(), OrderHash: common.Hash{}.Bytes(), FeeRecipientAddress: common.Address{}.Bytes(),
 	}
-	if position.IsLong {
+	if wasLong {
 		sellTrades = append(sellTrades, trade)
 	} else {
 		buyTrades = append(buyTrades, trade)
@@ -463,37 +553,14 @@ func (k DerivativesMsgServer) handleLiquidatedPosition(
 		return &v2.EventBatchDerivativeExecution{MarketId: market.MarketID().String(), IsBuy: isBuy, IsLiquidation: isLiq,
 			ExecutionType: v2.ExecutionType_OffsettingPosition, Trades: trades, CumulativeFunding: &cumulativeFunding}
 	}
-	k.EmitEvent(ctx, batch(true, !position.IsLong, buyTrades))
-	k.EmitEvent(ctx, batch(false, position.IsLong, sellTrades))
+	k.EmitEvent(ctx, batch(true, !wasLong, buyTrades))
+	k.EmitEvent(ctx, batch(false, wasLong, sellTrades))
 
-	before := k.GetDeposit(ctx, positionSubaccountID, market.QuoteDenom).AvailableBalance
 	for _, id := range deltas.GetSortedSubaccountKeys() {
 		k.UpdateDepositWithDeltaWithoutBankCharge(ctx, id, market.GetQuoteDenom(), deltas[id])
 	}
-	after := k.GetDeposit(ctx, positionSubaccountID, market.QuoteDenom).AvailableBalance
-	isMissingFunds := after.IsNegative()
 
-	if payoutChain.IsNegative() {
-		lost := calculateLostFundsFromAvailable(payoutChain, isMissingFunds, before)
-		if isMissingFunds {
-			settle, err := k.handleNegativeLiquidationPayout(ctx, market, positionSubaccountID, lost, true)
-			if err != nil {
-				metrics.ReportFuncError(k.svcTags)
-				return settle, err
-			}
-			return settle, nil
-		}
-		k.EmitEvent(ctx, &v2.EventLostFundsFromLiquidation{MarketId: market.MarketID().Hex(), SubaccountId: positionSubaccountID.Bytes(),
-			LostFundsFromAvailableDuringPayout: lost})
-		k.IncrementMarketBalance(ctx, market.MarketID(), lost)
-		return false, nil
-	} else if payoutChain.IsPositive() {
-		if err := k.handlePositiveLiquidationPayout(ctx, market, payoutChain, liquidatorAddr, positionSubaccountID); err != nil {
-			metrics.ReportFuncError(k.svcTags)
-			return false, err
-		}
-	}
-	return false, nil
+	return nil
 }
 
 func (k DerivativesMsgServer) handleOffsettingPositions(
@@ -505,8 +572,11 @@ func (k DerivativesMsgServer) handleOffsettingPositions(
 	positionSubaccountID common.Hash,
 	liquidatorAddr sdk.AccAddress,
 	offsettingSubaccountIDs ...string,
-) (bool, error) {
-	settlementPrice := markPrice
+) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleOffsettingPositions")()
+
+	settlementPrice, isBankrupt := getOffsettingSettlementPrice(position, markPrice, funding)
+	liquidatorRewardShareRate := k.GetCachedParams(ctx).WhiteKnightLiquidatorRewardShareRate
 	offsettingSubaccountIDHashes := parseSubaccountIDHashes(offsettingSubaccountIDs)
 
 	res, err := k.processOffsettingSubaccounts(
@@ -518,7 +588,7 @@ func (k DerivativesMsgServer) handleOffsettingPositions(
 		offsettingSubaccountIDHashes,
 	)
 	if err != nil {
-		return false, err
+		return err
 	}
 
 	return k.handleLiquidatedPosition(
@@ -529,12 +599,14 @@ func (k DerivativesMsgServer) handleOffsettingPositions(
 		position,
 		positionSubaccountID,
 		liquidatorAddr,
+		liquidatorRewardShareRate,
+		isBankrupt,
 		res,
 	)
 }
 
 func (k DerivativesMsgServer) liquidatePosition(
-	goCtx context.Context,
+	c context.Context,
 	liquidatorAddr sdk.AccAddress,
 	liquidatedSubaccountID,
 	marketID common.Hash,
@@ -542,10 +614,9 @@ func (k DerivativesMsgServer) liquidatePosition(
 	liquidationMode LiquidationMode,
 	offsettingSubaccountIDs ...string,
 ) (*v2.MsgLiquidatePositionResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "liquidatePosition")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	cacheCtx, writeCache := ctx.CacheContext()
 
 	positionSubaccountID := liquidatedSubaccountID
@@ -556,13 +627,13 @@ func (k DerivativesMsgServer) liquidatePosition(
 	market, markPrice := k.GetDerivativeMarketWithMarkPrice(cacheCtx, marketID, true)
 	if market == nil {
 		k.Logger(ctx).Error("active derivative market doesn't exist", "marketID", marketID.Hex())
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrDerivativeMarketNotFound, "active derivative market for marketID %s not found", marketID.Hex())
 	}
 
 	position := k.GetPosition(cacheCtx, marketID, positionSubaccountID)
 	if position == nil || position.Quantity.IsZero() {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrPositionNotFound, "subaccountID %s marketID %s", positionSubaccountID.Hex(), marketID.Hex())
 	}
 
@@ -575,7 +646,6 @@ func (k DerivativesMsgServer) liquidatePosition(
 	shouldLiquidate := (position.IsLong && markPrice.LTE(liquidationPrice)) || (position.IsShort() && markPrice.GTE(liquidationPrice))
 
 	if !shouldLiquidate {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrapf(
 			types.ErrPositionNotLiquidable,
 			"%s position liquidation price is %s but mark price is %s",
@@ -598,6 +668,24 @@ func (k DerivativesMsgServer) liquidatePosition(
 	// Step 1c: Cancel all conditional orders created by the position holder in the given market
 	k.CancelAllConditionalDerivativeOrdersBySubaccountIDAndMarket(cacheCtx, market, positionSubaccountID)
 
+	if isOffsettingSubaccount {
+		if err := k.handleOffsettingPositions(
+			cacheCtx,
+			market,
+			markPrice,
+			funding,
+			position,
+			positionSubaccountID,
+			liquidatorAddr,
+			offsettingSubaccountIDs...,
+		); err != nil {
+			return nil, err
+		}
+
+		writeCache()
+		return &v2.MsgLiquidatePositionResponse{}, nil
+	}
+
 	liquidationMarketOrder, err := k.prepareLiquidationMarketOrder(
 		cacheCtx,
 		market,
@@ -606,11 +694,16 @@ func (k DerivativesMsgServer) liquidatePosition(
 		position,
 		positionSubaccountID,
 		liquidatorAddr,
-		liquidationMode,
 	)
 	if err != nil {
 		return nil, err
 	}
+
+	liquidatorRewardShareRate := getLiquidatorRewardShareRate(
+		k.GetCachedParams(ctx),
+		liquidatorOrder != nil,
+		k.IsWhiteKnightLiquidator(ctx, liquidatorAddr.String()),
+	)
 
 	if isEmergencySettlingMarket {
 		var orderType v2.OrderType
@@ -634,9 +727,9 @@ func (k DerivativesMsgServer) liquidatePosition(
 	}
 
 	var liquidatorOrderHash common.Hash
-	hasLiquidatorProvidedOrder := liquidatorOrder != nil
+	hasLiquidatorOrder := liquidatorOrder != nil
 
-	if hasLiquidatorProvidedOrder {
+	if hasLiquidatorOrder {
 		liquidatorOrderHash, err = k.prepareLiquidatorOrder(cacheCtx, market, markPrice, liquidatorOrder, liquidatorAddr, liquidationMode)
 		if err != nil {
 			return nil, err
@@ -653,20 +746,18 @@ func (k DerivativesMsgServer) liquidatePosition(
 		cacheCtx, market, markPrice, funding, liquidationMarketOrder, positionStates, positionCache, true,
 	)
 
-	// offsetting subaccounts are allowed to have no liquidity, so we accept ErrNoLiquidity
-	hasAcceptedError := isOffsettingSubaccount && errors.IsOf(err, types.ErrNoLiquidity)
-
-	if err != nil && !hasAcceptedError {
-		metrics.ReportFuncError(k.svcTags)
+	if err != nil {
 		return nil, err
 	}
 
 	if !isMarketSolvent {
-		writeCache()
+		if err := k.PauseMarketAndScheduleForSettlement(ctx, market.MarketID(), true); err != nil {
+			return nil, err
+		}
 		return &v2.MsgLiquidatePositionResponse{}, nil
 	}
 
-	if hasLiquidatorProvidedOrder {
+	if hasLiquidatorOrder {
 		k.handleLiquidatorOrderPostExecution(cacheCtx, market, marketID, liquidatorOrder, liquidatorOrderHash)
 	}
 
@@ -676,21 +767,7 @@ func (k DerivativesMsgServer) liquidatePosition(
 	payout := calculatePayout(fundsBeforeLiquidation, fundsAfterLiquidation)
 	isMissingFunds := payout.IsNegative() && availableBalanceAfterLiquidation.IsNegative()
 
-	position = k.GetPosition(cacheCtx, marketID, positionSubaccountID)
-	hasNoRemainingPosition := position == nil || position.Quantity.IsZero()
-
-	if hasNoRemainingPosition && isOffsettingSubaccount {
-		return nil, errors.Wrapf(
-			types.ErrPositionNotOffsettable,
-			"Insufficient orderbook liquidity is required to offset position %s in market %s",
-			positionSubaccountID.Hex(),
-			marketID.Hex(),
-		)
-	}
-
 	shouldSettleMarketFromLiquidation := false
-	shouldSettleMarketFromOffsetting := false
-
 	lostFundsFromAvailableDuringPayout := calculateLostFundsFromAvailable(payout, isMissingFunds, availableBalanceBeforeLiquidation)
 
 	// if payout is positive, then trader lost position margin + PNL which we cannot get here, but which is emitted as EventBatchDerivativeExecution
@@ -702,7 +779,7 @@ func (k DerivativesMsgServer) liquidatePosition(
 			lostFundsFromAvailableDuringPayout,
 			!isOffsettingSubaccount,
 		); err != nil {
-			metrics.ReportFuncError(k.svcTags)
+
 			return nil, err
 		}
 	} else if payout.IsPositive() {
@@ -713,8 +790,8 @@ func (k DerivativesMsgServer) liquidatePosition(
 			surplusAmount,
 			liquidatorAddr,
 			positionSubaccountID,
+			liquidatorRewardShareRate,
 		); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, err
 		}
 	}
@@ -731,40 +808,14 @@ func (k DerivativesMsgServer) liquidatePosition(
 		k.IncrementMarketBalance(cacheCtx, marketID, lostFundsFromAvailableDuringPayout)
 	}
 
-	if isOffsettingSubaccount && !shouldSettleMarketFromLiquidation {
-		shouldSettleMarketFromOffsetting, err = k.handleOffsettingPositions(
-			cacheCtx,
-			market,
-			markPrice,
-			funding,
-			position,
-			positionSubaccountID,
-			liquidatorAddr,
-			offsettingSubaccountIDs...,
-		)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	shouldSettleMarket := shouldSettleMarketFromLiquidation || shouldSettleMarketFromOffsetting
+	shouldSettleMarket := shouldSettleMarketFromLiquidation
 
 	if isEmergencySettlingMarket && !shouldSettleMarket {
 		return nil, types.ErrInvalidEmergencySettle
 	}
 
-	if isOffsettingSubaccount && shouldSettleMarket {
-		return nil, errors.Wrapf(
-			types.ErrPositionNotOffsettable,
-			"Market would be settled to offset position %s in market %s, use emergency settling functionality",
-			positionSubaccountID.Hex(),
-			marketID.Hex(),
-		)
-	}
-
 	if shouldSettleMarket {
 		if err = k.PauseMarketAndScheduleForSettlement(ctx, market.MarketID(), true); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, err
 		}
 	} else {

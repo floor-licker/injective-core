@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -11,10 +10,8 @@ import (
 	cmttypes "github.com/cometbft/cometbft/types"
 
 	errorsmod "cosmossdk.io/errors"
-	sdkmath "cosmossdk.io/math"
-	"github.com/cosmos/cosmos-sdk/telemetry"
+	"github.com/InjectiveLabs/metrics/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/hashicorp/go-metrics"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/types"
 )
@@ -30,47 +27,19 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 
 	tx := msg.AsTransaction()
 
-	labels := []metrics.Label{
-		telemetry.NewLabel("tx_type", fmt.Sprintf("%d", tx.Type())),
-	}
+	tags := []metrics.TagAttribute{metrics.Tag("tx_type", int64(tx.Type()))}
 	if tx.To() == nil {
-		labels = append(labels, telemetry.NewLabel("execution", "create"))
+		tags = append(tags, metrics.Tag("execution", "create"))
 	} else {
-		labels = append(labels, telemetry.NewLabel("execution", "call"))
+		tags = append(tags, metrics.Tag("execution", "call"))
 	}
+
+	defer k.Meter(ctx).FuncTiming(&ctx, "EthereumTx", tags...)()
 
 	response, err := k.ApplyTransaction(ctx, msg)
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to apply transaction")
 	}
-
-	defer func() {
-		telemetry.IncrCounterWithLabels(
-			[]string{"tx", "msg", "ethereum_tx", "total"},
-			1,
-			labels,
-		)
-
-		if response.GasUsed != 0 {
-			telemetry.IncrCounterWithLabels(
-				[]string{"tx", "msg", "ethereum_tx", "gas_used", "total"},
-				float32(response.GasUsed),
-				labels,
-			)
-
-			// Observe which users define a gas limit >> gas used. Note, that
-			// gas_limit and gas_used are always > 0
-			gasLimit := sdkmath.LegacyNewDec(int64(tx.Gas()))
-			gasRatio, err := gasLimit.QuoInt64(int64(response.GasUsed)).Float64()
-			if err == nil {
-				telemetry.SetGaugeWithLabels(
-					[]string{"tx", "msg", "ethereum_tx", "gas_limit", "per", "gas_used"},
-					float32(gasRatio),
-					labels,
-				)
-			}
-		}
-	}()
 
 	attrs := []sdk.Attribute{
 		sdk.NewAttribute(sdk.AttributeKeyAmount, tx.Value().String()),
@@ -127,11 +96,13 @@ func (k *Keeper) EthereumTx(goCtx context.Context, msg *types.MsgEthereumTx) (*t
 // performed if the requested authority is the Cosmos SDK governance module
 // account.
 func (k *Keeper) UpdateParams(goCtx context.Context, req *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(goCtx)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
+
 	if k.authority.String() != req.Authority {
 		return nil, errorsmod.Wrapf(govtypes.ErrInvalidSigner, "invalid authority, expected %s, got %s", k.authority.String(), req.Authority)
 	}
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if err := k.SetParams(ctx, req.Params); err != nil {
 		return nil, err
 	}

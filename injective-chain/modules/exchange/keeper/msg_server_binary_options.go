@@ -6,7 +6,6 @@ import (
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
@@ -17,31 +16,25 @@ import (
 
 type BinaryOptionsMsgServer struct {
 	*Keeper
-	svcTags metrics.Tags
 }
 
 // NewBinaryOptionsMsgServerImpl returns an implementation of the exchange MsgServer interface for the provided Keeper for binary options market functions.
 func NewBinaryOptionsMsgServerImpl(keeper *Keeper) BinaryOptionsMsgServer {
 	return BinaryOptionsMsgServer{
 		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "bin_msg_h",
-		},
 	}
 }
 
 func (k BinaryOptionsMsgServer) InstantBinaryOptionsMarketLaunch(
-	goCtx context.Context, msg *v2.MsgInstantBinaryOptionsMarketLaunch,
+	c context.Context, msg *v2.MsgInstantBinaryOptionsMarketLaunch,
 ) (*v2.MsgInstantBinaryOptionsMarketLaunchResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "InstantBinaryOptionsMarketLaunch")()
 
 	senderAddr, _ := sdk.AccAddressFromBech32(msg.Sender)
-	fee := k.GetParams(ctx).BinaryOptionsMarketInstantListingFee
+	fee := k.GetCachedParams(ctx).BinaryOptionsMarketInstantListingFee
 	if err := k.DistributionKeeper.FundCommunityPool(ctx, sdk.Coins{fee}, senderAddr); err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		k.Logger(ctx).Error("failed launching binary options market", err)
 		return nil, err
 	}
@@ -55,7 +48,7 @@ func (k BinaryOptionsMsgServer) InstantBinaryOptionsMarketLaunch(
 	if k.checkIfMarketLaunchProposalExist(
 		ctx, marketID, types.ProposalTypeBinaryOptionsMarketLaunch, v2.ProposalTypeBinaryOptionsMarketLaunch,
 	) {
-		metrics.ReportFuncError(k.svcTags)
+
 		ctx.Logger().Info("the binary options market launch proposal already exists", "marketID", marketID.Hex())
 		return nil, errors.Wrapf(
 			types.ErrMarketLaunchProposalAlreadyExists,
@@ -83,7 +76,7 @@ func (k BinaryOptionsMsgServer) InstantBinaryOptionsMarketLaunch(
 	)
 
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		k.Logger(ctx).Error("failed launching binary options market", err)
 		return nil, err
 	}
@@ -92,12 +85,11 @@ func (k BinaryOptionsMsgServer) InstantBinaryOptionsMarketLaunch(
 }
 
 func (k BinaryOptionsMsgServer) CreateBinaryOptionsLimitOrder(
-	goCtx context.Context, msg *v2.MsgCreateBinaryOptionsLimitOrder,
+	c context.Context, msg *v2.MsgCreateBinaryOptionsLimitOrder,
 ) (*v2.MsgCreateBinaryOptionsLimitOrderResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateBinaryOptionsLimitOrder")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgCreateBinaryOptionsLimitOrder")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -108,7 +100,7 @@ func (k BinaryOptionsMsgServer) CreateBinaryOptionsLimitOrder(
 	market := k.GetBinaryOptionsMarket(ctx, msg.Order.MarketID(), true)
 	if market == nil {
 		k.Logger(ctx).Error("active binary options market doesn't exist", "marketId", msg.Order.MarketId)
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrBinaryOptionsMarketNotFound, "marketID %s", msg.Order.MarketId)
 	}
 
@@ -121,7 +113,7 @@ func (k BinaryOptionsMsgServer) CreateBinaryOptionsLimitOrder(
 	orderHash, err := k.CreateDerivativeLimitOrder(ctx, account, &msg.Order, market, math.LegacyDec{})
 
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, err
 	}
 
@@ -132,12 +124,11 @@ func (k BinaryOptionsMsgServer) CreateBinaryOptionsLimitOrder(
 }
 
 func (k BinaryOptionsMsgServer) CreateBinaryOptionsMarketOrder(
-	goCtx context.Context, msg *v2.MsgCreateBinaryOptionsMarketOrder,
+	c context.Context, msg *v2.MsgCreateBinaryOptionsMarketOrder,
 ) (*v2.MsgCreateBinaryOptionsMarketOrderResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateBinaryOptionsMarketOrder")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgCreateBinaryOptionsMarketOrder")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -148,7 +139,7 @@ func (k BinaryOptionsMsgServer) CreateBinaryOptionsMarketOrder(
 	market := k.GetBinaryOptionsMarket(ctx, msg.Order.MarketID(), true)
 	if market == nil {
 		k.Logger(ctx).Error("active binary options market doesn't exist", "marketId", msg.Order.MarketId)
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrBinaryOptionsMarketNotFound, "marketID %s", msg.Order.MarketId)
 	}
 
@@ -160,7 +151,7 @@ func (k BinaryOptionsMsgServer) CreateBinaryOptionsMarketOrder(
 		math.LegacyDec{},
 	)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, err
 	}
 
@@ -177,12 +168,11 @@ func (k BinaryOptionsMsgServer) CreateBinaryOptionsMarketOrder(
 }
 
 func (k BinaryOptionsMsgServer) CancelBinaryOptionsOrder(
-	goCtx context.Context, msg *v2.MsgCancelBinaryOptionsOrder,
+	c context.Context, msg *v2.MsgCancelBinaryOptionsOrder,
 ) (*v2.MsgCancelBinaryOptionsOrderResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CancelBinaryOptionsOrder")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgCancelBinaryOptionsOrder")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -207,29 +197,28 @@ func (k BinaryOptionsMsgServer) CancelBinaryOptionsOrder(
 }
 
 func (k BinaryOptionsMsgServer) AdminUpdateBinaryOptionsMarket(
-	goCtx context.Context, msg *v2.MsgAdminUpdateBinaryOptionsMarket,
+	c context.Context, msg *v2.MsgAdminUpdateBinaryOptionsMarket,
 ) (*v2.MsgAdminUpdateBinaryOptionsMarketResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "AdminUpdateBinaryOptionsMarket")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	marketID := common.HexToHash(msg.MarketId)
 	market := k.GetBinaryOptionsMarketByID(ctx, marketID)
 
 	if market == nil {
 		k.Logger(ctx).Error("binary options market doesn't exist", "marketID", msg.MarketId)
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrBinaryOptionsMarketNotFound, "marketID %s", msg.MarketId)
 	}
 
 	if market.Admin != msg.Sender {
 		k.Logger(ctx).Error("message sender is not an admin of binary options market", "sender", msg.Sender, "admin", market.Admin)
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrSenderIsNotAnAdmin, "sender %s, admin %s", msg.Sender, market.Admin)
 	}
 
 	if market.Status == v2.MarketStatus_Demolished {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, errors.Wrapf(types.ErrInvalidMarketStatus, "can't update market that was demolished already")
 	}
 
@@ -237,11 +226,11 @@ func (k BinaryOptionsMsgServer) AdminUpdateBinaryOptionsMarket(
 
 	if msg.ExpirationTimestamp > 0 {
 		if msg.ExpirationTimestamp <= ctx.BlockTime().Unix() {
-			metrics.ReportFuncError(k.svcTags)
+
 			return nil, errors.Wrapf(types.ErrInvalidExpiry, "expiration timestamp %d is in the past", msg.ExpirationTimestamp)
 		}
 		if market.Status != v2.MarketStatus_Active {
-			metrics.ReportFuncError(k.svcTags)
+
 			return nil, errors.Wrap(types.ErrInvalidExpiry, "cannot change expiration time of an expired market")
 		}
 		expTimestamp = msg.ExpirationTimestamp
@@ -249,11 +238,11 @@ func (k BinaryOptionsMsgServer) AdminUpdateBinaryOptionsMarket(
 
 	if msg.SettlementTimestamp > 0 {
 		if msg.SettlementTimestamp <= ctx.BlockTime().Unix() {
-			metrics.ReportFuncError(k.svcTags)
+
 			return nil, errors.Wrapf(types.ErrInvalidSettlement, "SettlementTimestamp %d should be in future", msg.SettlementTimestamp)
 		}
 		if msg.SettlementTimestamp <= expTimestamp {
-			metrics.ReportFuncError(k.svcTags)
+
 			return nil, errors.Wrap(types.ErrInvalidSettlement, "settlement time must be after expiration time")
 		}
 		settlementTimestamp = msg.SettlementTimestamp
@@ -280,21 +269,21 @@ func (k BinaryOptionsMsgServer) AdminUpdateBinaryOptionsMarket(
 }
 
 func (k BinaryOptionsMsgServer) BatchCancelBinaryOptionsOrders(
-	goCtx context.Context, msg *v2.MsgBatchCancelBinaryOptionsOrders,
+	c context.Context, msg *v2.MsgBatchCancelBinaryOptionsOrders,
 ) (*v2.MsgBatchCancelBinaryOptionsOrdersResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchCancelBinaryOptionsOrders")()
 
 	successes := make([]bool, len(msg.Data))
 	for idx := range msg.Data {
-		if _, err := k.CancelBinaryOptionsOrder(goCtx, &v2.MsgCancelBinaryOptionsOrder{
+		if _, err := k.CancelBinaryOptionsOrder(ctx, &v2.MsgCancelBinaryOptionsOrder{
 			Sender:       msg.Sender,
 			MarketId:     msg.Data[idx].MarketId,
 			SubaccountId: msg.Data[idx].SubaccountId,
 			OrderHash:    msg.Data[idx].OrderHash,
 			Cid:          msg.Data[idx].Cid,
 		}); err != nil {
-			metrics.ReportFuncError(k.svcTags)
+
 		} else {
 			successes[idx] = true
 		}
@@ -304,11 +293,10 @@ func (k BinaryOptionsMsgServer) BatchCancelBinaryOptionsOrders(
 }
 
 func (k DerivativesMsgServer) LaunchBinaryOptionsMarket(
-	goCtx context.Context, msg *v2.MsgBinaryOptionsMarketLaunch,
+	c context.Context, msg *v2.MsgBinaryOptionsMarketLaunch,
 ) (*v2.MsgBinaryOptionsMarketLaunchResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LaunchBinaryOptionsMarket")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -322,12 +310,10 @@ func (k DerivativesMsgServer) LaunchBinaryOptionsMarket(
 }
 
 func (k DerivativesMsgServer) BinaryOptionsMarketParamUpdate(
-	goCtx context.Context, msg *v2.MsgBinaryOptionsMarketParamUpdate,
+	c context.Context, msg *v2.MsgBinaryOptionsMarketParamUpdate,
 ) (*v2.MsgBinaryOptionsMarketParamUpdateResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BinaryOptionsMarketParamUpdate")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized

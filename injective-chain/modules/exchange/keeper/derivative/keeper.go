@@ -3,7 +3,6 @@ package derivative
 import (
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
@@ -29,7 +28,6 @@ type DerivativeKeeper struct {
 	bank              bankkeeper.Keeper
 	wasm              types.WasmViewKeeper    // set after New
 	permissionsKeeper types.PermissionsKeeper // set after New
-	svcTags           metrics.Tags
 }
 
 func New(
@@ -51,9 +49,6 @@ func New(
 		insurance:         i,
 		trading:           tw,
 		permissionsKeeper: pk,
-		svcTags: map[string]string{
-			"svc": "derivative_k",
-		},
 	}
 }
 
@@ -69,7 +64,6 @@ func (k DerivativeKeeper) SetWasm(ws types.WasmViewKeeper) *DerivativeKeeper {
 		trading:           k.trading,
 		wasm:              ws,
 		permissionsKeeper: k.permissionsKeeper,
-		svcTags:           k.svcTags,
 	}
 }
 
@@ -82,6 +76,7 @@ func (k *DerivativeKeeper) SetPermissionsKeeper(pk types.PermissionsKeeper) {
 func (k DerivativeKeeper) GetFeeDiscountConfigForMarket(ctx sdk.Context, marketID common.Hash, stakingInfo *v2.FeeDiscountStakingInfo) *v2.FeeDiscountConfig {
 	return k.feeDiscounts.GetFeeDiscountConfigForMarket(ctx, marketID, stakingInfo)
 }
+
 func (k DerivativeKeeper) TokenDenomDecimals(ctx sdk.Context, tokenDenom string) (decimals uint32, err error) {
 	tokenMetadata, found := k.bank.GetDenomMetaData(ctx, tokenDenom)
 	if !found {
@@ -100,8 +95,7 @@ func (k DerivativeKeeper) SavePosition(
 	subaccountID common.Hash,
 	position *v2.Position,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SavePosition")()
 
 	k.SetTransientPosition(ctx, marketID, subaccountID, position)
 
@@ -118,14 +112,15 @@ func (k DerivativeKeeper) RemovePosition(
 	marketID,
 	subaccountID common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RemovePosition")()
 
 	k.InvalidateConditionalOrdersIfNoMarginLocked(ctx, marketID, subaccountID, true, nil, nil)
 	k.DeletePosition(ctx, marketID, subaccountID)
 }
 
 func (k DerivativeKeeper) CalculateOpenInterestForMarket(ctx sdk.Context, marketID common.Hash) (math.LegacyDec, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "CalculateOpenInterestForMarket")()
+
 	positions := k.GetAllPositionsByMarket(ctx, marketID)
 	if len(positions) == 0 {
 		return math.LegacyZeroDec(), nil
@@ -146,9 +141,9 @@ func (k DerivativeKeeper) CalculateOpenInterestForMarket(ctx sdk.Context, market
 		}
 
 		if position.Position.IsLong {
-			longOpenInterest = longOpenInterest.Add(position.Position.Quantity)
+			longOpenInterest.AddMut(position.Position.Quantity)
 		} else {
-			shortOpenInterest = shortOpenInterest.Add(position.Position.Quantity)
+			shortOpenInterest.AddMut(position.Position.Quantity)
 		}
 	}
 
@@ -163,6 +158,6 @@ func (k DerivativeKeeper) CalculateOpenInterestForMarket(ctx sdk.Context, market
 		return math.LegacyZeroDec(), err
 	}
 
-	openInterest := longOpenInterest.Add(shortOpenInterest)
+	openInterest := longOpenInterest.AddMut(shortOpenInterest)
 	return openInterest, nil
 }

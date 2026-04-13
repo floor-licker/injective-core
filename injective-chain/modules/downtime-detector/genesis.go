@@ -7,6 +7,8 @@ import (
 )
 
 func (k *Keeper) InitGenesis(ctx sdk.Context, gen *types.GenesisState) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitGenesis")()
+
 	k.StoreLastBlockTime(ctx, gen.LastBlockTime)
 	// set all default genesis down times, in case the provided list in genesis misses some.
 	k.setGenDowntimes(ctx, types.DefaultGenesis().GetDowntimes())
@@ -15,6 +17,8 @@ func (k *Keeper) InitGenesis(ctx sdk.Context, gen *types.GenesisState) {
 }
 
 func (k *Keeper) setGenDowntimes(ctx sdk.Context, genDowntimes []types.GenesisDowntimeEntry) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setGenDowntimes")()
+
 	for _, downtime := range genDowntimes {
 		k.StoreLastDowntimeOfLength(ctx, downtime.Duration, downtime.LastDowntime)
 	}
@@ -22,6 +26,9 @@ func (k *Keeper) setGenDowntimes(ctx sdk.Context, genDowntimes []types.GenesisDo
 
 // ExportGenesis returns the downtime detector module's exported genesis.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExportGenesis")(&err)
+
 	t, err := k.GetLastBlockTime(ctx)
 	if err != nil {
 		panic(err)
@@ -33,6 +40,9 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 }
 
 func (k *Keeper) getGenDowntimes(ctx sdk.Context) []types.GenesisDowntimeEntry {
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "getGenDowntimes")(&err)
+
 	downtimes := []types.GenesisDowntimeEntry{}
 	for _, downtime := range types.DowntimeToDuration.Keys() {
 		t, err := k.GetLastDowntimeOfLength(ctx, downtime)

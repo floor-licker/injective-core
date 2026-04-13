@@ -4,7 +4,7 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/pkg/errors"
 
 	"github.com/ethereum/go-ethereum"
@@ -40,29 +40,32 @@ type EVMProviderWithRet interface {
 
 type evmProviderWithRet struct {
 	*ethclient.Client
-	rc      *rpc.Client
-	svcTags coretracer.Tags
+	rc    *rpc.Client
+	meter metrics.Meter
 }
 
-func NewEVMProvider(rc *rpc.Client) EVMProviderWithRet {
+func NewEVMProvider(rc *rpc.Client, meter metrics.Meter) EVMProviderWithRet {
+	if meter == nil {
+		meter = metrics.NewNilMeter()
+	}
+
 	return &evmProviderWithRet{
-		Client:  ethclient.NewClient(rc),
-		rc:      rc,
-		svcTags: coretracer.NewTag("svc", "eth_provider"),
+		Client: ethclient.NewClient(rc),
+		rc:     rc,
+		meter:  meter.SubMeter("eth_provider", metrics.Tag("svc", "eth_provider")),
 	}
 }
 
 func (p *evmProviderWithRet) SendTransactionWithRet(ctx context.Context, tx *types.Transaction) (txHash common.Hash, err error) {
-	defer coretracer.Trace(&ctx, p.svcTags)()
+	ctx, done := p.meter.FuncTimingCtx(ctx, "SendTransactionWithRet")
+	defer done(&err)
 
 	data, err := rlp.EncodeToBytes(tx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return common.Hash{}, err
 	}
 
 	if err := p.rc.CallContext(ctx, &txHash, "eth_sendRawTransaction", hexutil.Encode(data)); err != nil {
-		coretracer.TraceError(ctx, err)
 		return common.Hash{}, err
 	}
 

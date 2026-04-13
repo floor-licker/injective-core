@@ -21,14 +21,19 @@ func InitGenesis(
 	accountKeeper types.AccountKeeper,
 	data types.GenesisState,
 ) []abci.ValidatorUpdate {
-	err := k.SetParams(ctx, data.Params)
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitGenesis")(&err)
+
+	err = k.SetParams(ctx, data.Params)
 	if err != nil {
-		panic(fmt.Errorf("error setting params %w", err))
+		err = fmt.Errorf("error setting params %w", err)
+		panic(err)
 	}
 
 	// ensure evm module account is set
 	if addr := accountKeeper.GetModuleAddress(types.ModuleName); addr == nil {
-		panic("the EVM module account has not been set")
+		err = fmt.Errorf("the EVM module account has not been set")
+		panic(err)
 	}
 
 	for _, account := range data.Accounts {
@@ -37,30 +42,29 @@ func InitGenesis(
 		// check that the EVM balance the matches the account balance
 		acc := accountKeeper.GetAccount(ctx, accAddress)
 		if acc == nil {
-			panic(fmt.Errorf("account not found for address %s", account.Address))
+			err = fmt.Errorf("account not found for address %s", account.Address)
+			panic(err)
 		}
 
 		ethAcct, ok := acc.(chaintypes.EthAccountI)
 		if !ok {
-			panic(
-				fmt.Errorf("account %s must be an EthAccount interface, got %T",
-					account.Address, acc,
-				),
-			)
+			err = fmt.Errorf("account %s must be an EthAccount interface, got %T", account.Address, acc)
+			panic(err)
 		}
 		code := common.Hex2Bytes(account.Code)
 		codeHash := crypto.Keccak256Hash(code)
 
 		if account.Code != "" && !bytes.Equal(ethAcct.GetCodeHash().Bytes(), codeHash.Bytes()) {
 			s := "the evm state code doesn't match with the codehash\n"
-			panic(fmt.Sprintf("%s account: %s , evm state codehash: %v, ethAccount codehash: %v, evm state code: %s\n",
-				s, account.Address, codeHash, ethAcct.GetCodeHash(), account.Code))
+			err = fmt.Errorf("%s account: %s , evm state codehash: %v, ethAccount codehash: %v, evm state code: %s\n",
+				s, account.Address, codeHash, ethAcct.GetCodeHash(), account.Code)
+			panic(err)
 		}
 
 		k.SetCode(ctx, codeHash.Bytes(), code)
 
 		for _, storage := range account.Storage {
-			k.SetState(ctx, address, common.HexToHash(storage.Key), common.HexToHash(storage.Value).Bytes())
+			k.SetState(ctx, address, common.HexToHash(storage.Key), common.HexToHash(storage.Value))
 		}
 	}
 
@@ -69,6 +73,8 @@ func InitGenesis(
 
 // ExportGenesis exports genesis state of the EVM module
 func ExportGenesis(ctx sdk.Context, k *keeper.Keeper, ak types.AccountKeeper) *types.GenesisState {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExportGenesis")()
+
 	var ethGenAccounts []types.GenesisAccount
 	ak.IterateAccounts(ctx, func(account sdk.AccountI) bool {
 		ethAccount, ok := account.(chaintypes.EthAccountI)

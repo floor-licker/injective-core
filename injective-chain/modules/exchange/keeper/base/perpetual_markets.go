@@ -3,7 +3,6 @@ package base
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -13,8 +12,7 @@ import (
 
 // GetPerpetualMarketFunding gets the perpetual market funding state from the keeper
 func (k *BaseKeeper) GetPerpetualMarketFunding(ctx sdk.Context, marketID common.Hash) *v2.PerpetualMarketFunding {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPerpetualMarketFunding")()
 
 	store := k.getStore(ctx)
 	fundingStore := prefix.NewStore(store, types.PerpetualMarketFundingPrefix)
@@ -32,8 +30,7 @@ func (k *BaseKeeper) GetPerpetualMarketFunding(ctx sdk.Context, marketID common.
 
 // SetPerpetualMarketFunding saves the perpetual market funding to the keeper
 func (k *BaseKeeper) SetPerpetualMarketFunding(ctx sdk.Context, marketID common.Hash, funding *v2.PerpetualMarketFunding) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetPerpetualMarketFunding")()
 
 	store := k.getStore(ctx)
 	fundingStore := prefix.NewStore(store, types.PerpetualMarketFundingPrefix)
@@ -44,8 +41,7 @@ func (k *BaseKeeper) SetPerpetualMarketFunding(ctx sdk.Context, marketID common.
 
 // IteratePerpetualMarketFundings iterates over perpetual market funding state calling process on each funding state
 func (k *BaseKeeper) IteratePerpetualMarketFundings(ctx sdk.Context, process func(*v2.PerpetualMarketFunding, common.Hash) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IteratePerpetualMarketFundings")()
 
 	store := k.getStore(ctx)
 	fundingStore := prefix.NewStore(store, types.PerpetualMarketFundingPrefix)
@@ -59,8 +55,7 @@ func (k *BaseKeeper) IteratePerpetualMarketFundings(ctx sdk.Context, process fun
 }
 
 func (k *BaseKeeper) GetPerpetualMarketInfo(ctx sdk.Context, marketID common.Hash) *v2.PerpetualMarketInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPerpetualMarketInfo")()
 
 	store := k.getStore(ctx)
 	perpetualMarketInfoStore := prefix.NewStore(store, types.PerpetualMarketInfoPrefix)
@@ -78,8 +73,7 @@ func (k *BaseKeeper) GetPerpetualMarketInfo(ctx sdk.Context, marketID common.Has
 
 // SetPerpetualMarketInfo saves the perpetual market's market info to the keeper
 func (k *BaseKeeper) SetPerpetualMarketInfo(ctx sdk.Context, marketID common.Hash, marketInfo *v2.PerpetualMarketInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetPerpetualMarketInfo")()
 
 	store := k.getStore(ctx)
 	perpetualMarketInfoStore := prefix.NewStore(store, types.PerpetualMarketInfoPrefix)
@@ -90,8 +84,7 @@ func (k *BaseKeeper) SetPerpetualMarketInfo(ctx sdk.Context, marketID common.Has
 
 // IteratePerpetualMarketInfos iterates over perpetual market's market info calling process on each market info
 func (k *BaseKeeper) IteratePerpetualMarketInfos(ctx sdk.Context, process func(*v2.PerpetualMarketInfo, common.Hash) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IteratePerpetualMarketInfos")()
 
 	store := k.getStore(ctx)
 	perpetualMarketInfoStore := prefix.NewStore(store, types.PerpetualMarketInfoPrefix)
@@ -105,8 +98,7 @@ func (k *BaseKeeper) IteratePerpetualMarketInfos(ctx sdk.Context, process func(*
 
 // GetAllActiveDerivativeMarkets returns all active derivative markets.
 func (k *BaseKeeper) GetAllActiveDerivativeMarkets(ctx sdk.Context) []*v2.DerivativeMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllActiveDerivativeMarkets")()
 
 	isEnabled := true
 	markets := make([]*v2.DerivativeMarket, 0)
@@ -124,11 +116,25 @@ func (k *BaseKeeper) GetAllActiveDerivativeMarkets(ctx sdk.Context) []*v2.Deriva
 // AccumulateAtomicPerpetualVwap accumulates VWAP data from atomic orders in transient storage
 // so it can be merged with regular trades in EndBlocker.
 func (k *BaseKeeper) AccumulateAtomicPerpetualVwap(ctx sdk.Context, marketID common.Hash, markPrice, vwapPrice, vwapQuantity math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AccumulateAtomicPerpetualVwap")()
 
+	k.accumulateTransientPerpetualVwap(ctx, types.GetTransientAtomicPerpetualVwapKey(marketID), markPrice, vwapPrice, vwapQuantity)
+}
+
+// AccumulateSyntheticPerpetualFundingVwap accumulates VWAP data from synthetic trades in transient storage
+// so it can be merged into the funding VWAP at EndBlock without affecting trade history.
+func (k *BaseKeeper) AccumulateSyntheticPerpetualFundingVwap(ctx sdk.Context, marketID common.Hash, markPrice, vwapPrice, vwapQuantity math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "AccumulateSyntheticPerpetualFundingVwap")()
+
+	k.accumulateTransientPerpetualVwap(ctx, types.GetTransientSyntheticPerpetualFundingVwapKey(marketID), markPrice, vwapPrice, vwapQuantity)
+}
+
+func (k *BaseKeeper) accumulateTransientPerpetualVwap(
+	ctx sdk.Context,
+	key []byte,
+	markPrice, vwapPrice, vwapQuantity math.LegacyDec,
+) {
 	store := k.getTransientStore(ctx)
-	key := types.GetTransientAtomicPerpetualVwapKey(marketID)
 
 	var existingMarkPrice, existingPrice, existingQuantity math.LegacyDec
 
@@ -156,11 +162,21 @@ func (k *BaseKeeper) AccumulateAtomicPerpetualVwap(ctx sdk.Context, marketID com
 // GetAllAtomicPerpetualVwap retrieves all accumulated atomic VWAP data from transient storage.
 // Returns a map of marketID -> VwapInfo.
 func (k *BaseKeeper) GetAllAtomicPerpetualVwap(ctx sdk.Context) map[common.Hash]*v2.VwapInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllAtomicPerpetualVwap")()
 
+	return k.getAllTransientPerpetualVwap(ctx, types.TransientAtomicPerpetualVwapPrefix)
+}
+
+// GetAllSyntheticPerpetualFundingVwap retrieves all accumulated synthetic funding VWAP data from transient storage.
+func (k *BaseKeeper) GetAllSyntheticPerpetualFundingVwap(ctx sdk.Context) map[common.Hash]*v2.VwapInfo {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllSyntheticPerpetualFundingVwap")()
+
+	return k.getAllTransientPerpetualVwap(ctx, types.TransientSyntheticPerpetualFundingVwapPrefix)
+}
+
+func (k *BaseKeeper) getAllTransientPerpetualVwap(ctx sdk.Context, storePrefix []byte) map[common.Hash]*v2.VwapInfo {
 	store := k.getTransientStore(ctx)
-	vwapStore := prefix.NewStore(store, types.TransientAtomicPerpetualVwapPrefix)
+	vwapStore := prefix.NewStore(store, storePrefix)
 
 	result := make(map[common.Hash]*v2.VwapInfo)
 

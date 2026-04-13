@@ -18,7 +18,9 @@ func NewMigrator(k Keeper, ss exported.Subspace) Migrator {
 	}
 }
 
-func (m Migrator) Migrate1to2(ctx sdk.Context) error {
+func (m Migrator) Migrate1to2(ctx sdk.Context) (err error) {
+	defer m.keeper.Meter(ctx).FuncTiming(&ctx, "Migrate1to2")(&err)
+
 	return v2.Migrate(
 		ctx,
 		ctx.KVStore(m.keeper.storeKey),

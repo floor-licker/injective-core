@@ -58,6 +58,15 @@ func (s *TestSuite) PeggyMsgServer() types.MsgServer {
 	return keeper.NewMsgServerImpl(s.App.PeggyKeeper)
 }
 
+func (s *TestSuite) BeginBlocker(t *testing.T) []abci.Event {
+	t.Helper()
+
+	block, err := s.App.BeginBlocker(s.Ctx)
+	require.NoError(t, err)
+
+	return block.Events
+}
+
 func (s *TestSuite) EndBlocker(t *testing.T) []abci.Event {
 	t.Helper()
 

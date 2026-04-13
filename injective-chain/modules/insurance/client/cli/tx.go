@@ -113,9 +113,6 @@ func NewCreateInsuranceFundTxCmd() *cobra.Command {
 				Expiry:         expiry,
 				InitialDeposit: initialDeposit,
 			}
-			if err != nil {
-				return err
-			}
 
 			if err := msg.ValidateBasic(); err != nil {
 				return err
@@ -129,7 +126,7 @@ func NewCreateInsuranceFundTxCmd() *cobra.Command {
 	cmd.Flags().String(FlagQuoteDenom, "", "insurance fund quote denom")
 	cmd.Flags().String(FlagOracleBase, "", "insurance fund oracle base")
 	cmd.Flags().String(FlagOracleQuote, "", "insurance fund oracle quote")
-	cmd.Flags().String(FlagOracleType, "", "insurance fund oracle type, e.g. Band | PriceFeed | Chainlink | Razor | Dia | API3 | Uma | Pyth | BandIBC")
+	cmd.Flags().String(FlagOracleType, "", "insurance fund oracle type, e.g. PriceFeed | Coinbase | Provider | Pyth | Stork")
 	cmd.Flags().Int64(FlagExpiry, 1619181341, "insurance fund expiry timestamp")
 	cmd.Flags().String(FlagInitialDeposit, "", "insurance fund initial deposit")
 

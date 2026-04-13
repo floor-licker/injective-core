@@ -2,7 +2,6 @@ package feediscounts
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -18,8 +17,6 @@ type FeeDiscountsKeeper struct {
 	*base.BaseKeeper
 
 	staking types.StakingKeeper
-
-	svcTags metrics.Tags
 }
 
 func New(
@@ -29,13 +26,11 @@ func New(
 	return &FeeDiscountsKeeper{
 		BaseKeeper: b,
 		staking:    s,
-		svcTags:    metrics.Tags{"svc": "fee_discounts_k"},
 	}
 }
 
 func (k FeeDiscountsKeeper) PersistFeeDiscountStakingInfoUpdates(ctx sdk.Context, stakingInfo *v2.FeeDiscountStakingInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistFeeDiscountStakingInfoUpdates")()
 
 	if stakingInfo == nil {
 		return
@@ -83,8 +78,7 @@ func (k FeeDiscountsKeeper) UpdateFeeDiscountAccountVolumeInBucket(
 	bucketStartTimestamp int64,
 	addedPoints math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateFeeDiscountAccountVolumeInBucket")()
 
 	if addedPoints.IsZero() {
 		return
@@ -102,8 +96,7 @@ func (k FeeDiscountsKeeper) IncrementSubaccountMarketAggregateVolume(
 	marketID common.Hash,
 	volume v2.VolumeRecord,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementSubaccountMarketAggregateVolume")()
 
 	if volume.IsZero() {
 		return
@@ -120,8 +113,7 @@ func (k FeeDiscountsKeeper) IncrementMarketAggregateVolume(
 	marketID common.Hash,
 	volume v2.VolumeRecord,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementMarketAggregateVolume")()
 
 	if volume.IsZero() {
 		return
@@ -140,6 +132,7 @@ func (k FeeDiscountsKeeper) FetchAndUpdateDiscountedTradingFeeRate(
 	account sdk.AccAddress,
 	config *v2.FeeDiscountConfig,
 ) math.LegacyDec {
+	defer k.Meter(ctx).FuncTiming(&ctx, "FetchAndUpdateDiscountedTradingFeeRate")()
 	// fee discounts not supported for negative fees
 	if tradingFeeRate.IsNegative() {
 		return tradingFeeRate
@@ -152,6 +145,9 @@ func (k FeeDiscountsKeeper) FetchAndUpdateDiscountedTradingFeeRate(
 			return tradingFeeRate
 		}
 		feeDiscountRates, tierLevel, isTTLExpired, effectiveGrant := k.GetAccountFeeDiscountRates(ctx, account, config)
+		if feeDiscountRates == nil {
+			return tradingFeeRate
+		}
 		config.SetAccountTierInfo(account, feeDiscountRates)
 
 		if isTTLExpired {
@@ -188,12 +184,20 @@ func (k FeeDiscountsKeeper) GetAccountFeeDiscountRates(
 	isTTLExpired bool,
 	effectiveGrant *v2.EffectiveGrant,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAccountFeeDiscountRates")()
+
 	tierTTL := k.GetFeeDiscountAccountTierInfo(ctx, account)
 	isTTLExpired = tierTTL == nil || tierTTL.TtlTimestamp < config.MaxTTLTimestamp
 
 	if !isTTLExpired {
 		feeDiscountRates = config.FeeDiscountRatesCache[tierTTL.Tier]
-		return feeDiscountRates, tierTTL.Tier, isTTLExpired, k.getEffectiveGrant(ctx, account)
+		if feeDiscountRates != nil {
+			return feeDiscountRates, tierTTL.Tier, isTTLExpired, k.getEffectiveGrant(ctx, account)
+		}
+
+		// The stored TTL points at a tier that no longer exists in the active
+		// schedule. Treat it as expired and recompute against the current cache.
+		isTTLExpired = true
 	}
 
 	_, tierOneVolume := config.Schedule.TierOneRequirements()
@@ -223,7 +227,8 @@ func (k FeeDiscountsKeeper) GetAccountFeeDiscountRates(
 }
 
 func (k FeeDiscountsKeeper) getEffectiveGrant(ctx sdk.Context, grantee sdk.AccAddress) *v2.EffectiveGrant {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getEffectiveGrant")()
+
 	stakeGrantedToOthers := k.GetTotalGrantAmount(ctx, grantee)
 	activeGrant := k.GetActiveGrant(ctx, grantee)
 
@@ -241,8 +246,7 @@ func (k FeeDiscountsKeeper) GetFeeDiscountTotalAccountVolume(
 	account sdk.AccAddress,
 	currBucketStartTimestamp int64,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountTotalAccountVolume")()
 
 	currBucketVolume := k.GetFeeDiscountAccountVolumeInBucket(ctx, currBucketStartTimestamp, account)
 	pastBucketVolume := k.GetPastBucketTotalVolume(ctx, account)
@@ -252,6 +256,8 @@ func (k FeeDiscountsKeeper) GetFeeDiscountTotalAccountVolume(
 }
 
 func (k FeeDiscountsKeeper) GetValidatedEffectiveGrant(ctx sdk.Context, grantee sdk.AccAddress) *v2.EffectiveGrant {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetValidatedEffectiveGrant")()
+
 	effectiveGrant := k.getEffectiveGrant(ctx, grantee)
 
 	if effectiveGrant.Granter == "" {
@@ -286,8 +292,7 @@ func (k FeeDiscountsKeeper) CalculateStakedAmountWithoutCache(
 	staker sdk.AccAddress,
 	maxDelegations uint16,
 ) math.Int {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CalculateStakedAmountWithoutCache")()
 
 	delegations, _ := k.staking.GetDelegatorDelegations(ctx, staker, maxDelegations)
 	totalStaked := math.ZeroInt()
@@ -316,8 +321,7 @@ func (k FeeDiscountsKeeper) CalculateStakedAmountWithCache(
 	trader sdk.AccAddress,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) math.Int {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CalculateStakedAmountWithCache")()
 
 	maxDelegations := uint16(10)
 	delegations, _ := k.staking.GetDelegatorDelegations(ctx, trader, maxDelegations)
@@ -351,6 +355,8 @@ func (k FeeDiscountsKeeper) fetchValidatorAndUpdateCache(
 	validatorAddr string,
 	feeDiscountConfig *v2.FeeDiscountConfig,
 ) stakingtypes.ValidatorI {
+	defer k.Meter(ctx).FuncTiming(&ctx, "fetchValidatorAndUpdateCache")()
+
 	validatorAddress, _ := sdk.ValAddressFromBech32(validatorAddr)
 
 	validator, err := k.staking.Validator(ctx, validatorAddress)
@@ -366,7 +372,8 @@ func (k FeeDiscountsKeeper) fetchValidatorAndUpdateCache(
 }
 
 func (k FeeDiscountsKeeper) GetActiveGrantAmount(ctx sdk.Context, grantee sdk.AccAddress) math.Int {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetActiveGrantAmount")()
+
 	grant := k.GetActiveGrant(ctx, grantee)
 	if grant == nil {
 		return math.ZeroInt()
@@ -375,8 +382,7 @@ func (k FeeDiscountsKeeper) GetActiveGrantAmount(ctx sdk.Context, grantee sdk.Ac
 }
 
 func (k FeeDiscountsKeeper) InitialFetchAndUpdateActiveAccountFeeDiscountStakingInfo(ctx sdk.Context) *v2.FeeDiscountStakingInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitialFetchAndUpdateActiveAccountFeeDiscountStakingInfo")()
 
 	accounts := k.GetAllAccountsActivelyTradingQualifiedMarketsInBlockForFeeDiscounts(ctx)
 	schedule := k.GetFeeDiscountSchedule(ctx)
@@ -411,8 +417,7 @@ func (k FeeDiscountsKeeper) InitialFetchAndUpdateActiveAccountFeeDiscountStaking
 
 // GetOldestBucketStartTimestamp gets the oldest bucket start timestamp.
 func (k FeeDiscountsKeeper) GetOldestBucketStartTimestamp(ctx sdk.Context) (startTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOldestBucketStartTimestamp")()
 
 	appendVolumes := func(bucketStartTimestamp int64, _ sdk.AccAddress, _ math.LegacyDec) (stop bool) {
 		startTimestamp = bucketStartTimestamp
@@ -429,6 +434,8 @@ func (k FeeDiscountsKeeper) setAccountFeeDiscountTier(
 	account sdk.AccAddress,
 	config *v2.FeeDiscountConfig,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setAccountFeeDiscountTier")()
+
 	feeDiscountRates, tierLevel, isTTLExpired, effectiveGrant := k.GetAccountFeeDiscountRates(ctx, account, config)
 	config.SetAccountTierInfo(account, feeDiscountRates)
 
@@ -455,8 +462,7 @@ func (k FeeDiscountsKeeper) IncrementPastBucketTotalVolume(
 	account sdk.AccAddress,
 	addedBucketTotalFeesAmount math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementPastBucketTotalVolume")()
 
 	currVolume := k.GetPastBucketTotalVolume(ctx, account)
 	newVolume := currVolume.Add(addedBucketTotalFeesAmount)
@@ -470,8 +476,7 @@ func (k FeeDiscountsKeeper) DecrementPastBucketTotalVolume(
 	account sdk.AccAddress,
 	removedBucketTotalFeesAmount math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DecrementPastBucketTotalVolume")()
 
 	currVolume := k.GetPastBucketTotalVolume(ctx, account)
 	newVolume := currVolume.Sub(removedBucketTotalFeesAmount)
@@ -481,8 +486,7 @@ func (k FeeDiscountsKeeper) DecrementPastBucketTotalVolume(
 
 // DeleteAllPastBucketTotalVolume deletes the total volume in past buckets for all accounts
 func (k FeeDiscountsKeeper) DeleteAllPastBucketTotalVolume(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAllPastBucketTotalVolume")()
 
 	accountVolumes := k.GetAllPastBucketTotalVolume(ctx)
 	for _, a := range accountVolumes {
@@ -493,8 +497,7 @@ func (k FeeDiscountsKeeper) DeleteAllPastBucketTotalVolume(ctx sdk.Context) {
 
 // GetAllPastBucketTotalVolume gets all total volume in past buckets for all accounts
 func (k FeeDiscountsKeeper) GetAllPastBucketTotalVolume(ctx sdk.Context) []*v2.AccountVolume {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllPastBucketTotalVolume")()
 
 	accountVolumes := make([]*v2.AccountVolume, 0)
 
@@ -512,8 +515,7 @@ func (k FeeDiscountsKeeper) GetAllPastBucketTotalVolume(ctx sdk.Context) []*v2.A
 
 // DeleteAllFeeDiscountMarketQualifications deletes the fee discount qualifications for all markets
 func (k FeeDiscountsKeeper) DeleteAllFeeDiscountMarketQualifications(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAllFeeDiscountMarketQualifications")()
 
 	marketIDs, _ := k.GetAllFeeDiscountMarketQualification(ctx)
 	for _, marketID := range marketIDs {
@@ -523,8 +525,7 @@ func (k FeeDiscountsKeeper) DeleteAllFeeDiscountMarketQualifications(ctx sdk.Con
 
 // GetAllFeeDiscountMarketQualification gets all market fee discount qualification statuses
 func (k FeeDiscountsKeeper) GetAllFeeDiscountMarketQualification(ctx sdk.Context) ([]common.Hash, []bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllFeeDiscountMarketQualification")()
 
 	marketIDs := make([]common.Hash, 0)
 	isQualified := make([]bool, 0)
@@ -544,8 +545,7 @@ func (k FeeDiscountsKeeper) CheckQuoteAndSetFeeDiscountQualification(
 	marketID common.Hash,
 	quoteDenom string,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CheckQuoteAndSetFeeDiscountQualification")()
 
 	if schedule := k.GetFeeDiscountSchedule(ctx); schedule != nil {
 		disqualified := false
@@ -571,8 +571,7 @@ func (k FeeDiscountsKeeper) CheckQuoteAndSetFeeDiscountQualification(
 
 // AdvanceFeeDiscountCurrentBucketStartTimestamp increments the start timestamp for the fee discount bucket.
 func (k FeeDiscountsKeeper) AdvanceFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AdvanceFeeDiscountCurrentBucketStartTimestamp")()
 
 	currentStartTimestamp := k.GetFeeDiscountCurrentBucketStartTimestamp(ctx)
 	bucketDuration := k.GetFeeDiscountBucketDuration(ctx)
@@ -582,8 +581,7 @@ func (k FeeDiscountsKeeper) AdvanceFeeDiscountCurrentBucketStartTimestamp(ctx sd
 
 // GetAllSubaccountMarketAggregateVolumes gets all of the aggregate subaccount market volumes
 func (k FeeDiscountsKeeper) GetAllSubaccountMarketAggregateVolumes(ctx sdk.Context) []*v2.AggregateSubaccountVolumeRecord {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllSubaccountMarketAggregateVolumes")()
 
 	volumes := make([]*v2.AggregateSubaccountVolumeRecord, 0)
 
@@ -621,8 +619,7 @@ func (k FeeDiscountsKeeper) GetAllSubaccountMarketAggregateVolumes(ctx sdk.Conte
 
 // GetAllComputedMarketAggregateVolumes gets all of the aggregate subaccount market volumes
 func (k FeeDiscountsKeeper) GetAllComputedMarketAggregateVolumes(ctx sdk.Context) map[common.Hash]v2.VolumeRecord {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllComputedMarketAggregateVolumes")()
 
 	marketVolumes := make(map[common.Hash]v2.VolumeRecord)
 
@@ -649,8 +646,7 @@ func (k FeeDiscountsKeeper) GetAllSubaccountMarketAggregateVolumesBySubaccount(
 	ctx sdk.Context,
 	subaccountID common.Hash,
 ) []*v2.MarketVolume {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllSubaccountMarketAggregateVolumesBySubaccount")()
 
 	volumes := make([]*v2.MarketVolume, 0)
 	k.IterateSubaccountMarketAggregateVolumesBySubaccount(
@@ -676,8 +672,7 @@ func (k FeeDiscountsKeeper) GetAllSubaccountMarketAggregateVolumesByAccAddress(
 	ctx sdk.Context,
 	accAddress sdk.AccAddress,
 ) []*v2.MarketVolume {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllSubaccountMarketAggregateVolumesByAccAddress")()
 
 	// marketID => volume
 	totalVolumes := make(map[common.Hash]v2.VolumeRecord)
@@ -708,8 +703,7 @@ func (k FeeDiscountsKeeper) GetAllSubaccountMarketAggregateVolumesByAccAddress(
 
 // DeleteAllAccountVolumeInAllBucketsWithMetadata deletes all total volume in all buckets for all accounts
 func (k FeeDiscountsKeeper) DeleteAllAccountVolumeInAllBucketsWithMetadata(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAllAccountVolumeInAllBucketsWithMetadata")()
 
 	allVolumes := k.GetAllAccountVolumeInAllBuckets(ctx)
 
@@ -730,19 +724,17 @@ func (k FeeDiscountsKeeper) DeleteAllAccountVolumeInAllBucketsWithMetadata(ctx s
 		}
 	}
 
-	// Delete the other metadata/trackers for consistency as well
+	// Delete the other volume metadata/trackers for consistency as well.
 	k.DeleteFeeDiscountCurrentBucketStartTimestamp(ctx)
 	for _, account := range accounts {
 		k.DeletePastBucketTotalVolume(ctx, account)
 	}
-	k.DeleteAllFeeDiscountAccountTierInfo(ctx)
 	k.DeleteAllPastBucketTotalVolume(ctx)
 }
 
 // GetAllAccountVolumeInAllBuckets gets all total volume in all buckets for all accounts
 func (k FeeDiscountsKeeper) GetAllAccountVolumeInAllBuckets(ctx sdk.Context) []*v2.FeeDiscountBucketVolumeAccounts {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllAccountVolumeInAllBuckets")()
 
 	accountVolumeInAllBuckets := make([]*v2.FeeDiscountBucketVolumeAccounts, 0)
 	accountVolumeMap := make(map[int64][]*v2.AccountVolume)
@@ -783,8 +775,7 @@ func (k FeeDiscountsKeeper) GetAllAccountVolumeInAllBuckets(ctx sdk.Context) []*
 
 // DeleteAllFeeDiscountAccountTierInfo deletes all accounts' fee discount Tier and TTL info.
 func (k FeeDiscountsKeeper) DeleteAllFeeDiscountAccountTierInfo(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAllFeeDiscountAccountTierInfo")()
 
 	allAccountTiers := k.GetAllFeeDiscountAccountTierInfo(ctx)
 	for _, accountTier := range allAccountTiers {
@@ -795,8 +786,7 @@ func (k FeeDiscountsKeeper) DeleteAllFeeDiscountAccountTierInfo(ctx sdk.Context)
 
 // GetAllFeeDiscountAccountTierInfo gets all accounts' fee discount Tier and TTL info
 func (k FeeDiscountsKeeper) GetAllFeeDiscountAccountTierInfo(ctx sdk.Context) []*v2.FeeDiscountAccountTierTTL {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllFeeDiscountAccountTierInfo")()
 
 	accountTierTTL := make([]*v2.FeeDiscountAccountTierTTL, 0)
 	k.IterateFeeDiscountAccountTierInfo(ctx, func(account sdk.AccAddress, tierInfo *v2.FeeDiscountTierTTL) (stop bool) {
@@ -812,8 +802,7 @@ func (k FeeDiscountsKeeper) GetAllFeeDiscountAccountTierInfo(ctx sdk.Context) []
 
 // GetAllAccountVolumeInBucket gets all total volume in a given bucket for all accounts
 func (k FeeDiscountsKeeper) GetAllAccountVolumeInBucket(ctx sdk.Context, bucketStartTimestamp int64) []*v2.AccountVolume {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllAccountVolumeInBucket")()
 
 	accountVolumes := make([]*v2.AccountVolume, 0)
 
@@ -830,8 +819,7 @@ func (k FeeDiscountsKeeper) GetAllAccountVolumeInBucket(ctx sdk.Context, bucketS
 }
 
 func (k FeeDiscountsKeeper) ProcessFeeDiscountBuckets(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessFeeDiscountBuckets")()
 
 	currBucketStartTimestamp := k.GetFeeDiscountCurrentBucketStartTimestamp(ctx)
 	if currBucketStartTimestamp == 0 {
@@ -882,8 +870,7 @@ func (k FeeDiscountsKeeper) ProcessFeeDiscountBuckets(ctx sdk.Context) {
 }
 
 func (k FeeDiscountsKeeper) SetFeeDiscountMarketQualificationForAllQualifyingMarkets(ctx sdk.Context, schedule *v2.FeeDiscountSchedule) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountMarketQualificationForAllQualifyingMarkets")()
 
 	marketIDQuoteDenoms := k.GetAllMarketIDsWithQuoteDenoms(ctx)
 
@@ -908,8 +895,7 @@ func (k FeeDiscountsKeeper) GetFeeDiscountConfigForMarket(
 	marketID common.Hash,
 	stakingInfo *v2.FeeDiscountStakingInfo,
 ) *v2.FeeDiscountConfig {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountConfigForMarket")()
 
 	isQualifiedForFeeDiscounts := k.IsMarketQualifiedForFeeDiscount(ctx, marketID)
 	return v2.NewFeeDiscountConfig(isQualifiedForFeeDiscounts, stakingInfo)
@@ -919,6 +905,8 @@ func (k FeeDiscountsKeeper) GetFeeDiscountConfigAndStakingInfoForMarket(
 	ctx sdk.Context,
 	marketID common.Hash,
 ) (*v2.FeeDiscountStakingInfo, *v2.FeeDiscountConfig) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountConfigAndStakingInfoForMarket")()
+
 	var stakingInfo *v2.FeeDiscountStakingInfo
 
 	schedule := k.GetFeeDiscountSchedule(ctx)
@@ -942,8 +930,7 @@ func (k FeeDiscountsKeeper) GetFeeDiscountConfigAndStakingInfoForMarket(
 }
 
 func (k FeeDiscountsKeeper) SaveFeeDiscountSchedule(ctx sdk.Context, schedule *v2.FeeDiscountSchedule) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SaveFeeDiscountSchedule")()
 
 	k.SetFeeDiscountSchedule(ctx, schedule)
 	k.SetFeeDiscountBucketCount(ctx, schedule.BucketCount)
@@ -958,7 +945,7 @@ func (k FeeDiscountsKeeper) AuthorizeStakeGrant(
 	grantee sdk.AccAddress,
 	amount math.Int,
 ) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AuthorizeStakeGrant")()
 
 	existingGrantAmount := k.GetGrantAuthorization(ctx, granter, grantee)
 	existingTotalGrantAmount := k.GetTotalGrantAmount(ctx, granter)

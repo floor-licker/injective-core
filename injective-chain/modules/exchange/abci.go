@@ -4,41 +4,35 @@ import (
 	"runtime/debug"
 	"sync"
 
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
 	downtimetypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/downtime-detector/types"
+	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/fba"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper"
-	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 )
 
 type BlockHandler struct {
 	k *keeper.Keeper
-
-	svcTags metrics.Tags
 }
 
 func NewBlockHandler(k *keeper.Keeper) *BlockHandler {
 	return &BlockHandler{
 		k: k,
-		svcTags: metrics.Tags{
-			"svc": "exchange_b",
-		},
 	}
 }
 
 func (h *BlockHandler) BeginBlocker(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.BeginBlocker")()
 
 	// swap the gas meter with a threadsafe version
 
 	// Check for downtime-based post-only mode activation (execute first to ensure immediate response to downtime)
 	params := h.k.GetParams(ctx)
+
 	h.processDowntimePostOnlyMode(ctx, params)
 
 	// Check for post-only mode cancellation flag and disable post-only mode if set
@@ -64,14 +58,13 @@ func (h *BlockHandler) BeginBlocker(ctx sdk.Context) {
 }
 
 func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.EndBlocker")()
 
 	// swap the gas meter with a threadsafe version
 	ctx = ctx.WithGasMeter(chaintypes.NewThreadsafeInfiniteGasMeter()).
 		WithBlockGasMeter(chaintypes.NewThreadsafeInfiniteGasMeter())
 
-	/** =========== Stage 1: Process all orders in parallel =========== */
+	/* =========== Stage 1: Process conditional orders and market orders =========== */
 
 	// Process Conditional Market orders first
 	triggeredMarketsAndOrders, marketCache := h.k.GetAllTriggeredConditionalOrders(ctx)
@@ -81,32 +74,20 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 	stakingInfo := h.k.InitialFetchAndUpdateActiveAccountFeeDiscountStakingInfo(ctx)
 	spotVwapData := v2.NewSpotVwapInfo()
 
-	// Process spot market orders
+	// Create FBA batch auction for this block execution
+	batchAuction := fba.NewBatchAuction(*h.k.SpotKeeper, *h.k.DerivativeKeeper)
+
+	// Get market order indicators
 	spotMarketOrderIndicators := h.k.GetAllTransientSpotMarketOrderIndicators(ctx)
-	batchSpotExecutionData := make([]*v2.SpotBatchExecutionData, len(spotMarketOrderIndicators))
-	batchSpotExecutionDataMux := new(sync.Mutex)
+	derivativeMarketOrderDirections := h.k.GetAllTransientDerivativeMarketDirections(ctx, false)
 
-	wg := new(sync.WaitGroup)
-	wg.Add(len(spotMarketOrderIndicators))
-
-	for idx, marketOrderIndicator := range spotMarketOrderIndicators {
-		go func(idx int, indicator *v2.MarketOrderIndicator) {
-			defer wg.Done()
-
-			executionData := h.k.ExecuteSpotMarketOrders(ctx, indicator, stakingInfo)
-			batchSpotExecutionDataMux.Lock()
-			batchSpotExecutionData[idx] = executionData
-			batchSpotExecutionDataMux.Unlock()
-		}(idx, marketOrderIndicator)
-	}
-
-	// Obtain the subaccountIDs in each market where limit matching will apply that have had positions modified prior
+	// Build modified position cache in parallel with market order execution
 	derivativeLimitOrderMarketDirections := h.k.GetAllTransientDerivativeMarketDirections(ctx, true)
 	modifiedPositionCache := v2.NewModifiedPositionCache()
 
+	wg := new(sync.WaitGroup)
 	if len(derivativeLimitOrderMarketDirections) > 0 {
 		wg.Add(1)
-
 		go func() {
 			defer wg.Done()
 
@@ -123,29 +104,15 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 		}()
 	}
 
-	// Process derivative market orders
-	derivativeMarketOrderMarketDirections := h.k.GetAllTransientDerivativeMarketDirections(ctx, false)
+	// Execute market orders via FBA BatchAuction (handles parallel execution internally)
+	batchSpotExecutionData, batchDerivativeExecutionData := batchAuction.ExecuteMarketOrders(
+		ctx, spotMarketOrderIndicators, derivativeMarketOrderDirections, stakingInfo,
+	)
 
-	batchDerivativeExecutionData := make([]*v2.DerivativeBatchExecutionData, len(derivativeMarketOrderMarketDirections))
-	batchDerivativeExecutionDataMux := new(sync.Mutex)
-
-	wg.Add(len(derivativeMarketOrderMarketDirections))
-
-	for idx, matchedMarketDirection := range derivativeMarketOrderMarketDirections {
-		go func(idx int, direction *types.MatchedMarketDirection) {
-			defer wg.Done()
-
-			executionData := h.k.ExecuteDerivativeMarketOrderMatching(ctx, direction, stakingInfo)
-			batchDerivativeExecutionDataMux.Lock()
-			batchDerivativeExecutionData[idx] = executionData
-			batchDerivativeExecutionDataMux.Unlock()
-		}(idx, matchedMarketDirection)
-	}
-
-	// wait for computational pipeline outcome
+	// Wait for modified position cache building to complete
 	wg.Wait()
 
-	/** =========== Stage 2: Persist market order execution to store =========== */
+	/* =========== Stage 2: Persist market order execution to store =========== */
 	// Persist Spot market order execution data
 	tradingRewards := h.k.PersistSpotMarketOrderExecution(ctx, batchSpotExecutionData, spotVwapData)
 
@@ -161,65 +128,41 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 		ctx, batchDerivativeExecutionData, derivativeVwapData, tradingRewards, modifiedPositionCache,
 	)
 
-	/** =========== Stage 3: Process all limit orders in parallel =========== */
+	/* =========== Stage 3: Process all limit orders in parallel =========== */
 
 	spotLimitOrderMarketDirections := h.k.GetAllTransientMatchedSpotLimitOrderMarkets(ctx)
 
-	batchSpotMatchingExecutionData := make([]*v2.SpotBatchExecutionData, len(spotLimitOrderMarketDirections))
-	batchSpotMatchingExecutionDataMux := new(sync.Mutex)
+	// Execute FBA (Frequent Batch Auction) for limit orders
+	batchSpotMatchingExecutionData, batchDerivativeMatchingExecutionData := batchAuction.ExecuteLimitOrders(
+		ctx,
+		spotLimitOrderMarketDirections,
+		derivativeLimitOrderMarketDirections,
+		stakingInfo,
+		modifiedPositionCache,
+	)
 
-	wg.Add(len(spotLimitOrderMarketDirections))
-
-	// Process spot limit orders matching
-	for idx, matchedMarketDirection := range spotLimitOrderMarketDirections {
-		go func(idx int, direction *types.MatchedMarketDirection) {
-			defer wg.Done()
-
-			executionData := h.k.ExecuteSpotLimitOrderMatching(ctx, direction, stakingInfo)
-			batchSpotMatchingExecutionDataMux.Lock()
-			batchSpotMatchingExecutionData[idx] = executionData
-			batchSpotMatchingExecutionDataMux.Unlock()
-		}(idx, matchedMarketDirection)
-	}
-
-	// Process derivative limit orders matching
-	batchDerivativeMatchingExecutionData := make([]*v2.DerivativeBatchExecutionData, len(derivativeLimitOrderMarketDirections))
-	batchDerivativeMatchingExecutionDataMux := new(sync.Mutex)
-
-	wg.Add(len(derivativeLimitOrderMarketDirections))
-
-	for idx, matchedMarketDirection := range derivativeLimitOrderMarketDirections {
-		go func(idx int, direction *types.MatchedMarketDirection) {
-			defer wg.Done()
-
-			executionData := h.k.ExecuteDerivativeLimitOrderMatching(ctx, direction, stakingInfo, modifiedPositionCache)
-			batchDerivativeMatchingExecutionDataMux.Lock()
-			batchDerivativeMatchingExecutionData[idx] = executionData
-			batchDerivativeMatchingExecutionDataMux.Unlock()
-		}(idx, matchedMarketDirection)
-	}
-
-	// wait for computational pipeline outcome
-	wg.Wait()
-
-	/** =========== Stage 4: Persist limit order matching execution + new limit orders to store =========== */
+	/* =========== Stage 4: Persist limit order matching execution + new limit orders to store =========== */
 	// Persist Spot Matching execution data
 	tradingRewards = h.k.PersistSpotMatchingExecution(ctx, batchSpotMatchingExecutionData, spotVwapData, tradingRewards)
 
 	// Persist Derivative Limit order matching execution data
 	tradingRewards = h.k.PersistDerivativeMatchingExecution(ctx, batchDerivativeMatchingExecutionData, derivativeVwapData, tradingRewards)
 
-	/** =========== Stage 5: Update perpetual market funding info =========== */
+	/* =========== Stage 5: Update perpetual market funding info =========== */
 
 	atomicVwapData := h.k.GetAllAtomicPerpetualVwap(ctx)
-	derivativeVwapData.MergeAtomicPerpetualVwap(atomicVwapData)
+	derivativeVwapData.MergePerpetualVwap(atomicVwapData)
 
 	h.k.PersistVwapInfo(ctx, &spotVwapData, &derivativeVwapData)
+
+	syntheticFundingVwapData := h.k.GetAllSyntheticPerpetualFundingVwap(ctx)
+	derivativeVwapData.MergePerpetualVwap(syntheticFundingVwapData)
+
 	h.k.PersistPerpetualFundingInfo(ctx, derivativeVwapData)
 	h.k.PersistTradingRewardPoints(ctx, tradingRewards)
 	h.k.PersistFeeDiscountStakingInfoUpdates(ctx, stakingInfo)
 
-	/** =========== Stage 6: Process Spot Market Param Updates if any =========== */
+	/* =========== Stage 6: Process Spot Market Param Updates if any =========== */
 	h.k.IterateSpotMarketParamUpdates(ctx, func(p *v2.SpotMarketParamUpdateProposal) (stop bool) {
 		err := h.k.ExecuteSpotMarketParamUpdateProposal(ctx, p)
 		if err != nil {
@@ -228,7 +171,7 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 		return false
 	})
 
-	/** =========== Stage 7: Process Derivative Market Param Updates if any =========== */
+	/* =========== Stage 7: Process Derivative Market Param Updates if any =========== */
 	h.k.IterateDerivativeMarketParamUpdates(ctx, func(p *v2.DerivativeMarketParamUpdateProposal) (stop bool) {
 		err := h.k.ExecuteDerivativeMarketParamUpdateProposal(ctx, p)
 		if err != nil {
@@ -237,7 +180,7 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 		return false
 	})
 
-	/** =========== Stage 8: Process Derivative Market Param Updates if any =========== */
+	/* =========== Stage 8: Process Derivative Market Param Updates if any =========== */
 	h.k.IterateBinaryOptionsMarketParamUpdates(ctx, func(p *v2.BinaryOptionsMarketParamUpdateProposal) (stop bool) {
 		err := h.k.ExecuteBinaryOptionsMarketParamUpdateProposal(ctx, p)
 		if err != nil {
@@ -246,19 +189,20 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 		return false
 	})
 
-	/** =========== Stage 9: Invalidate conditional RO orders if no locked margin left =========== */
+	/* =========== Stage 9: Invalidate conditional RO orders if no locked margin left =========== */
 	h.k.IterateInvalidConditionalOrderFlags(ctx, func(marketID, subaccountID common.Hash, isBuy bool) (stop bool) {
 		h.k.InvalidateConditionalOrdersIfNoMarginLocked(ctx, marketID, subaccountID, false, &isBuy, marketCache)
 		return false
 	})
 
-	/** =========== Stage 10: Emit Deposit, Position and Orderbook Update Events =========== */
+	/* =========== Stage 10: Emit Deposit, Position and Orderbook Update Events =========== */
 	h.k.EmitAllTransientDepositUpdates(ctx)
 	h.k.EmitAllTransientPositionUpdates(ctx)
 	h.k.IncrementSequenceAndEmitAllTransientOrderbookUpdates(ctx)
 }
 
 func (h *BlockHandler) handleConditionalMarketOrderCancels(ctx sdk.Context, triggeredMarketsAndOrders []*v2.TriggeredOrdersInMarket) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.handleConditionalMarketOrderCancels")()
 	// cancel conditional orders first on ctx so we can trigger them on separate cacheCtx
 	for _, triggeredMarket := range triggeredMarketsAndOrders {
 		if triggeredMarket == nil {
@@ -270,6 +214,8 @@ func (h *BlockHandler) handleConditionalMarketOrderCancels(ctx sdk.Context, trig
 }
 
 func (h *BlockHandler) cancelTriggeredMarketOrdersForMarket(ctx sdk.Context, triggeredMarket *v2.TriggeredOrdersInMarket) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.cancelTriggeredMarketOrdersForMarket")()
+
 	for i, marketOrder := range triggeredMarket.MarketOrders {
 		if err := h.k.CancelConditionalDerivativeMarketOrder(
 			ctx, triggeredMarket.Market, marketOrder.OrderInfo.SubaccountID(), nil, marketOrder.Hash(),
@@ -283,8 +229,7 @@ func (h *BlockHandler) cancelTriggeredMarketOrdersForMarket(ctx sdk.Context, tri
 }
 
 func (h *BlockHandler) handleTriggeringConditionalMarketOrders(ctx sdk.Context, triggeredMarketsAndOrders []*v2.TriggeredOrdersInMarket) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.handleTriggeringConditionalMarketOrders")()
 
 	// try with one big cacheCtx first for performance reasons, fall back on individual cacheCtx if panicked
 	cacheCtx, writeCache := ctx.CacheContext()
@@ -305,6 +250,8 @@ func (h *BlockHandler) executeTriggeredMarketOrders(
 	triggeredMarketsAndOrders []*v2.TriggeredOrdersInMarket,
 	triggerFn func(sdk.Context, *keeper.Keeper, *v2.TriggeredOrdersInMarket),
 ) (isPanicked bool) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.executeTriggeredMarketOrders")()
+
 	defer RecoverEndBlocker(ctx, &isPanicked)
 
 	for _, triggeredMarket := range triggeredMarketsAndOrders {
@@ -319,6 +266,8 @@ func (h *BlockHandler) executeTriggeredMarketOrders(
 }
 
 func (h *BlockHandler) updateTransientOrderIndicators(ctx sdk.Context, triggeredMarket *v2.TriggeredOrdersInMarket) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.updateTransientOrderIndicators")()
+
 	if triggeredMarket.HasLimitBuyOrders {
 		h.k.SetTransientDerivativeLimitOrderIndicator(ctx, triggeredMarket.Market.MarketID(), true)
 	}
@@ -400,6 +349,7 @@ func triggerMarketOrderWithoutCache(
 }
 
 func (h *BlockHandler) handleConditionalLimitOrderCancels(ctx sdk.Context, triggeredMarketsAndOrders []*v2.TriggeredOrdersInMarket) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.handleConditionalLimitOrderCancels")()
 	// Trigger Conditional Limit Orders (after market orders matching is done, so we won't hit the limitation of one market order per block)
 	for _, triggeredMarket := range triggeredMarketsAndOrders {
 		if triggeredMarket == nil {
@@ -412,6 +362,8 @@ func (h *BlockHandler) handleConditionalLimitOrderCancels(ctx sdk.Context, trigg
 
 // cancelConditionalOrdersForMarket handles cancellation of limit orders for a specific market
 func (h *BlockHandler) cancelConditionalOrdersForMarket(ctx sdk.Context, triggeredMarket *v2.TriggeredOrdersInMarket) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.cancelConditionalOrdersForMarket")()
+
 	for i, limitOrder := range triggeredMarket.LimitOrders {
 		if err := h.k.CancelConditionalDerivativeLimitOrder(
 			ctx, triggeredMarket.Market, limitOrder.OrderInfo.SubaccountID(), nil, limitOrder.Hash(),
@@ -425,6 +377,8 @@ func (h *BlockHandler) cancelConditionalOrdersForMarket(ctx sdk.Context, trigger
 }
 
 func (h *BlockHandler) handleTriggeringConditionalLimitOrders(ctx sdk.Context, triggeredMarketsAndOrders []*v2.TriggeredOrdersInMarket) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.handleTriggeringConditionalLimitOrders")()
+
 	triggerLimitOrders := func(
 		ctx sdk.Context,
 		triggerFn func(sdk.Context, *keeper.Keeper, *v2.TriggeredOrdersInMarket, *v2.DerivativeLimitOrder),
@@ -518,6 +472,7 @@ func triggerLimitOrderWithoutCache(
 // processDowntimePostOnlyMode checks if the current block is the first block after a detected downtime
 // and activates post-only mode if the downtime exceeds the configured MinPostOnlyModeDowntimeDuration
 func (h *BlockHandler) processDowntimePostOnlyMode(ctx sdk.Context, params v2.Params) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.processDowntimePostOnlyMode")()
 	// Skip if MinPostOnlyModeDowntimeDuration is empty or if exchange is already in post-only mode
 	if params.MinPostOnlyModeDowntimeDuration == "" || h.k.IsPostOnlyMode(ctx) {
 		return
@@ -562,6 +517,7 @@ func (h *BlockHandler) processDowntimePostOnlyMode(ctx sdk.Context, params v2.Pa
 // processPostOnlyModeCancellation checks if the post-only mode cancellation flag is set
 // and disables post-only mode if requested by governance or exchange admins
 func (h *BlockHandler) processPostOnlyModeCancellation(ctx sdk.Context) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.processPostOnlyModeCancellation")()
 	// Check if the cancellation flag is set
 	if !h.k.HasPostOnlyModeCancellationFlag(ctx) {
 		return

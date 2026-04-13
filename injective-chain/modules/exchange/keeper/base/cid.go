@@ -2,7 +2,6 @@ package base
 
 import (
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -18,8 +17,7 @@ func (k *BaseKeeper) SetCid( //nolint:revive // ok
 	isBuy bool,
 	orderHash common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCid")()
 
 	if cid == "" {
 		return
@@ -43,8 +41,7 @@ func (k *BaseKeeper) ExistsCid(
 	subaccountID common.Hash,
 	cid string,
 ) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExistsCid")()
 
 	key := types.GetSubaccountCidKey(subaccountID, cid)
 
@@ -63,8 +60,7 @@ func (k *BaseKeeper) DeleteCid( //nolint:revive // ok
 	subaccountID common.Hash,
 	cid string,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteCid")()
 
 	if cid == "" {
 		return
@@ -88,8 +84,7 @@ func (k *BaseKeeper) GetOrderHashByCid( //nolint:revive // ok
 	subaccountID common.Hash,
 	cid string,
 ) (exists bool, orderHash common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOrderHashByCid")()
 
 	var store storetypes.KVStore
 
@@ -114,6 +109,8 @@ func (k *BaseKeeper) GetOrderHashFromIdentifier(
 	subaccountID common.Hash,
 	identifier any,
 ) (common.Hash, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOrderHashFromIdentifier")()
+
 	if orderHash, ok := identifier.(common.Hash); ok {
 		return orderHash, nil
 	}

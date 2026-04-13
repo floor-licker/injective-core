@@ -10,6 +10,7 @@ import (
 	upgradetypes "cosmossdk.io/x/upgrade/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
+	authzkeeper "github.com/cosmos/cosmos-sdk/x/authz/keeper"
 	bankkeeper "github.com/cosmos/cosmos-sdk/x/bank/keeper"
 	distrkeeper "github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 	slashingkeeper "github.com/cosmos/cosmos-sdk/x/slashing/keeper"
@@ -22,10 +23,11 @@ import (
 	erc20keeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/erc20/keeper"
 	evmkeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/keeper"
 	exchangekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper"
+	insurancekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/keeper"
 	oraclekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/keeper"
 	peggykeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/keeper"
-	txfeeskeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/txfees/keeper"
 	permissionskeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/keeper"
+	txfeeskeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/txfees/keeper"
 )
 
 type UpgradeHandlerStep struct {
@@ -138,7 +140,9 @@ type InjectiveApplication interface {
 	GetDowntimeDetectorKeeper() *downtimedetector.Keeper
 	GetICAHostKeeper() icahostkeeper.Keeper
 	GetOracleKeeper() *oraclekeeper.Keeper
+	GetInsuranceKeeper() *insurancekeeper.Keeper
 	GetPermissionsKeeper() *permissionskeeper.Keeper
+	GetAuthzKeeper() *authzkeeper.Keeper
 }
 
 func LogUpgradeProgress(logger log.Logger, startTime, lastUpdatedTime time.Time, currentUpdateNumber, totalUpdates int) {

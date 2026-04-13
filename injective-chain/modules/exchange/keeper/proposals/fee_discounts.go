@@ -13,6 +13,8 @@ const REQUIRED_FEE_DISCOUNT_QUOTE_DECIMALS = 6
 
 //nolint:revive // ok
 func (k *ProposalKeeper) HandleFeeDiscountProposal(ctx sdk.Context, p *v2.FeeDiscountProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleFeeDiscountProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -93,15 +95,22 @@ func (k *ProposalKeeper) HandleFeeDiscountProposal(ctx sdk.Context, p *v2.FeeDis
 	}
 
 	hasBucketConfigChanged := !isBucketCountSame || !isBucketDurationSame || !isQuoteDenomsSame
-	if hasBucketConfigChanged {
-		k.DeleteAllAccountVolumeInAllBucketsWithMetadata(ctx)
-		k.SetIsFirstFeeCycleFinished(ctx, false)
+	if prevSchedule == nil {
+		startTimestamp := ctx.BlockTime().Unix()
+		k.SetFeeDiscountCurrentBucketStartTimestamp(ctx, startTimestamp)
+	} else {
+		// Tier TTLs encode indices from the previous schedule. Invalidate them on
+		// every schedule update before any subsequent lookup can trust cached
+		// tier membership under the new requirements.
+		k.DeleteAllFeeDiscountAccountTierInfo(ctx)
 
-		startTimestamp := ctx.BlockTime().Unix()
-		k.SetFeeDiscountCurrentBucketStartTimestamp(ctx, startTimestamp)
-	} else if prevSchedule == nil {
-		startTimestamp := ctx.BlockTime().Unix()
-		k.SetFeeDiscountCurrentBucketStartTimestamp(ctx, startTimestamp)
+		if hasBucketConfigChanged {
+			k.DeleteAllAccountVolumeInAllBucketsWithMetadata(ctx)
+			k.SetIsFirstFeeCycleFinished(ctx, false)
+
+			startTimestamp := ctx.BlockTime().Unix()
+			k.SetFeeDiscountCurrentBucketStartTimestamp(ctx, startTimestamp)
+		}
 	}
 
 	k.SetFeeDiscountMarketQualificationForAllQualifyingMarkets(ctx, p.Schedule)

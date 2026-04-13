@@ -1,7 +1,6 @@
 package binaryoptions
 
 import (
-	"github.com/InjectiveLabs/metrics"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/base"
@@ -22,8 +21,6 @@ type BinaryOptionsKeeper struct {
 	account      authkeeper.AccountKeeper
 	trading      *rewards.TradingKeeper
 	feeDiscounts *feediscounts.FeeDiscountsKeeper
-
-	svcTags metrics.Tags
 }
 
 func New(

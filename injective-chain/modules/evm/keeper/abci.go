@@ -7,6 +7,7 @@ import (
 
 // BeginBlock sets the sdk Context and EIP155 chain id to the Keeper.
 func (k *Keeper) BeginBlock(ctx sdk.Context) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "BeginBlock")()
 	// cache parameters that's common for the whole block.
 	evmBlockConfig, err := k.EVMBlockConfig(ctx)
 	if err != nil {
@@ -32,6 +33,8 @@ func (k *Keeper) BeginBlock(ctx sdk.Context) error {
 // KVStore. The EVM end block logic doesn't update the validator set, thus it returns
 // an empty slice.
 func (k *Keeper) EndBlock(ctx sdk.Context) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "EndBlock")()
+
 	k.CollectTxBloom(ctx)
 	k.RemoveParamsCache(ctx)
 

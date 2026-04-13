@@ -4,7 +4,6 @@ import (
 	"sort"
 
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -25,8 +24,7 @@ func (k TradingKeeper) GetMarketVolatility(
 	rawTrades []*v2.TradeRecord,
 	meta *oracletypes.MetadataStatistics,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMarketVolatility")()
 
 	maxAge, groupingSec, includeRawHistory, includeMetadata := k.getHistoricalTradeRecordsSearchParams(ctx, options)
 
@@ -52,10 +50,12 @@ func (k TradingKeeper) GetMarketVolatility(
 }
 
 //revive:disable:function-result-limit // we need to return 4 values
-func (TradingKeeper) getHistoricalTradeRecordsSearchParams(
+func (k TradingKeeper) getHistoricalTradeRecordsSearchParams(
 	ctx sdk.Context,
 	options *v2.TradeHistoryOptions,
 ) (maxAge, groupingSec int64, includeRawHistory, includeMetadata bool) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getHistoricalTradeRecordsSearchParams")()
+
 	maxAge = int64(0)
 	groupingSec = int64(GROUPING_SECONDS_DEFAULT)
 	includeRawHistory = false
@@ -75,8 +75,7 @@ func (TradingKeeper) getHistoricalTradeRecordsSearchParams(
 }
 
 func (k TradingKeeper) AppendTradeRecord(ctx sdk.Context, marketID common.Hash, tradeRecord *v2.TradeRecord) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AppendTradeRecord")()
 
 	existingOrEmptyRecord, _ := k.GetHistoricalTradeRecords(ctx, marketID, tradeRecord.Timestamp-types.MaxHistoricalTradeRecordAge)
 	existingOrEmptyRecord.LatestTradeRecords = append(existingOrEmptyRecord.LatestTradeRecords, tradeRecord)
@@ -85,8 +84,7 @@ func (k TradingKeeper) AppendTradeRecord(ctx sdk.Context, marketID common.Hash, 
 }
 
 func (k TradingKeeper) CleanupHistoricalTradeRecords(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CleanupHistoricalTradeRecords")()
 
 	before := ctx.BlockTime().Unix() - types.MaxHistoricalTradeRecordAge
 	onlyEnabled := true
@@ -103,6 +101,8 @@ func (k TradingKeeper) CleanupHistoricalTradeRecords(ctx sdk.Context) {
 }
 
 func (k TradingKeeper) cleanupMarketHistoricalTradeRecords(ctx sdk.Context, marketID common.Hash, before int64) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "cleanupMarketHistoricalTradeRecords")()
+
 	needsSave := false
 	existingOrEmptyRecord, omitted := k.GetHistoricalTradeRecords(ctx, marketID, before)
 
@@ -125,8 +125,7 @@ func (k TradingKeeper) cleanupMarketHistoricalTradeRecords(ctx sdk.Context, mark
 }
 
 func (k TradingKeeper) PersistVwapInfo(ctx sdk.Context, spotVwapInfo *v2.SpotVwapInfo, derivativeVwapInfo *v2.DerivativeVwapInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PersistVwapInfo")()
 
 	blockTime := ctx.BlockTime()
 

@@ -18,7 +18,7 @@ import (
 func Emit(ctx sdk.Context, k *base.BaseKeeper, ev proto.Message) {
 	emitEvent(ctx, k, ev)
 
-	if k.GetParams(ctx).EmitLegacyVersionEvents {
+	if k.ShouldEmitLegacyVersionEvents(ctx) {
 		EmitLegacyVersionEvent(ctx, k, ev)
 	}
 }

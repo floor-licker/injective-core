@@ -7,6 +7,8 @@ import (
 )
 
 func (k Keeper) mintTo(ctx sdk.Context, amount sdk.Coin, mintTo sdk.AccAddress) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "mintTo")()
+
 	if !amount.IsPositive() {
 		return types.ErrAmountNotPositive
 	}
@@ -20,6 +22,8 @@ func (k Keeper) mintTo(ctx sdk.Context, amount sdk.Coin, mintTo sdk.AccAddress) 
 }
 
 func (k Keeper) burnFrom(ctx sdk.Context, amount sdk.Coin, burnFrom sdk.AccAddress) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "burnFrom")()
+
 	if k.IsModuleAcc(burnFrom) {
 		return types.ErrUnauthorized.Wrap("cannot burn from module account")
 	}

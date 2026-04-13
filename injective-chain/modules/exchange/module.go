@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"cosmossdk.io/core/appmodule"
-	"github.com/InjectiveLabs/metrics"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
 	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
@@ -96,7 +95,6 @@ const ConsensusVersion = 2
 type AppModule struct {
 	AppModuleBasic
 
-	svcTags        metrics.Tags
 	keeper         *exchangekeeper.Keeper
 	accountKeeper  authkeeper.AccountKeeper
 	bankKeeper     bankkeeper.Keeper
@@ -126,9 +124,6 @@ func NewAppModule(
 		bankKeeper:     bankKeeper,
 		blockHandler:   NewBlockHandler(keeper),
 		legacySubspace: legacySubspace,
-		svcTags: metrics.Tags{
-			"svc": "exchange_m",
-		},
 	}
 }
 

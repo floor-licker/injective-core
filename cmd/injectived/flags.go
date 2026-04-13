@@ -51,25 +51,26 @@ const (
 )
 
 var (
-	statsdAgent            string
-	statsdEnabled          bool
-	statsdPrefix           string
-	statsdAddress          string
-	statsdStuckFunc        string
-	statsdTracingEnabled   bool
-	statsdProfilingEnabled bool
+	metricsEnabled         bool
+	metricsEndpoint        string
+	metricsStuckFunc       string
+	metricsExportInterval  string
+	tracingEnabled         bool
+	metricsInsecure        bool
 	traceRecorderThreshold int
 )
 
 func AddStatsdFlagsToCmd(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&statsdAgent, "statsd-agent", "telegraf", "StatsD agent")
-	cmd.PersistentFlags().BoolVar(&statsdEnabled, "statsd-enabled", false, "Enabled StatsD reporting.")
-	cmd.PersistentFlags().StringVar(&statsdPrefix, "statsd-prefix", "injectived", "Specify StatsD compatible metrics prefix.")
-	cmd.PersistentFlags().StringVar(&statsdAddress, "statsd-address", "localhost:8125", "UDP address of a StatsD compatible metrics aggregator.")
-	cmd.PersistentFlags().StringVar(&statsdStuckFunc, "statsd-stuck-func", "5m", "Sets a duration to consider a function to be stuck (e.g. in deadlock).")
-	cmd.PersistentFlags().BoolVar(&statsdTracingEnabled, "statsd-tracing-enabled", true, "Enable tracing via DataDog provider.")
-	cmd.PersistentFlags().BoolVar(&statsdProfilingEnabled, "statsd-profiling-enabled", true, "Enable profiling via DataDog provider.")
-	cmd.PersistentFlags().IntVar(&traceRecorderThreshold, "trace-recorder-threshold", 0, "Set flight trace recorder threshold duration in seconds. 0 = trace recorder disabled")
+	cmd.PersistentFlags().BoolVar(&metricsEnabled, "metrics-enable-metrics", false, "Enable OpenTelemetry metrics")
+	cmd.PersistentFlags().BoolVar(&tracingEnabled, "metrics-enable-tracing", false, "Enable OpenTelemetry tracing")
+	cmd.PersistentFlags().StringVar(&metricsEndpoint, "metrics-endpoint", "localhost:4317", "OpenTelemetry collector gRPC address")
+	cmd.PersistentFlags().BoolVar(&metricsInsecure, "metrics-insecure", false, "Disables TLS encryption for gRPC metrics endpoint communication")
+	cmd.PersistentFlags().StringVar(&metricsStuckFunc, "metrics-stuck-func", "0m",
+		"Sets a duration to consider a function to be stuck to mark in metrics (e.g. in deadlock). 0 disables timeouts.")
+	cmd.PersistentFlags().StringVar(&metricsExportInterval, "metrics-export-interval", "10s",
+		"Interval to batch and send metrics")
+	cmd.PersistentFlags().IntVar(&traceRecorderThreshold, "trace-flight-recorder-threshold", 0,
+		"Set trace flight recorder threshold duration in seconds. 0 = flight recorder disabled")
 }
 
 func duration(s string, defaults time.Duration) time.Duration {

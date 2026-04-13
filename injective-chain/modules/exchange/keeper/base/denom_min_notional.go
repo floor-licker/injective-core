@@ -10,6 +10,8 @@ import (
 )
 
 func (k *BaseKeeper) SetMinNotionalForDenom(ctx sdk.Context, denom string, minNotional math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetMinNotionalForDenom")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.DenomMinNotionalPrefix)
 	key := []byte(denom)
 
@@ -24,6 +26,8 @@ func (k *BaseKeeper) SetMinNotionalForDenom(ctx sdk.Context, denom string, minNo
 }
 
 func (k *BaseKeeper) GetMinNotionalForDenom(ctx sdk.Context, denom string) math.LegacyDec {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMinNotionalForDenom")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.DenomMinNotionalPrefix)
 	key := []byte(denom)
 
@@ -36,6 +40,8 @@ func (k *BaseKeeper) GetMinNotionalForDenom(ctx sdk.Context, denom string) math.
 }
 
 func (k *BaseKeeper) HasMinNotionalForDenom(ctx sdk.Context, denom string) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasMinNotionalForDenom")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.DenomMinNotionalPrefix)
 	key := []byte(denom)
 
@@ -43,6 +49,8 @@ func (k *BaseKeeper) HasMinNotionalForDenom(ctx sdk.Context, denom string) bool 
 }
 
 func (k *BaseKeeper) GetAllDenomMinNotionals(ctx sdk.Context) []*v2.DenomMinNotional {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllDenomMinNotionals")()
+
 	minNotionals := make([]*v2.DenomMinNotional, 0)
 
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.DenomMinNotionalPrefix)

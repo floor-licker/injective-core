@@ -18,6 +18,8 @@ import (
 
 // GetCoinbaseAddress returns the block proposer's validator operator address.
 func (k Keeper) GetCoinbaseAddress(ctx sdk.Context) (common.Address, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCoinbaseAddress")()
+
 	proposerAddress := sdk.ConsAddress(ctx.BlockHeader().ProposerAddress)
 	if len(proposerAddress) == 0 {
 		// it's ok that proposer address don't exsits in some contexts like CheckTx.
@@ -59,6 +61,8 @@ func (k *Keeper) DeductTxCostsFromUserBalance(
 	fees sdk.Coins,
 	from common.Address,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeductTxCostsFromUserBalance")()
+
 	// fetch sender account
 	signerAcc, err := authante.GetSignerAcc(ctx, k.accountKeeper, from.Bytes())
 	if err != nil {

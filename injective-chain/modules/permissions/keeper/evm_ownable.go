@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 
@@ -55,7 +54,9 @@ func init() {
 // 3. Executes the call using the EVM keeper with a 300,000 gas limit
 // 4. Unpacks the returned address using the pre-compiled Ownable ABI
 // 5. Converts the Ethereum address to a Cosmos SDK address format
-func (k msgServer) getEVMContractOwner(c context.Context, denom string) (sdk.AccAddress, error) {
+func (k msgServer) getEVMContractOwner(ctx sdk.Context, denom string) (sdk.AccAddress, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getEVMContractOwner")()
+
 	address, ok := strings.CutPrefix(denom, erc20types.DenomPrefix)
 	if !ok {
 		return sdk.AccAddress{}, types.ErrInvalidERC20Denom
@@ -72,7 +73,7 @@ func (k msgServer) getEVMContractOwner(c context.Context, denom string) (sdk.Acc
 		GasCap: uint64(300_000),
 	}
 
-	resp, err := k.evmKeeper.EthCall(c, &req)
+	resp, err := k.evmKeeper.EthCall(ctx, &req)
 	if err != nil || resp.VmError != "" {
 		var errText string
 		if err != nil {

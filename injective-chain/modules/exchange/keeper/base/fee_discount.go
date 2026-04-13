@@ -8,7 +8,6 @@ import (
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 )
 
 // GetFeeDiscountAccountTierInfo fetches the account's fee discount Tier and TTL info
@@ -16,8 +15,7 @@ func (k *BaseKeeper) GetFeeDiscountAccountTierInfo(
 	ctx sdk.Context,
 	account sdk.AccAddress,
 ) *v2.FeeDiscountTierTTL {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountAccountTierInfo")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetFeeDiscountAccountTierKey(account))
@@ -36,8 +34,7 @@ func (k *BaseKeeper) DeleteFeeDiscountAccountTierInfo(
 	ctx sdk.Context,
 	account sdk.AccAddress,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountAccountTierInfo")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetFeeDiscountAccountTierKey(account))
@@ -49,8 +46,7 @@ func (k *BaseKeeper) SetFeeDiscountAccountTierInfo(
 	account sdk.AccAddress,
 	tierTTL *v2.FeeDiscountTierTTL,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountAccountTierInfo")()
 
 	store := k.getStore(ctx)
 
@@ -64,8 +60,7 @@ func (k *BaseKeeper) IterateFeeDiscountAccountTierInfo(
 	ctx sdk.Context,
 	process func(account sdk.AccAddress, tierInfo *v2.FeeDiscountTierTTL) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateFeeDiscountAccountTierInfo")()
 
 	store := k.getStore(ctx)
 	accountTierStore := prefix.NewStore(store, types.FeeDiscountAccountTierPrefix)
@@ -84,8 +79,7 @@ func (k *BaseKeeper) GetFeeDiscountAccountVolumeInBucket(
 	bucketStartTimestamp int64,
 	account sdk.AccAddress,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountAccountVolumeInBucket")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetFeeDiscountAccountVolumeInBucketKey(bucketStartTimestamp, account))
@@ -101,8 +95,7 @@ func (k *BaseKeeper) DeleteFeeDiscountAccountVolumeInBucket(
 	bucketStartTimestamp int64,
 	account sdk.AccAddress,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountAccountVolumeInBucket")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetFeeDiscountAccountVolumeInBucketKey(bucketStartTimestamp, account))
@@ -115,8 +108,7 @@ func (k *BaseKeeper) SetFeeDiscountAccountVolumeInBucket(
 	account sdk.AccAddress,
 	points math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountAccountVolumeInBucket")()
 
 	store := k.getStore(ctx)
 
@@ -130,8 +122,7 @@ func (k *BaseKeeper) IterateAccountVolume(
 	ctx sdk.Context,
 	process func(bucketStartTimestamp int64, account sdk.AccAddress, totalVolume math.LegacyDec) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateAccountVolume")()
 
 	store := k.getStore(ctx)
 	pastBucketVolumeStore := prefix.NewStore(store, types.FeeDiscountBucketAccountVolumePrefix)
@@ -148,8 +139,7 @@ func (k *BaseKeeper) IterateAccountVolumeInBucket(
 	bucketStartTimestamp int64,
 	process func(account sdk.AccAddress, totalVolume math.LegacyDec) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateAccountVolumeInBucket")()
 
 	store := k.getStore(ctx)
 
@@ -164,8 +154,7 @@ func (k *BaseKeeper) IterateAccountVolumeInBucket(
 
 //nolint:revive // ok
 func (k *BaseKeeper) SetIsFirstFeeCycleFinished(ctx sdk.Context, isFirstFeeCycleFinished bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetIsFirstFeeCycleFinished")()
 
 	store := k.getStore(ctx)
 	isFirstFeeCycleFinishedUint := []byte{types.FalseByte}
@@ -178,8 +167,7 @@ func (k *BaseKeeper) SetIsFirstFeeCycleFinished(ctx sdk.Context, isFirstFeeCycle
 }
 
 func (k *BaseKeeper) GetIsFirstFeeCycleFinished(ctx sdk.Context) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetIsFirstFeeCycleFinished")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.IsFirstFeeCycleFinishedKey)
@@ -192,8 +180,7 @@ func (k *BaseKeeper) GetIsFirstFeeCycleFinished(ctx sdk.Context) bool {
 
 // GetFeeDiscountBucketDuration fetches the bucket duration of the fee discount buckets
 func (k *BaseKeeper) GetFeeDiscountBucketDuration(ctx sdk.Context) int64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountBucketDuration")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.FeeDiscountBucketDurationKey)
@@ -207,8 +194,7 @@ func (k *BaseKeeper) GetFeeDiscountBucketDuration(ctx sdk.Context) int64 {
 
 // DeleteFeeDiscountBucketDuration deletes the bucket duration of the fee discount buckets.
 func (k *BaseKeeper) DeleteFeeDiscountBucketDuration(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountBucketDuration")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.FeeDiscountBucketDurationKey)
@@ -216,8 +202,7 @@ func (k *BaseKeeper) DeleteFeeDiscountBucketDuration(ctx sdk.Context) {
 
 // SetFeeDiscountBucketDuration sets the bucket duration of the fee discount buckets.
 func (k *BaseKeeper) SetFeeDiscountBucketDuration(ctx sdk.Context, duration int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountBucketDuration")()
 
 	store := k.getStore(ctx)
 	store.Set(types.FeeDiscountBucketDurationKey, sdk.Uint64ToBigEndian(uint64(duration)))
@@ -225,8 +210,7 @@ func (k *BaseKeeper) SetFeeDiscountBucketDuration(ctx sdk.Context, duration int6
 
 // GetFeeDiscountCurrentBucketStartTimestamp fetches the start timestamp of the current fee discount bucket
 func (k *BaseKeeper) GetFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Context) int64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountCurrentBucketStartTimestamp")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.FeeDiscountCurrentBucketStartTimeKey)
@@ -240,8 +224,7 @@ func (k *BaseKeeper) GetFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Context) 
 
 // DeleteFeeDiscountCurrentBucketStartTimestamp deletes the current bucket start timestamp
 func (k *BaseKeeper) DeleteFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountCurrentBucketStartTimestamp")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.FeeDiscountCurrentBucketStartTimeKey)
@@ -249,8 +232,7 @@ func (k *BaseKeeper) DeleteFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Contex
 
 // SetFeeDiscountCurrentBucketStartTimestamp sets the start timestamp of the current fee discount bucket.
 func (k *BaseKeeper) SetFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Context, timestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountCurrentBucketStartTimestamp")()
 
 	store := k.getStore(ctx)
 	store.Set(types.FeeDiscountCurrentBucketStartTimeKey, sdk.Uint64ToBigEndian(uint64(timestamp)))
@@ -258,8 +240,7 @@ func (k *BaseKeeper) SetFeeDiscountCurrentBucketStartTimestamp(ctx sdk.Context, 
 
 // GetFeeDiscountBucketCount fetches the bucket count of the fee discount buckets
 func (k *BaseKeeper) GetFeeDiscountBucketCount(ctx sdk.Context) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountBucketCount")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.FeeDiscountBucketCountKey)
@@ -273,8 +254,7 @@ func (k *BaseKeeper) GetFeeDiscountBucketCount(ctx sdk.Context) uint64 {
 
 // DeleteFeeDiscountBucketCount deletes the bucket count.
 func (k *BaseKeeper) DeleteFeeDiscountBucketCount(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountBucketCount")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.FeeDiscountBucketCountKey)
@@ -282,8 +262,7 @@ func (k *BaseKeeper) DeleteFeeDiscountBucketCount(ctx sdk.Context) {
 
 // SetFeeDiscountBucketCount sets the bucket count of the fee discount buckets.
 func (k *BaseKeeper) SetFeeDiscountBucketCount(ctx sdk.Context, count uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountBucketCount")()
 
 	store := k.getStore(ctx)
 	store.Set(types.FeeDiscountBucketCountKey, sdk.Uint64ToBigEndian(count))
@@ -296,8 +275,7 @@ func (k *BaseKeeper) CheckAndSetFeeDiscountAccountActivityIndicator(
 	marketID common.Hash,
 	account sdk.AccAddress,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CheckAndSetFeeDiscountAccountActivityIndicator")()
 
 	if k.HasFeeRewardTransientActiveAccountIndicator(ctx, account) {
 		return
@@ -329,8 +307,7 @@ func (k *BaseKeeper) CheckAndSetFeeDiscountAccountActivityIndicator(
 
 // IsMarketQualifiedForFeeDiscount returns true if the given marketID qualifies for fee discount
 func (k *BaseKeeper) IsMarketQualifiedForFeeDiscount(ctx sdk.Context, marketID common.Hash) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsMarketQualifiedForFeeDiscount")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetFeeDiscountMarketQualificationKey(marketID))
@@ -343,8 +320,7 @@ func (k *BaseKeeper) IsMarketQualifiedForFeeDiscount(ctx sdk.Context, marketID c
 
 // DeleteFeeDiscountMarketQualification deletes the market's fee discount qualification indicator
 func (k *BaseKeeper) DeleteFeeDiscountMarketQualification(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountMarketQualification")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetFeeDiscountMarketQualificationKey(marketID))
@@ -358,8 +334,7 @@ func (k *BaseKeeper) SetFeeDiscountMarketQualification(
 	marketID common.Hash,
 	isQualified bool,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountMarketQualification")()
 
 	store := k.getStore(ctx)
 	qualificationBz := []byte{types.TrueByte}
@@ -374,8 +349,7 @@ func (k *BaseKeeper) IterateFeeDiscountMarketQualifications(
 	ctx sdk.Context,
 	process func(common.Hash, bool) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateFeeDiscountMarketQualifications")()
 
 	store := k.getStore(ctx)
 
@@ -392,8 +366,7 @@ func (k *BaseKeeper) GetPastBucketTotalVolume(
 	ctx sdk.Context,
 	account sdk.AccAddress,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPastBucketTotalVolume")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetFeeDiscountPastBucketAccountVolumeKey(account))
@@ -409,8 +382,7 @@ func (k *BaseKeeper) SetPastBucketTotalVolume(
 	account sdk.AccAddress,
 	volume math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetPastBucketTotalVolume")()
 
 	store := k.getStore(ctx)
 	bz := types.UnsignedDecToUnsignedDecBytes(volume)
@@ -422,8 +394,7 @@ func (k *BaseKeeper) DeletePastBucketTotalVolume(
 	ctx sdk.Context,
 	account sdk.AccAddress,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeletePastBucketTotalVolume")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetFeeDiscountPastBucketAccountVolumeKey(account))
@@ -434,8 +405,7 @@ func (k *BaseKeeper) IteratePastBucketTotalVolume(
 	ctx sdk.Context,
 	process func(account sdk.AccAddress, totalVolume math.LegacyDec) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IteratePastBucketTotalVolume")()
 
 	store := k.getStore(ctx)
 
@@ -448,8 +418,7 @@ func (k *BaseKeeper) IteratePastBucketTotalVolume(
 
 // GetFeeDiscountSchedule fetches the FeeDiscountSchedule.
 func (k *BaseKeeper) GetFeeDiscountSchedule(ctx sdk.Context) *v2.FeeDiscountSchedule {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFeeDiscountSchedule")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.FeeDiscountScheduleKey)
@@ -465,8 +434,7 @@ func (k *BaseKeeper) GetFeeDiscountSchedule(ctx sdk.Context) *v2.FeeDiscountSche
 
 // DeleteFeeDiscountSchedule deletes the FeeDiscountSchedule.
 func (k *BaseKeeper) DeleteFeeDiscountSchedule(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteFeeDiscountSchedule")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.FeeDiscountScheduleKey)
@@ -474,8 +442,7 @@ func (k *BaseKeeper) DeleteFeeDiscountSchedule(ctx sdk.Context) {
 
 // SetFeeDiscountSchedule sets the FeeDiscountSchedule.
 func (k *BaseKeeper) SetFeeDiscountSchedule(ctx sdk.Context, schedule *v2.FeeDiscountSchedule) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetFeeDiscountSchedule")()
 
 	store := k.getStore(ctx)
 	bz := k.cdc.MustMarshal(schedule)
@@ -483,8 +450,7 @@ func (k *BaseKeeper) SetFeeDiscountSchedule(ctx sdk.Context, schedule *v2.FeeDis
 }
 
 func (k *BaseKeeper) HasFeeRewardTransientActiveAccountIndicator(ctx sdk.Context, account sdk.AccAddress) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasFeeRewardTransientActiveAccountIndicator")()
 
 	// use transient store key
 	tStore := k.getTransientStore(ctx)
@@ -498,8 +464,7 @@ func (k *BaseKeeper) HasFeeRewardTransientActiveAccountIndicator(ctx sdk.Context
 func (k *BaseKeeper) GetAllAccountsActivelyTradingQualifiedMarketsInBlockForFeeDiscounts(
 	ctx sdk.Context,
 ) []sdk.AccAddress {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllAccountsActivelyTradingQualifiedMarketsInBlockForFeeDiscounts")()
 
 	tStore := k.getTransientStore(ctx)
 	accountStore := prefix.NewStore(tStore, types.FeeDiscountAccountOrderIndicatorPrefix)
@@ -521,8 +486,7 @@ func (k *BaseKeeper) GetAllAccountsActivelyTradingQualifiedMarketsInBlockForFeeD
 }
 
 func (k *BaseKeeper) setFeeRewardTransientActiveAccountIndicator(ctx sdk.Context, account sdk.AccAddress) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "setFeeRewardTransientActiveAccountIndicator")()
 
 	// use transient store key
 	tStore := k.getTransientStore(ctx)

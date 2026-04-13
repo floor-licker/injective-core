@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/InjectiveLabs/coretracer"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -16,10 +15,11 @@ func (s *peggyContract) GetTxBatchNonce(
 	ctx context.Context,
 	erc20ContractAddress common.Address,
 	callerAddress common.Address,
-) (*big.Int, error) {
-	defer coretracer.Trace(&ctx, s.svcTags)()
+) (nonce *big.Int, err error) {
+	ctx, done := s.meter.FuncTimingCtx(ctx, "GetTxBatchNonce")
+	defer done(&err)
 
-	nonce, err := s.ethPeggy.LastBatchNonce(&bind.CallOpts{
+	nonce, err = s.ethPeggy.LastBatchNonce(&bind.CallOpts{
 		From:    callerAddress,
 		Context: ctx,
 	}, erc20ContractAddress)
@@ -36,16 +36,16 @@ func (s *peggyContract) GetTxBatchNonce(
 func (s *peggyContract) GetValsetNonce(
 	ctx context.Context,
 	callerAddress common.Address,
-) (*big.Int, error) {
-	defer coretracer.Trace(&ctx, s.svcTags)()
+) (nonce *big.Int, err error) {
+	ctx, done := s.meter.FuncTimingCtx(ctx, "GetValsetNonce")
+	defer done(&err)
 
-	nonce, err := s.ethPeggy.StateLastValsetNonce(&bind.CallOpts{
+	nonce, err = s.ethPeggy.StateLastValsetNonce(&bind.CallOpts{
 		From:    callerAddress,
 		Context: ctx,
 	})
 
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return nil, errors.Wrap(err, "StateLastValsetNonce call failed")
 	}
 
@@ -56,16 +56,16 @@ func (s *peggyContract) GetValsetNonce(
 func (s *peggyContract) GetPeggyID(
 	ctx context.Context,
 	callerAddress common.Address,
-) (common.Hash, error) {
-	defer coretracer.Trace(&ctx, s.svcTags)()
+) (peggyID common.Hash, err error) {
+	ctx, done := s.meter.FuncTimingCtx(ctx, "GetPeggyID")
+	defer done(&err)
 
-	peggyID, err := s.ethPeggy.StatePeggyId(&bind.CallOpts{
+	peggyID, err = s.ethPeggy.StatePeggyId(&bind.CallOpts{
 		From:    callerAddress,
 		Context: ctx,
 	})
 
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return common.Hash{}, errors.Wrap(err, "StatePeggyId call failed")
 	}
 
@@ -77,7 +77,8 @@ func (s *peggyContract) GetERC20Symbol(
 	erc20ContractAddress common.Address,
 	callerAddress common.Address,
 ) (symbol string, err error) {
-	defer coretracer.Trace(&ctx, s.svcTags)()
+	ctx, done := s.meter.FuncTimingCtx(ctx, "GetERC20Symbol")
+	defer done(&err)
 
 	erc20Wrapper := bind.NewBoundContract(erc20ContractAddress, erc20ABI, s.ethProvider, nil, nil)
 
@@ -88,7 +89,6 @@ func (s *peggyContract) GetERC20Symbol(
 	var out []interface{}
 
 	if err = erc20Wrapper.Call(callOpts, &out, "symbol"); err != nil {
-		coretracer.TraceError(ctx, err)
 		return "", errors.Wrap(err, "ERC20 [symbol] call failed")
 	}
 

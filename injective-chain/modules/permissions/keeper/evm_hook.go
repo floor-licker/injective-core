@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"context"
 	"encoding/json"
 	"math"
 	"math/big"
@@ -31,7 +30,8 @@ func init() {
 }
 
 // validateEvmHook checks that smart contract implements isTransferRestricted method
-func (k Keeper) validateEvmHook(ctx context.Context, contractAddr common.Address) error {
+func (k Keeper) validateEvmHook(ctx sdk.Context, contractAddr common.Address) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "validateEvmHook")()
 	// use dummy params just to check that the smart-contract implements the
 	// correct interface. We don't care whether this specific transfer is
 	// restricted or not.
@@ -71,11 +71,13 @@ func (k Keeper) validateEvmHook(ctx context.Context, contractAddr common.Address
 // Contract: EVM contract should implement single method:
 //   - function isTransferRestricted(address from, address to, Cosmos.Coin calldata amount) external pure override returns (bool)
 func (k Keeper) ExecuteEvmHook(
-	ctx context.Context,
+	ctx sdk.Context,
 	namespace *types.Namespace,
 	fromAddr, toAddr sdk.AccAddress,
 	amount sdk.Coin,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteEvmHook")()
+
 	if namespace.EvmHook == "" {
 		return nil
 	}
@@ -106,13 +108,15 @@ func (k Keeper) ExecuteEvmHook(
 // to min(params.ContractHookMaxGas, ctx.GasRemaining)
 // Any panic happening within this function is caught and treated as a hook error.
 func (k *Keeper) callEvmHook(
-	ctx context.Context,
+	ctx sdk.Context,
 	contractAddr common.Address,
 	from common.Address,
 	to common.Address,
 	amount *big.Int,
 	denom string,
 ) (isRestricted bool, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "callEvmHook")()
+
 	defer func() {
 		// treat panics as hook error
 		if panicErr := recover(); panicErr != nil {
@@ -142,16 +146,15 @@ func (k *Keeper) callEvmHook(
 		return false, errors.Wrapf(types.ErrInvalidEVMHook, "failed to marshal transaction args: %v", err)
 	}
 
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	params := k.GetParams(sdkCtx)
-	gasRemaining := sdkCtx.GasMeter().GasRemaining()
+	params := k.GetParams(ctx)
+	gasRemaining := ctx.GasMeter().GasRemaining()
 	execCtx := ctx
 
 	switch gasRemaining {
 	case 0: // Short-circuit if no gas available
 		return false, errors.Wrap(types.ErrContractHookError, "insufficient gas for EVM hook execution")
 	case infiniteGasMeterRemainingGas: // infinite gas meter (consensus code / EVM transaction / fixed gas mode)
-		execCtx = sdkCtx.WithGasMeter(storetypes.NewGasMeter(params.ContractHookMaxGas))
+		execCtx = execCtx.WithGasMeter(storetypes.NewGasMeter(params.ContractHookMaxGas))
 	default:
 	}
 
@@ -172,12 +175,12 @@ func (k *Keeper) callEvmHook(
 
 	resp, err := k.evmKeeper.EthCall(execCtx, &req)
 	if err != nil {
-		sdkCtx.GasMeter().ConsumeGas(req.GasCap, "EVM hook call failed")
+		ctx.GasMeter().ConsumeGas(req.GasCap, "EVM hook call failed")
 		return false, errors.Wrapf(types.ErrContractHookError, "EVM hook call failed: %s", err.Error())
 	}
 
 	// consume gas on the original gas meter
-	sdkCtx.GasMeter().ConsumeGas(resp.GasUsed, "call evm hook")
+	ctx.GasMeter().ConsumeGas(resp.GasUsed, "call evm hook")
 
 	if resp.Failed() {
 		return false, errors.Wrapf(types.ErrInvalidEVMHook, "got error from EVM: %s", resp.VmError)

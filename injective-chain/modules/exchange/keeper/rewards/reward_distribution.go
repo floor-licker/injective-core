@@ -2,7 +2,6 @@ package rewards
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/events"
@@ -13,8 +12,7 @@ import (
 
 //nolint:revive // ok
 func (k TradingKeeper) ProcessTradingRewards(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessTradingRewards")()
 
 	blockTime := ctx.BlockTime().Unix()
 
@@ -28,7 +26,6 @@ func (k TradingKeeper) ProcessTradingRewards(ctx sdk.Context) {
 
 		if !doesCurrentCampaignExist {
 			// should never happen
-			metrics.ReportFuncError(k.svcTags)
 			k.Logger(ctx).Error("Ending the current reward token campaign failed")
 			return
 		}
@@ -47,7 +44,7 @@ func (k TradingKeeper) ProcessTradingRewards(ctx sdk.Context) {
 	}
 
 	pendingRewardPool := k.GetFirstCampaignRewardPendingPool(ctx)
-	isDistributingRewards := pendingRewardPool != nil && blockTime >= pendingRewardPool.StartTimestamp+k.GetParams(ctx).TradingRewardsVestingDuration
+	isDistributingRewards := pendingRewardPool != nil && blockTime >= pendingRewardPool.StartTimestamp+k.GetCachedParams(ctx).TradingRewardsVestingDuration
 
 	if isDistributingRewards {
 		availableRewardsToPayout := k.getAvailableRewardsToPayout(ctx, pendingRewardPool.MaxCampaignRewards)
@@ -83,8 +80,7 @@ func (k TradingKeeper) DistributeTradingRewards(
 	rewardReceiver sdk.AccAddress,
 	rewards sdk.Coins,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DistributeTradingRewards")()
 
 	if rewards.Len() == 0 {
 		return
@@ -93,7 +89,6 @@ func (k TradingKeeper) DistributeTradingRewards(
 	// No need to check if receiver is a blocked address because a trading reward receiver could never be a module account
 	err := k.bank.SendCoins(ctx, types.TempRewardsSenderAddress, rewardReceiver, rewards)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		k.Logger(ctx).Error("reward token transfer failed",
 			"rewardReceiver", rewardReceiver.String(),
 			"rewards", rewards.String(),
@@ -110,11 +105,10 @@ func (k TradingKeeper) distributeTradingRewardsForAccount(
 	totalPoints math.LegacyDec,
 	pendingPoolStartTimestamp int64,
 ) sdk.Coins {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "distributeTradingRewardsForAccount")()
 
 	accountRewards := sdk.NewCoins()
-	injRewardStakedRequirementThreshold := k.GetParams(ctx).InjRewardStakedRequirementThreshold
+	injRewardStakedRequirementThreshold := k.GetCachedParams(ctx).InjRewardStakedRequirementThreshold
 
 	for _, coin := range maxCampaignRewards {
 		availableRewardForDenom := availableRewardsToPayout[coin.Denom]
@@ -148,8 +142,7 @@ func (k TradingKeeper) distributeTradingRewardsForAllAccounts(
 	maxCampaignRewards sdk.Coins,
 	pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "distributeTradingRewardsForAllAccounts")()
 
 	allAccountPoints, totalPoints := k.GetAllAccountCampaignTradingRewardPendingPointsWithTotalPointsForPool(ctx, pendingPoolStartTimestamp)
 
@@ -178,8 +171,7 @@ func (k TradingKeeper) getAvailableRewardsToPayout(
 	ctx sdk.Context,
 	maxCampaignRewards sdk.Coins,
 ) map[string]math.Int {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getAvailableRewardsToPayout")()
 
 	availableRewardsToPayout := make(map[string]math.Int)
 	feePool, err := k.distribution.FeePool.Get(ctx)
@@ -193,7 +185,6 @@ func (k TradingKeeper) getAvailableRewardsToPayout(
 		coinsToDistributeFromPool := sdk.NewCoins(sdk.NewCoin(rewardCoin.Denom, totalReward))
 
 		if err := k.distribution.DistributeFromFeePool(ctx, coinsToDistributeFromPool, types.TempRewardsSenderAddress); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			k.Logger(ctx).Error(
 				"DistributeFromFeePool failed", "totalCoins: ", coinsToDistributeFromPool.String(), "receiver: ", types.TempRewardsSenderAddress.String(), "err", err.Error(),
 			)

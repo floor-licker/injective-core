@@ -23,6 +23,8 @@ var _ statedb.Keeper = &Keeper{}
 
 // GetState loads contract state from database, implements `statedb.Keeper` interface.
 func (k *Keeper) GetState(ctx sdk.Context, addr common.Address, key common.Hash) common.Hash {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetState")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 
 	value := store.Get(key.Bytes())
@@ -35,12 +37,16 @@ func (k *Keeper) GetState(ctx sdk.Context, addr common.Address, key common.Hash)
 
 // GetCode loads contract code from database, implements `statedb.Keeper` interface.
 func (k *Keeper) GetCode(ctx sdk.Context, codeHash common.Hash) []byte {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCode")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixCode)
 	return store.Get(codeHash.Bytes())
 }
 
 // ForEachStorage iterate contract storage, callback return false to break early
 func (k *Keeper) ForEachStorage(ctx sdk.Context, addr common.Address, cb func(key, value common.Hash) bool) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ForEachStorage")()
+
 	store := ctx.KVStore(k.storeKey)
 	storePrefix := types.AddressStoragePrefix(addr)
 
@@ -59,10 +65,18 @@ func (k *Keeper) ForEachStorage(ctx sdk.Context, addr common.Address, cb func(ke
 }
 
 func (k *Keeper) Transfer(ctx sdk.Context, sender, recipient sdk.AccAddress, coins sdk.Coins) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "Transfer")()
+
+	if k.bankKeeper.BlockedAddr(recipient) {
+		return errorsmod.Wrapf(types.ErrBlockedAddress, "%s is not allowed to receive funds", recipient)
+	}
+
 	return k.bankKeeper.SendCoins(ctx, sender, recipient, coins)
 }
 
 func (k *Keeper) AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "AddBalance")()
+
 	if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, coins); err != nil {
 		return err
 	}
@@ -70,6 +84,8 @@ func (k *Keeper) AddBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coin
 }
 
 func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coins) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SubBalance")()
+
 	if err := k.bankKeeper.SendCoinsFromAccountToModule(ctx, addr, types.ModuleName, coins); err != nil {
 		return err
 	}
@@ -78,6 +94,8 @@ func (k *Keeper) SubBalance(ctx sdk.Context, addr sdk.AccAddress, coins sdk.Coin
 
 // SetBalance reset the account's balance, mainly used by unit tests
 func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.Int, evmDenom string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBalance")()
+
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	balance := k.GetBalance(ctx, cosmosAddr, evmDenom)
 	delta := new(big.Int).Sub(amount, balance)
@@ -95,6 +113,7 @@ func (k *Keeper) SetBalance(ctx sdk.Context, addr common.Address, amount *big.In
 
 // SetAccount updates nonce/balance/codeHash together.
 func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account statedb.Account) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAccount")()
 	// update account
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
@@ -125,14 +144,16 @@ func (k *Keeper) SetAccount(ctx sdk.Context, addr common.Address, account stated
 }
 
 // SetState update contract storage, delete if value is empty.
-func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte) {
+func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key, value common.Hash) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetState")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.AddressStoragePrefix(addr))
 	action := "updated"
-	if len(value) == 0 {
+	if (value == common.Hash{}) {
 		store.Delete(key.Bytes())
 		action = "deleted"
 	} else {
-		store.Set(key.Bytes(), value)
+		store.Set(key.Bytes(), value.Bytes())
 	}
 	k.Logger(ctx).Debug("state",
 		"action", action,
@@ -143,6 +164,8 @@ func (k *Keeper) SetState(ctx sdk.Context, addr common.Address, key common.Hash,
 
 // SetCode set contract code, delete if code is empty.
 func (k *Keeper) SetCode(ctx sdk.Context, codeHash, code []byte) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCode")()
+
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.KeyPrefixCode)
 
 	// store or delete code
@@ -166,6 +189,8 @@ func (k *Keeper) SetCode(ctx sdk.Context, codeHash, code []byte) {
 //
 // NOTE: balance should be cleared separately
 func (k *Keeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAccount")()
+
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
@@ -185,7 +210,7 @@ func (k *Keeper) DeleteAccount(ctx sdk.Context, addr common.Address) error {
 		return true
 	})
 	for _, key := range keys {
-		k.SetState(ctx, addr, key, nil)
+		k.SetState(ctx, addr, key, common.Hash{})
 	}
 
 	// remove auth account

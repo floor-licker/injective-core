@@ -8,15 +8,13 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/utils"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 )
 
 type DerivativesV1MsgServer struct {
-	keeper  Keeper
-	server  v2.MsgServer
-	svcTags metrics.Tags
+	keeper Keeper
+	server v2.MsgServer
 }
 
 // NewDerivativesV1MsgServerImpl returns an implementation of the exchange MsgServer interface for the provided Keeper
@@ -25,17 +23,12 @@ func NewDerivativesV1MsgServerImpl(keeper Keeper, server v2.MsgServer) Derivativ
 	return DerivativesV1MsgServer{
 		keeper: keeper,
 		server: server,
-		svcTags: metrics.Tags{
-			"svc": "dvt_msg_v1_h",
-		},
 	}
 }
 
 func (k DerivativesV1MsgServer) CreateDerivativeLimitOrder(
 	goCtx context.Context, msg *types.MsgCreateDerivativeLimitOrder,
 ) (*types.MsgCreateDerivativeLimitOrderResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
 
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
@@ -69,8 +62,6 @@ func (k DerivativesV1MsgServer) CreateDerivativeLimitOrder(
 func (k DerivativesV1MsgServer) BatchCreateDerivativeLimitOrders(
 	goCtx context.Context, msg *types.MsgBatchCreateDerivativeLimitOrders,
 ) (*types.MsgBatchCreateDerivativeLimitOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
 
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
@@ -109,8 +100,6 @@ func (k DerivativesV1MsgServer) BatchCreateDerivativeLimitOrders(
 func (k DerivativesV1MsgServer) CreateDerivativeMarketOrder(
 	goCtx context.Context, msg *types.MsgCreateDerivativeMarketOrder,
 ) (*types.MsgCreateDerivativeMarketOrderResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
 
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
@@ -169,8 +158,7 @@ func (k DerivativesV1MsgServer) CreateDerivativeMarketOrder(
 func (k DerivativesV1MsgServer) CancelDerivativeOrder(
 	goCtx context.Context, msg *types.MsgCancelDerivativeOrder,
 ) (*types.MsgCancelDerivativeOrderResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
+
 	v2Msg := &v2.MsgCancelDerivativeOrder{
 		Sender:       msg.Sender,
 		MarketId:     msg.MarketId,
@@ -195,7 +183,6 @@ func (k DerivativesV1MsgServer) CancelDerivativeOrder(
 func (k DerivativesV1MsgServer) BatchCancelDerivativeOrders(
 	goCtx context.Context, msg *types.MsgBatchCancelDerivativeOrders,
 ) (*types.MsgBatchCancelDerivativeOrdersResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	v2OrderDataList := make([]v2.OrderData, 0, len(msg.Data))
 	for _, orderData := range msg.Data {
@@ -230,7 +217,6 @@ func (k DerivativesV1MsgServer) BatchCancelDerivativeOrders(
 func (k DerivativesV1MsgServer) IncreasePositionMargin(
 	goCtx context.Context, msg *types.MsgIncreasePositionMargin,
 ) (*types.MsgIncreasePositionMarginResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -238,7 +224,7 @@ func (k DerivativesV1MsgServer) IncreasePositionMargin(
 	market := k.keeper.GetDerivativeMarketByID(ctx, marketId)
 	if market == nil {
 		k.keeper.Logger(ctx).Error("active derivative market with valid mark price doesn't exist", "marketId", msg.MarketId)
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, types.ErrDerivativeMarketNotFound.Wrapf("active derivative market for marketID %s not found", msg.MarketId)
 	}
 
@@ -267,7 +253,6 @@ func (k DerivativesV1MsgServer) IncreasePositionMargin(
 func (k DerivativesV1MsgServer) DecreasePositionMargin(
 	goCtx context.Context, msg *types.MsgDecreasePositionMargin,
 ) (*types.MsgDecreasePositionMarginResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	ctx := sdk.UnwrapSDKContext(goCtx)
 
@@ -275,7 +260,7 @@ func (k DerivativesV1MsgServer) DecreasePositionMargin(
 	market := k.keeper.GetDerivativeMarketByID(ctx, marketId)
 	if market == nil {
 		k.keeper.Logger(ctx).Error("active derivative market with valid mark price doesn't exist", "marketId", msg.MarketId)
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, types.ErrDerivativeMarketNotFound.Wrapf("active derivative market for marketID %s not found", msg.MarketId)
 	}
 
@@ -304,7 +289,6 @@ func (k DerivativesV1MsgServer) DecreasePositionMargin(
 func (k DerivativesV1MsgServer) EmergencySettleMarket(
 	goCtx context.Context, msg *types.MsgEmergencySettleMarket,
 ) (*types.MsgEmergencySettleMarketResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	v2Msg := &v2.MsgEmergencySettleMarket{
 		Sender:       msg.Sender,
@@ -327,7 +311,6 @@ func (k DerivativesV1MsgServer) EmergencySettleMarket(
 func (k DerivativesV1MsgServer) LiquidatePosition(
 	goCtx context.Context, msg *types.MsgLiquidatePosition,
 ) (*types.MsgLiquidatePositionResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	v2Msg := &v2.MsgLiquidatePosition{
 		Sender:       msg.Sender,
@@ -364,7 +347,6 @@ func (k DerivativesV1MsgServer) UpdateDerivativeMarket(
 	c context.Context,
 	msg *types.MsgUpdateDerivativeMarket,
 ) (*types.MsgUpdateDerivativeMarketResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 
 	market := k.keeper.GetDerivativeMarketByID(sdk.UnwrapSDKContext(c), common.HexToHash(msg.MarketId))
 	if market == nil {

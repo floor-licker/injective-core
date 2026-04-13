@@ -41,7 +41,7 @@ var (
 	_ appmodule.AppModule = AppModule{}
 )
 
-const ConsensusVersion = 1
+const ConsensusVersion = 2
 
 // ----------------------------------------------------------------------------
 // AppModuleBasic
@@ -106,7 +106,7 @@ func (AppModuleBasic) GetQueryCmd() *cobra.Command {
 type AppModule struct {
 	AppModuleBasic
 
-	keeper keeper.Keeper
+	keeper *keeper.Keeper
 
 	bankKeeper types.BankKeeper
 	tfKeeper   types.TokenFactoryKeeper
@@ -116,7 +116,7 @@ type AppModule struct {
 }
 
 func NewAppModule(
-	k keeper.Keeper,
+	k *keeper.Keeper,
 	bankKeeper types.BankKeeper,
 	tfKeeper types.TokenFactoryKeeper,
 	wasmKeeper types.WasmKeeper,
@@ -149,6 +149,11 @@ func (AppModule) QuerierRoute() string { return QuerierRoute }
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.NewQueryServerImpl(am.keeper))
+
+	migrator := keeper.NewMigrator(am.keeper)
+	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
+		panic(fmt.Sprintf("failed to migrate permissions from version 1 to 2: %v", err))
+	}
 }
 
 // InitGenesis performs the x/permissions module's genesis initialization. It

@@ -7,14 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/types"
 )
 
 func (k *Keeper) GetCosmosOriginatedDenom(ctx sdk.Context, tokenContract common.Address) (string, bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCosmosOriginatedDenom")()
 
 	store := ctx.KVStore(k.storeKey)
 
@@ -27,8 +24,7 @@ func (k *Keeper) GetCosmosOriginatedDenom(ctx sdk.Context, tokenContract common.
 }
 
 func (k *Keeper) GetCosmosOriginatedERC20(ctx sdk.Context, denom string) (common.Address, bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCosmosOriginatedERC20")()
 
 	store := ctx.KVStore(k.storeKey)
 
@@ -41,8 +37,7 @@ func (k *Keeper) GetCosmosOriginatedERC20(ctx sdk.Context, denom string) (common
 }
 
 func (k *Keeper) SetCosmosOriginatedDenomToERC20(ctx sdk.Context, denom string, tokenContract common.Address) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCosmosOriginatedDenomToERC20")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Set(types.GetCosmosDenomToERC20Key(denom), tokenContract.Bytes())
@@ -53,8 +48,7 @@ func (k *Keeper) SetCosmosOriginatedDenomToERC20(ctx sdk.Context, denom string, 
 // This will return an error if it cant parse the denom as a peggy denom, and then also can't find the denom
 // in an index of ERC20 contracts deployed on Ethereum to serve as synthetic Cosmos assets.
 func (k *Keeper) DenomToERC20Lookup(ctx sdk.Context, denomStr string) (isCosmosOriginated bool, tokenContract common.Address, err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DenomToERC20Lookup")()
 
 	// First try parsing the ERC20 out of the denom
 	peggyDenom, denomErr := types.NewPeggyDenomFromString(denomStr)
@@ -80,7 +74,6 @@ func (k *Keeper) DenomToERC20Lookup(ctx sdk.Context, denomStr string) (isCosmosO
 			denomStr, denomErr.Error(),
 		)
 
-		metrics.ReportFuncError(k.svcTags)
 		return false, common.Address{}, err
 	}
 
@@ -91,11 +84,9 @@ func (k *Keeper) DenomToERC20Lookup(ctx sdk.Context, denomStr string) (isCosmosO
 // RewardToERC20Lookup is a specialized function wrapping DenomToERC20Lookup designed to validate
 // the validator set reward any time we generate a validator set
 func (k *Keeper) RewardToERC20Lookup(ctx sdk.Context, coin sdk.Coin) (common.Address, math.Int) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RewardToERC20Lookup")()
 
 	if coin.Denom == "" || coin.Amount.BigInt() == nil || coin.Amount == math.NewInt(0) {
-		metrics.ReportFuncError(k.svcTags)
 		panic("Bad validator set relaying reward!")
 	} else {
 		// reward case, pass to DenomToERC20Lookup
@@ -104,12 +95,10 @@ func (k *Keeper) RewardToERC20Lookup(ctx sdk.Context, coin sdk.Coin) (common.Add
 			// This can only ever happen if governance sets a value for the reward
 			// which is not a valid ERC20 that as been bridged before (either from or to Cosmos)
 			// We'll classify that as operator error and just panic
-			metrics.ReportFuncError(k.svcTags)
 			panic("Invalid Valset reward! Correct or remove the paramater value")
 		}
 		err = types.ValidateEthAddress(addressStr.Hex())
 		if err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			panic("Invalid Valset reward! Correct or remove the paramater value")
 		}
 		return addressStr, coin.Amount
@@ -120,6 +109,7 @@ func (k *Keeper) RewardToERC20Lookup(ctx sdk.Context, coin sdk.Coin) (common.Add
 // Enfore if it is signed by valid signer
 // Enfore if validateBasic is successful.
 func (k *Keeper) ValidateClaimData(ctx sdk.Context, claimData string, ethereumSigner sdk.AccAddress) (msg sdk.Msg, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ValidateClaimData")()
 	// Check if the claim data is a valid sdk msg
 	if err := k.cdc.UnmarshalInterfaceJSON([]byte(claimData), &msg); err != nil {
 		return msg, errors.Errorf("claim data is not a valid sdk msg: %s", err.Error())
@@ -150,8 +140,7 @@ func (k *Keeper) ValidateClaimData(ctx sdk.Context, claimData string, ethereumSi
 // ERC20ToDenom returns if an ERC20 address represents an asset is native to Cosmos or Ethereum,
 // and get its corresponding peggy denom.
 func (k *Keeper) ERC20ToDenomLookup(ctx sdk.Context, tokenContract common.Address) (isCosmosOriginated bool, denom string) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ERC20ToDenomLookup")()
 
 	// First try looking up tokenContract in index
 	denomStr, exists := k.GetCosmosOriginatedDenom(ctx, tokenContract)
@@ -168,8 +157,7 @@ func (k *Keeper) ERC20ToDenomLookup(ctx sdk.Context, tokenContract common.Addres
 
 // IterateERC20ToDenom iterates over erc20 to denom relations
 func (k *Keeper) IterateERC20ToDenom(ctx sdk.Context, cb func(k []byte, v *types.ERC20ToDenom) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateERC20ToDenom")()
 
 	prefixStore := prefix.NewStore(ctx.KVStore(k.storeKey), types.ERC20ToDenomKey)
 	iter := prefixStore.Iterator(nil, nil)

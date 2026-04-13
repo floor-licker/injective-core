@@ -15,6 +15,7 @@ var (
 	_ sdk.Msg = &MsgUnderwrite{}
 	_ sdk.Msg = &MsgRequestRedemption{}
 	_ sdk.Msg = &MsgUpdateParams{}
+	_ sdk.Msg = &MsgClaimVoucher{}
 )
 
 // Route implements the sdk.Msg interface. It should return the name of the module
@@ -181,4 +182,41 @@ func (msg MsgRequestRedemption) GetSigners() []sdk.AccAddress {
 		panic(err)
 	}
 	return []sdk.AccAddress{sender}
+}
+
+// Route implements the sdk.Msg interface.
+func (MsgClaimVoucher) Route() string { return RouterKey }
+
+// Type implements the sdk.Msg interface.
+func (MsgClaimVoucher) Type() string { return "claimVoucher" }
+
+// ValidateBasic implements the sdk.Msg interface.
+func (msg MsgClaimVoucher) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return errors.Wrap(sdkerrors.ErrInvalidAddress, err.Error())
+	}
+	if err := sdk.ValidateDenom(msg.Denom); err != nil {
+		return errors.Wrap(sdkerrors.ErrInvalidCoins, err.Error())
+	}
+	return nil
+}
+
+// GetSignBytes implements the sdk.Msg interface.
+func (msg *MsgClaimVoucher) GetSignBytes() []byte {
+	return sdk.MustSortJSON(ModuleCdc.MustMarshalJSON(msg))
+}
+
+// GetSigners implements the sdk.Msg interface.
+func (msg MsgClaimVoucher) GetSigners() []sdk.AccAddress {
+	sender, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		panic(err)
+	}
+	return []sdk.AccAddress{sender}
+}
+
+// NewEmptyVoucher returns a zero-amount coin for the given denom.
+// Used by EmitDeleteVoucherEvent to signal voucher deletion via an EventSetVoucher event.
+func NewEmptyVoucher(denom string) sdk.Coin {
+	return sdk.NewInt64Coin(denom, 0)
 }

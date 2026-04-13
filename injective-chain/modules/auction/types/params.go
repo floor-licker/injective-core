@@ -111,7 +111,7 @@ func validateMinNextBidIncrementRate(i interface{}) error {
 		return fmt.Errorf("MinNextBidIncrementRate cannot be nil")
 	}
 
-	if v.Equal(math.LegacyZeroDec()) {
+	if !v.IsPositive() {
 		return fmt.Errorf("MinNextBidIncrementRate must be positive: %s", v.String())
 	}
 

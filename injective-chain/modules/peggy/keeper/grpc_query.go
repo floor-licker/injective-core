@@ -11,7 +11,6 @@ import (
 	gethcommon "github.com/ethereum/go-ethereum/common"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/types"
-	"github.com/InjectiveLabs/metrics"
 )
 
 var _ types.QueryServer = &Keeper{}
@@ -21,49 +20,49 @@ const MaxResults = 100 // todo: impl pagination
 
 // Params queries the params of the peggy module
 func (k *Keeper) Params(c context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Params")()
 
-	return &types.QueryParamsResponse{Params: *k.GetParams(sdk.UnwrapSDKContext(c))}, nil
+	return &types.QueryParamsResponse{Params: *k.GetParams(ctx)}, nil
 }
 
 // CurrentValset queries the CurrentValset of the peggy module
 func (k *Keeper) CurrentValset(c context.Context, req *types.QueryCurrentValsetRequest) (*types.QueryCurrentValsetResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CurrentValset")()
 
-	return &types.QueryCurrentValsetResponse{Valset: k.GetCurrentValset(sdk.UnwrapSDKContext(c))}, nil
+	return &types.QueryCurrentValsetResponse{Valset: k.GetCurrentValset(ctx)}, nil
 }
 
 // ValsetRequest queries the ValsetRequest of the peggy module
 func (k *Keeper) ValsetRequest(c context.Context, req *types.QueryValsetRequestRequest) (*types.QueryValsetRequestResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ValsetRequest")()
 
-	return &types.QueryValsetRequestResponse{Valset: k.GetValset(sdk.UnwrapSDKContext(c), req.Nonce)}, nil
+	return &types.QueryValsetRequestResponse{Valset: k.GetValset(ctx, req.Nonce)}, nil
 }
 
 // ValsetConfirm queries the ValsetConfirm of the peggy module
 func (k *Keeper) ValsetConfirm(c context.Context, req *types.QueryValsetConfirmRequest) (*types.QueryValsetConfirmResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ValsetConfirm")()
 
 	addr, err := sdk.AccAddressFromBech32(req.Address)
 	if err != nil {
 		return nil, errors.Wrap(sdkerrors.ErrInvalidRequest, "address invalid")
 	}
 
-	return &types.QueryValsetConfirmResponse{Confirm: k.GetValsetConfirm(sdk.UnwrapSDKContext(c), req.Nonce, addr)}, nil
+	return &types.QueryValsetConfirmResponse{Confirm: k.GetValsetConfirm(ctx, req.Nonce, addr)}, nil
 }
 
 // ValsetConfirmsByNonce queries the ValsetConfirmsByNonce of the peggy module
 func (k *Keeper) ValsetConfirmsByNonce(c context.Context, req *types.QueryValsetConfirmsByNonceRequest) (*types.QueryValsetConfirmsByNonceResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ValsetConfirmsByNonce")()
 
 	confirms := make([]*types.MsgValsetConfirm, 0)
 
-	k.IterateValsetConfirmByNonce(sdk.UnwrapSDKContext(c), req.Nonce, func(_ []byte, valset *types.MsgValsetConfirm) (stop bool) {
+	k.IterateValsetConfirmByNonce(ctx, req.Nonce, func(_ []byte, valset *types.MsgValsetConfirm) (stop bool) {
 		confirms = append(confirms, valset)
 
 		return false
@@ -74,10 +73,10 @@ func (k *Keeper) ValsetConfirmsByNonce(c context.Context, req *types.QueryValset
 
 // LastValsetRequests queries the LastValsetRequests of the peggy module
 func (k *Keeper) LastValsetRequests(c context.Context, req *types.QueryLastValsetRequestsRequest) (*types.QueryLastValsetRequestsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LastValsetRequests")()
 
-	valReq := k.GetValsets(sdk.UnwrapSDKContext(c))
+	valReq := k.GetValsets(ctx)
 	valReqLen := len(valReq)
 	retLen := 0
 
@@ -92,19 +91,18 @@ func (k *Keeper) LastValsetRequests(c context.Context, req *types.QueryLastValse
 
 // LastPendingValsetRequestByAddr queries the LastPendingValsetRequestByAddr of the peggy module
 func (k *Keeper) LastPendingValsetRequestByAddr(c context.Context, req *types.QueryLastPendingValsetRequestByAddrRequest) (*types.QueryLastPendingValsetRequestByAddrResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LastPendingValsetRequestByAddr")()
 
 	addr, err := sdk.AccAddressFromBech32(req.Address)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrap(sdkerrors.ErrInvalidRequest, "address invalid")
 	}
 
 	pendingValsetReq := make([]*types.Valset, 0)
-	k.IterateValsets(sdk.UnwrapSDKContext(c), func(_ []byte, val *types.Valset) bool {
+	k.IterateValsets(ctx, func(_ []byte, val *types.Valset) bool {
 		// foundConfirm is true if the operatorAddr has signed the valset we are currently looking at
-		foundConfirm := k.GetValsetConfirm(sdk.UnwrapSDKContext(c), val.Nonce, addr) != nil
+		foundConfirm := k.GetValsetConfirm(ctx, val.Nonce, addr) != nil
 		// if this valset has NOT been signed by operatorAddr, store it in pendingValsetReq
 		// and exit the loop
 		if !foundConfirm {
@@ -124,24 +122,21 @@ func (k *Keeper) LastPendingValsetRequestByAddr(c context.Context, req *types.Qu
 
 // BatchFees queries the batch fees from unbatched pool
 func (k *Keeper) BatchFees(c context.Context, req *types.QueryBatchFeeRequest) (*types.QueryBatchFeeResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchFees")()
 
-	return &types.QueryBatchFeeResponse{BatchFees: k.GetAllBatchFees(sdk.UnwrapSDKContext(c))}, nil
+	return &types.QueryBatchFeeResponse{BatchFees: k.GetAllBatchFees(ctx)}, nil
 }
 
 // LastPendingBatchRequestByAddr queries the LastPendingBatchRequestByAddr of the peggy module
 func (k *Keeper) LastPendingBatchRequestByAddr(c context.Context, req *types.QueryLastPendingBatchRequestByAddrRequest) (*types.QueryLastPendingBatchRequestByAddrResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LastPendingBatchRequestByAddr")()
 
 	addr, err := sdk.AccAddressFromBech32(req.Address)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrap(sdkerrors.ErrInvalidRequest, "address invalid")
 	}
-
-	ctx := sdk.UnwrapSDKContext(c)
 
 	var pendingBatchReq *types.OutgoingTxBatch
 	k.IterateOutgoingTXBatches(ctx, func(_ []byte, batch *types.OutgoingTxBatch) (stop bool) {
@@ -160,11 +155,11 @@ func (k *Keeper) LastPendingBatchRequestByAddr(c context.Context, req *types.Que
 
 // OutgoingTxBatches queries the OutgoingTxBatches of the peggy module
 func (k *Keeper) OutgoingTxBatches(c context.Context, req *types.QueryOutgoingTxBatchesRequest) (*types.QueryOutgoingTxBatchesResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "OutgoingTxBatches")()
 
 	batches := make([]*types.OutgoingTxBatch, 0)
-	k.IterateOutgoingTXBatches(sdk.UnwrapSDKContext(c), func(_ []byte, batch *types.OutgoingTxBatch) bool {
+	k.IterateOutgoingTXBatches(ctx, func(_ []byte, batch *types.OutgoingTxBatch) bool {
 		batches = append(batches, batch)
 		return len(batches) == MaxResults
 	})
@@ -174,17 +169,15 @@ func (k *Keeper) OutgoingTxBatches(c context.Context, req *types.QueryOutgoingTx
 
 // BatchRequestByNonce queries the BatchRequestByNonce of the peggy module
 func (k *Keeper) BatchRequestByNonce(c context.Context, req *types.QueryBatchRequestByNonceRequest) (*types.QueryBatchRequestByNonceResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchRequestByNonce")()
 
 	if err := types.ValidateEthAddress(req.ContractAddress); err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrap(sdkerrors.ErrUnknownRequest, err.Error())
 	}
 
-	foundBatch := k.GetOutgoingTXBatch(sdk.UnwrapSDKContext(c), gethcommon.HexToAddress(req.ContractAddress), req.Nonce)
+	foundBatch := k.GetOutgoingTXBatch(ctx, gethcommon.HexToAddress(req.ContractAddress), req.Nonce)
 	if foundBatch == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrap(sdkerrors.ErrUnknownRequest, "Can not find tx batch")
 	}
 
@@ -193,11 +186,11 @@ func (k *Keeper) BatchRequestByNonce(c context.Context, req *types.QueryBatchReq
 
 // BatchConfirms returns the batch confirmations by nonce and token contract
 func (k *Keeper) BatchConfirms(c context.Context, req *types.QueryBatchConfirmsRequest) (*types.QueryBatchConfirmsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchConfirms")()
 
 	confirms := make([]*types.MsgConfirmBatch, 0)
-	k.IterateBatchConfirmByNonceAndTokenContract(sdk.UnwrapSDKContext(c), req.Nonce, gethcommon.HexToAddress(req.ContractAddress),
+	k.IterateBatchConfirmByNonceAndTokenContract(ctx, req.Nonce, gethcommon.HexToAddress(req.ContractAddress),
 		func(_ []byte, batch *types.MsgConfirmBatch) (stop bool) {
 			confirms = append(confirms, batch)
 			return false
@@ -208,21 +201,18 @@ func (k *Keeper) BatchConfirms(c context.Context, req *types.QueryBatchConfirmsR
 
 // LastEventByAddr returns the last event for the given validator address, this allows eth oracles to figure out where they left off
 func (k *Keeper) LastEventByAddr(c context.Context, req *types.QueryLastEventByAddrRequest) (*types.QueryLastEventByAddrResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LastEventByAddr")()
+
 	var ret types.QueryLastEventByAddrResponse
 
 	addr, err := sdk.AccAddressFromBech32(req.Address)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrap(sdkerrors.ErrInvalidAddress, req.Address)
 	}
 
 	validator, found := k.GetOrchestratorValidator(ctx, addr)
 	if !found {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrap(types.ErrUnknown, "address")
 	}
 
@@ -239,10 +229,9 @@ func (k *Keeper) LastEventByAddr(c context.Context, req *types.QueryLastEventByA
 
 // DenomToERC20 queries the Cosmos Denom that maps to an Ethereum ERC20
 func (k *Keeper) DenomToERC20(c context.Context, req *types.QueryDenomToERC20Request) (*types.QueryDenomToERC20Response, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "DenomToERC20")()
+
 	cosmosOriginated, erc20, err := k.DenomToERC20Lookup(ctx, req.Denom)
 
 	var ret types.QueryDenomToERC20Response
@@ -254,10 +243,9 @@ func (k *Keeper) DenomToERC20(c context.Context, req *types.QueryDenomToERC20Req
 
 // ERC20ToDenom queries the ERC20 contract that maps to an Ethereum ERC20 if any
 func (k *Keeper) ERC20ToDenom(c context.Context, req *types.QueryERC20ToDenomRequest) (*types.QueryERC20ToDenomResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ERC20ToDenom")()
+
 	cosmosOriginated, name := k.ERC20ToDenomLookup(ctx, gethcommon.HexToAddress(req.Erc20))
 
 	var ret types.QueryERC20ToDenomResponse
@@ -268,14 +256,11 @@ func (k *Keeper) ERC20ToDenom(c context.Context, req *types.QueryERC20ToDenomReq
 }
 
 func (k *Keeper) GetDelegateKeyByValidator(c context.Context, req *types.QueryDelegateKeysByValidatorAddress) (*types.QueryDelegateKeysByValidatorAddressResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDelegateKeyByValidator")()
 
 	valAddress, err := sdk.ValAddressFromBech32(req.ValidatorAddress)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, err
 	}
 
@@ -285,7 +270,6 @@ func (k *Keeper) GetDelegateKeyByValidator(c context.Context, req *types.QueryDe
 	for _, key := range keys {
 		senderAddr, err := sdk.AccAddressFromBech32(key.Sender)
 		if err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, err
 		}
 		if valAccountAddr.Equals(senderAddr) {
@@ -293,20 +277,17 @@ func (k *Keeper) GetDelegateKeyByValidator(c context.Context, req *types.QueryDe
 		}
 	}
 
-	metrics.ReportFuncError(k.svcTags)
 	return nil, errors.Wrap(types.ErrInvalid, "No validator")
 }
 
 func (k *Keeper) GetDelegateKeyByOrchestrator(c context.Context, req *types.QueryDelegateKeysByOrchestratorAddress) (*types.QueryDelegateKeysByOrchestratorAddressResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDelegateKeyByOrchestrator")()
+
 	keys := k.GetOrchestratorAddresses(ctx)
 
 	_, err := sdk.AccAddressFromBech32(req.OrchestratorAddress)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, err
 	}
 
@@ -316,15 +297,12 @@ func (k *Keeper) GetDelegateKeyByOrchestrator(c context.Context, req *types.Quer
 		}
 	}
 
-	metrics.ReportFuncError(k.svcTags)
 	return nil, errors.Wrap(types.ErrInvalid, "No validator")
 }
 
 func (k *Keeper) GetDelegateKeyByEth(c context.Context, req *types.QueryDelegateKeysByEthAddress) (*types.QueryDelegateKeysByEthAddressResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDelegateKeyByEth")()
 
 	keys := k.GetOrchestratorAddresses(ctx)
 	if err := types.ValidateEthAddress(req.EthAddress); err != nil {
@@ -339,15 +317,13 @@ func (k *Keeper) GetDelegateKeyByEth(c context.Context, req *types.QueryDelegate
 		}
 	}
 
-	metrics.ReportFuncError(k.svcTags)
 	return nil, errors.Wrap(types.ErrInvalid, "No validator")
 }
 
 func (k *Keeper) GetPendingSendToEth(c context.Context, req *types.QueryPendingSendToEth) (*types.QueryPendingSendToEthResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPendingSendToEth")()
+
 	batches := k.GetOutgoingTxBatches(ctx)
 	unbatchedTx := k.GetPoolTransactions(ctx)
 	senderAddress := req.SenderAddress
@@ -375,10 +351,8 @@ func (k *Keeper) GetPendingSendToEth(c context.Context, req *types.QueryPendingS
 }
 
 func (k *Keeper) PeggyModuleState(c context.Context, req *types.QueryModuleStateRequest) (*types.QueryModuleStateResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.grpcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "PeggyModuleState")()
 
 	var (
 		p                               = k.GetParams(ctx)
@@ -395,6 +369,7 @@ func (k *Keeper) PeggyModuleState(c context.Context, req *types.QueryModuleState
 		unbatchedTransfers              = k.GetPoolTransactions(ctx)
 		ethereumBlacklistAddresses      = k.GetAllEthereumBlacklistAddresses(ctx)
 		rateLimits                      = k.GetRateLimits(ctx)
+		rateLimitTransfers              = k.GetAllRateLimitTransfers(ctx)
 	)
 
 	// export valset confirmations from state
@@ -449,6 +424,8 @@ func (k *Keeper) PeggyModuleState(c context.Context, req *types.QueryModuleState
 		LastObservedValset:         *lastObservedValset,
 		EthereumBlacklist:          ethereumBlacklistAddresses,
 		RateLimits:                 rateLimits,
+		MintAmounts:                k.GetMintAmounts(ctx),
+		RateLimitTransfers:         rateLimitTransfers,
 	}
 
 	res := &types.QueryModuleStateResponse{
@@ -463,6 +440,8 @@ func (k *Keeper) MissingPeggoNonces(
 	_ *types.MissingNoncesRequest,
 ) (*types.MissingNoncesResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "MissingPeggoNonces")()
+
 	var res []string
 
 	bondedValidators, err := k.StakingKeeper.GetBondedValidatorsByPower(ctx)

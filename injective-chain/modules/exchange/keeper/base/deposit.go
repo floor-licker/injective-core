@@ -3,7 +3,6 @@ package base
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -17,8 +16,7 @@ func (k *BaseKeeper) GetDeposit(
 	subaccountID common.Hash,
 	denom string,
 ) *v2.Deposit {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDeposit")()
 
 	store := k.getStore(ctx)
 	key := types.GetDepositKey(subaccountID, denom)
@@ -49,8 +47,7 @@ func (k *BaseKeeper) SetDeposit(
 	denom string,
 	deposit *v2.Deposit,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetDeposit")()
 
 	k.SetTransientDeposit(ctx, subaccountID, denom, deposit)
 
@@ -72,8 +69,7 @@ func (k *BaseKeeper) GetDeposits(
 	ctx sdk.Context,
 	subaccountID common.Hash,
 ) map[string]*v2.Deposit {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDeposits")()
 
 	depositStore := prefix.NewStore(k.getStore(ctx), types.GetDepositKeyPrefixBySubaccountID(subaccountID))
 	deposits := make(map[string]*v2.Deposit)
@@ -93,8 +89,7 @@ func (k *BaseKeeper) GetDeposits(
 func (k *BaseKeeper) GetAllExchangeBalances(
 	ctx sdk.Context,
 ) []v2.Balance {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllExchangeBalances")()
 
 	depositStore := prefix.NewStore(k.getStore(ctx), types.DepositsPrefix)
 	balances := make([]v2.Balance, 0)
@@ -121,8 +116,7 @@ func (k *BaseKeeper) SetTransientDeposit(
 	denom string,
 	deposit *v2.Deposit,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTransientDeposit")()
 
 	store := k.getTransientStore(ctx)
 	key := types.GetDepositKey(subaccountID, denom)
@@ -134,8 +128,7 @@ func (k *BaseKeeper) IterateTransientDeposits(
 	ctx sdk.Context,
 	process func(subaccountID common.Hash, denom string, deposit *v2.Deposit) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateTransientDeposits")()
 
 	store := k.getTransientStore(ctx)
 	depositStore := prefix.NewStore(store, types.DepositsPrefix)

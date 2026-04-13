@@ -3,10 +3,8 @@ package spot
 import (
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
 
@@ -14,8 +12,7 @@ var _ SpotOrderbook = &SpotLimitOrderbook{}
 
 // GetAllTransientSpotLimitOrderbook returns all transient orderbooks for all spot markets.
 func (k SpotKeeper) GetAllTransientSpotLimitOrderbook(ctx sdk.Context) []v2.SpotOrderBook {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTransientSpotLimitOrderbook")()
 
 	markets := k.GetAllSpotMarkets(ctx)
 	orderbook := make([]v2.SpotOrderBook, 0, len(markets)*2)
@@ -69,8 +66,8 @@ type SpotOrderbook interface {
 	GetTotalQuantityFilled() math.LegacyDec
 	GetTransientOrderbookFills() *v2.OrderbookFills
 	GetRestingOrderbookFills() *v2.OrderbookFills
-	Peek() *v2.PriceLevel
-	Fill(math.LegacyDec) error
+	Peek(sdk.Context) *v2.PriceLevel
+	Fill(sdk.Context, math.LegacyDec)
 	Close() error
 }
 
@@ -185,7 +182,8 @@ func (b *SpotLimitOrderbook) advanceNewOrder() {
 	}
 }
 
-func (b *SpotLimitOrderbook) Peek() *v2.PriceLevel {
+func (b *SpotLimitOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "SpotLimitOrderbook.Peek")()
 	// Sets currState to the orderbook (transientOrderbook or restingOrderbook) with the next best priced order
 	b.advanceNewOrder()
 
@@ -193,15 +191,22 @@ func (b *SpotLimitOrderbook) Peek() *v2.PriceLevel {
 		return nil
 	}
 
-	priceLevel := v2.PriceLevel{}
-
 	idx := b.getCurrIndex()
 	order := b.currState.Orders[idx]
 	currMatchedQuantity := b.currState.FillQuantities[idx]
 
-	priceLevel.Price = order.OrderInfo.Price
-	priceLevel.Quantity = order.Fillable.Sub(currMatchedQuantity)
-	return &priceLevel
+	remainingFillableQuantity := order.Fillable.Sub(currMatchedQuantity)
+
+	// Skip orders with zero remaining fillable quantity
+	if remainingFillableQuantity.IsZero() {
+		b.currState = nil  // Mark current state as exhausted to advance to next order
+		return b.Peek(ctx) // Recursively peek next order
+	}
+
+	return &v2.PriceLevel{
+		Price:    order.OrderInfo.Price,
+		Quantity: remainingFillableQuantity,
+	}
 }
 
 // NOTE: b.currState must NOT be nil!
@@ -216,15 +221,12 @@ func (b *SpotLimitOrderbook) getCurrIndex() int {
 	return idx
 }
 
-func (b *SpotLimitOrderbook) Fill(fillQuantity math.LegacyDec) error {
+func (b *SpotLimitOrderbook) Fill(ctx sdk.Context, fillQuantity math.LegacyDec) {
+	defer b.k.Meter(ctx).FuncTiming(&ctx, "SpotLimitOrderbook.Fill")()
+
 	idx := b.getCurrIndex()
 
 	orderCumulativeFillQuantity := b.currState.FillQuantities[idx].Add(fillQuantity)
-
-	// Should never happen, might want to remove this once stable
-	if orderCumulativeFillQuantity.GT(b.currState.Orders[idx].Fillable) {
-		return types.ErrOrderbookFillInvalid
-	}
 
 	b.currState.FillQuantities[idx] = orderCumulativeFillQuantity
 
@@ -238,8 +240,6 @@ func (b *SpotLimitOrderbook) Fill(fillQuantity math.LegacyDec) error {
 	if orderCumulativeFillQuantity.Equal(b.currState.Orders[idx].Fillable) {
 		b.currState = nil
 	}
-
-	return nil
 }
 
 func (b *SpotLimitOrderbook) Close() error {
@@ -336,14 +336,14 @@ func (b *SpotMarketOrderbook) GetNotional() math.LegacyDec                  { re
 func (b *SpotMarketOrderbook) GetTotalQuantityFilled() math.LegacyDec       { return b.totalQuantity }
 func (b *SpotMarketOrderbook) GetOrderbookFillQuantities() []math.LegacyDec { return b.fillQuantities }
 func (b *SpotMarketOrderbook) Done() bool                                   { return b.orderIdx == len(b.orders) }
-func (b *SpotMarketOrderbook) Peek() *v2.PriceLevel {
+func (b *SpotMarketOrderbook) Peek(ctx sdk.Context) *v2.PriceLevel {
 	if b.Done() {
 		return nil
 	}
 
 	if b.fillQuantities[b.orderIdx].Equal(b.orders[b.orderIdx].OrderInfo.Quantity) {
 		b.orderIdx++
-		return b.Peek()
+		return b.Peek(ctx)
 	}
 
 	return &v2.PriceLevel{
@@ -352,16 +352,15 @@ func (b *SpotMarketOrderbook) Peek() *v2.PriceLevel {
 	}
 }
 
-func (b *SpotMarketOrderbook) Fill(fillQuantity math.LegacyDec) error {
+func (b *SpotMarketOrderbook) Fill(_ sdk.Context, fillQuantity math.LegacyDec) {
 	newFillAmount := b.fillQuantities[b.orderIdx].Add(fillQuantity)
-
-	if newFillAmount.GT(b.orders[b.orderIdx].OrderInfo.Quantity) {
-		return types.ErrOrderbookFillInvalid
-	}
 
 	b.fillQuantities[b.orderIdx] = newFillAmount
 	b.notional = b.notional.Add(fillQuantity.Mul(b.orders[b.orderIdx].OrderInfo.Price))
 	b.totalQuantity = b.totalQuantity.Add(fillQuantity)
+}
 
+func (*SpotMarketOrderbook) Close() error {
+	// Added for consistency with limit orderbooks interface
 	return nil
 }

@@ -5,33 +5,10 @@ import (
 	"strings"
 
 	sdkerrors "cosmossdk.io/errors"
-	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 )
-
-func (l *RateLimit) TotalInflow() sdkmath.Int {
-	sum := sdkmath.ZeroInt()
-	for _, transfer := range l.Transfers {
-		if transfer.IsDeposit {
-			sum = sum.Add(transfer.Amount)
-		}
-	}
-
-	return sum
-}
-
-func (l *RateLimit) TotalOutflow() sdkmath.Int {
-	sum := sdkmath.ZeroInt()
-	for _, transfer := range l.Transfers {
-		if !transfer.IsDeposit {
-			sum = sum.Add(transfer.Amount)
-		}
-	}
-
-	return sum
-}
 
 var (
 	_ sdk.Msg = &MsgCreateRateLimit{}
@@ -65,7 +42,7 @@ func (msg *MsgCreateRateLimit) ValidateBasic() error {
 		return sdkerrors.Wrap(sdkerrortypes.ErrInvalidRequest, "token_decimals cannot be zero")
 	}
 
-	if !isValidPythID(msg.TokenPriceId) {
+	if msg.TokenPriceId == "" || !isValidPythID(msg.TokenPriceId) {
 		return sdkerrors.Wrapf(sdkerrortypes.ErrInvalidRequest, "invalid token_price_id: %s", msg.TokenPriceId)
 	}
 
@@ -75,10 +52,6 @@ func (msg *MsgCreateRateLimit) ValidateBasic() error {
 
 	if msg.RateLimitWindow == 0 {
 		return sdkerrors.Wrap(sdkerrortypes.ErrInvalidRequest, "rate_limit_window cannot be zero")
-	}
-
-	if msg.AbsoluteMintLimit.IsNil() || msg.AbsoluteMintLimit.IsZero() {
-		return sdkerrors.Wrapf(sdkerrortypes.ErrInvalidRequest, "absolute_mint_limit cannot be zero")
 	}
 
 	return nil
@@ -105,7 +78,7 @@ func (msg *MsgUpdateRateLimit) ValidateBasic() error {
 		return sdkerrors.Wrapf(sdkerrortypes.ErrInvalidAddress, "invalid token_address: %s", msg.TokenAddress)
 	}
 
-	if !isValidPythID(msg.NewTokenPriceId) {
+	if msg.NewTokenPriceId == "" || !isValidPythID(msg.NewTokenPriceId) {
 		return sdkerrors.Wrapf(sdkerrortypes.ErrInvalidRequest, "invalid new_token_price_id: %s", msg.NewTokenPriceId)
 	}
 

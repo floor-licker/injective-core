@@ -6,14 +6,11 @@ import (
 
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/types"
 )
 
 func (k *Keeper) GetAuctionRound(ctx sdk.Context) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAuctionRound")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.AuctionRoundKey)
@@ -25,16 +22,14 @@ func (k *Keeper) GetAuctionRound(ctx sdk.Context) uint64 {
 }
 
 func (k *Keeper) SetAuctionRound(ctx sdk.Context, round uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAuctionRound")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Set(types.AuctionRoundKey, sdk.Uint64ToBigEndian(round))
 }
 
 func (k *Keeper) AdvanceNextAuctionRound(ctx sdk.Context) (nextRound uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AdvanceNextAuctionRound")()
 
 	currentRound := k.GetAuctionRound(ctx)
 	nextRound = currentRound + 1
@@ -43,8 +38,7 @@ func (k *Keeper) AdvanceNextAuctionRound(ctx sdk.Context) (nextRound uint64) {
 }
 
 func (k *Keeper) InitEndingTimeStamp(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitEndingTimeStamp")()
 
 	store := ctx.KVStore(k.storeKey)
 	auctionPeriod := k.GetParams(ctx).AuctionPeriod
@@ -53,8 +47,7 @@ func (k *Keeper) InitEndingTimeStamp(ctx sdk.Context) {
 }
 
 func (k *Keeper) SetEndingTimeStamp(ctx sdk.Context, timestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetEndingTimeStamp")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Set(types.KeyEndingTimeStamp, sdk.Uint64ToBigEndian(uint64(timestamp)))
@@ -62,8 +55,7 @@ func (k *Keeper) SetEndingTimeStamp(ctx sdk.Context, timestamp int64) {
 
 // GetEndingTimeStamp gets the ending timestamp of the current auction epoch.
 func (k *Keeper) GetEndingTimeStamp(ctx sdk.Context) int64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetEndingTimeStamp")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.KeyEndingTimeStamp)
@@ -73,8 +65,7 @@ func (k *Keeper) GetEndingTimeStamp(ctx sdk.Context) int64 {
 
 // GetNextEndingTimeStamp gets the ending timestamp of the next auction epoch.
 func (k *Keeper) GetNextEndingTimeStamp(ctx sdk.Context) int64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetNextEndingTimeStamp")()
 
 	auctionPeriod := k.GetParams(ctx).AuctionPeriod
 	currentTimeStamp := k.GetEndingTimeStamp(ctx)
@@ -90,8 +81,7 @@ func (k *Keeper) GetNextEndingTimeStamp(ctx sdk.Context) int64 {
 }
 
 func (k *Keeper) AdvanceNextEndingTimeStamp(ctx sdk.Context) (nextTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AdvanceNextEndingTimeStamp")()
 
 	nextTimestamp = k.GetNextEndingTimeStamp(ctx)
 
@@ -101,7 +91,7 @@ func (k *Keeper) AdvanceNextEndingTimeStamp(ctx sdk.Context) (nextTimestamp int6
 }
 
 func (k *Keeper) SetLastAuctionResult(ctx sdk.Context, result types.LastAuctionResult) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetLastAuctionResult")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := k.cdc.MustMarshal(&result)
@@ -109,7 +99,7 @@ func (k *Keeper) SetLastAuctionResult(ctx sdk.Context, result types.LastAuctionR
 }
 
 func (k *Keeper) GetLastAuctionResult(ctx sdk.Context) *types.LastAuctionResult {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetLastAuctionResult")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.KeyLastAuctionResult)

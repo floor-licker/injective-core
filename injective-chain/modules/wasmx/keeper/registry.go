@@ -4,31 +4,58 @@ import (
 	"encoding/json"
 
 	"cosmossdk.io/errors"
+	sdkmath "cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/wasmx/types"
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
-	"github.com/InjectiveLabs/metrics"
 )
+
+func capHookGasByBalance(contractBalance sdk.Coin, gasPrice, configuredHookGas uint64) (uint64, error) {
+	if gasPrice == 0 {
+		return 0, errors.Wrap(types.ErrInvalidGasPrice, "registered contract gas price must be greater than zero")
+	}
+
+	maxAvailableGas := contractBalance.Amount.Quo(sdkmath.NewIntFromUint64(gasPrice))
+	if !maxAvailableGas.IsPositive() {
+		return 0, nil
+	}
+
+	// If the available gas cannot fit into uint64, it is necessarily above any
+	// configured hook gas limit and we can keep configuredHookGas unchanged.
+	if maxAvailableGas.IsUint64() {
+		available := maxAvailableGas.Uint64()
+		if available < configuredHookGas {
+			return available, nil
+		}
+	}
+
+	return configuredHookGas, nil
+}
+
+func hookExecutionGasLimit(hookGas uint64) uint64 {
+	return sdkmath.NewIntFromUint64(hookGas).MulRaw(8).QuoRaw(10).Uint64()
+}
 
 func (k *Keeper) HandleContractRegistration(
 	ctx sdk.Context,
 	params types.Params,
 	req types.ContractRegistrationRequest,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandleContractRegistration")()
 
 	contractAddress, _ := sdk.AccAddressFromBech32(req.ContractAddress)
 
+	maxContractGasLimit := min(params.MaxContractGasLimit, types.MaxSafeExecutionGasLimit)
+
 	// Enforce MinGasContractExecution ≤ GasLimit ≤ MaxContractGasLimit
-	if req.GasLimit < types.MinExecutionGasLimit || req.GasLimit > params.MaxContractGasLimit {
+	if req.GasLimit < types.MinExecutionGasLimit || req.GasLimit > maxContractGasLimit {
 		return errors.Wrapf(
 			types.ErrInvalidGasLimit,
 			"ContractRegistrationRequestProposal: The gasLimit (%d) must be within the range (%d) - (%d).",
 			req.GasLimit,
 			types.MinExecutionGasLimit,
-			params.MaxContractGasLimit,
+			maxContractGasLimit,
 		)
 	}
 
@@ -107,8 +134,7 @@ func (k *Keeper) RegisterContract(
 	ctx sdk.Context,
 	req types.ContractRegistrationRequest,
 ) (err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RegisterContract")()
 
 	contract := types.RegisteredContract{
 		GasLimit:       req.GasLimit,
@@ -152,8 +178,7 @@ func (k *Keeper) DeregisterContract(
 	ctx sdk.Context,
 	contractAddress sdk.AccAddress,
 ) (err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeregisterContract")()
 
 	k.Logger(ctx).Debug("Deregistering contract", "contractAddress", contractAddress.String())
 	registeredContract := k.GetContractByAddress(ctx, contractAddress)
@@ -174,13 +199,17 @@ func (k *Keeper) DeregisterContract(
 		ContractAddress: contractAddress.String(),
 	})
 
-	contractBalance := k.bankKeeper.GetBalance(ctx, contractAddress, chaintypes.InjectiveCoin)
-	maxAvailableGas := contractBalance.Amount.QuoRaw(int64(registeredContract.GasPrice)).Uint64()
+	// Keep deregistration effective even for malformed legacy state.
+	if registeredContract.GasPrice == 0 {
+		k.Logger(ctx).Error("Skipping deregister callback due to zero gas price", "contractAddress", contractAddress.String())
+		return nil
+	}
 
+	contractBalance := k.bankKeeper.GetBalance(ctx, contractAddress, chaintypes.InjectiveCoin)
 	params := k.GetParams(ctx)
-	deregisterHookGas := params.MaxContractGasLimit
-	if maxAvailableGas < deregisterHookGas {
-		deregisterHookGas = maxAvailableGas
+	deregisterHookGas, err := capHookGasByBalance(contractBalance, registeredContract.GasPrice, params.MaxContractGasLimit)
+	if err != nil {
+		return err
 	}
 
 	// ignore the third error returned by executeMetered, which is the error returned by the callback and which is always nil
@@ -188,7 +217,7 @@ func (k *Keeper) DeregisterContract(
 		ctx,
 		contractAddress,
 		registeredContract,
-		deregisterHookGas*8/10,
+		hookExecutionGasLimit(deregisterHookGas),
 		deregisterHookGas,
 		func(subCtx sdk.Context) ([]byte, error) {
 			deregisterCallbackMsg := types.NewRegistryDeregisterCallbackMsg()
@@ -218,19 +247,24 @@ func (k *Keeper) DeactivateContract(
 	contractAddress sdk.AccAddress,
 	registeredContract *types.RegisteredContract,
 ) (err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeactivateContract")()
 
 	k.Logger(ctx).Debug("Deactivating contract", "contractAddress", contractAddress.String())
 
 	registeredContract.IsExecutable = false
 	k.SetContract(ctx, contractAddress, *registeredContract)
+
+	// Keep deactivation effective even for malformed legacy state.
+	if registeredContract.GasPrice == 0 {
+		k.Logger(ctx).Error("Skipping deactivate callback due to zero gas price", "contractAddress", contractAddress.String())
+		return nil
+	}
+
 	contractBalance := k.bankKeeper.GetBalance(ctx, contractAddress, chaintypes.InjectiveCoin)
-	maxAvailableGas := contractBalance.Amount.QuoRaw(int64(registeredContract.GasPrice)).Uint64()
 	params := k.GetParams(ctx)
-	deactivateHookGas := params.MaxContractGasLimit
-	if maxAvailableGas < deactivateHookGas {
-		deactivateHookGas = maxAvailableGas
+	deactivateHookGas, err := capHookGasByBalance(contractBalance, registeredContract.GasPrice, params.MaxContractGasLimit)
+	if err != nil {
+		return err
 	}
 
 	// ignore the third error returned by executeMetered, which is the error returned by the callback and which is always nil
@@ -238,7 +272,7 @@ func (k *Keeper) DeactivateContract(
 		ctx,
 		contractAddress,
 		registeredContract,
-		deactivateHookGas*8/10,
+		hookExecutionGasLimit(deactivateHookGas),
 		deactivateHookGas,
 		func(subCtx sdk.Context) ([]byte, error) {
 			deactivateCallbackMsg := types.NewRegistryDeactivateCallbackMsg()
@@ -259,5 +293,14 @@ func (k *Keeper) DeactivateContract(
 			return nil, nil
 		},
 	)
+
+	// Re-assert deactivation after the callback execution commits cache context writes.
+	// This prevents a contract from re-activating itself during the deactivate callback.
+	updatedContract := k.GetContractByAddress(ctx, contractAddress)
+	if updatedContract != nil {
+		updatedContract.IsExecutable = false
+		k.SetContract(ctx, contractAddress, *updatedContract)
+	}
+
 	return err
 }

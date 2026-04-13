@@ -6,7 +6,6 @@ import (
 
 	"cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -141,11 +140,9 @@ func (k *Keeper) FixedGasBatchUpdateOrders(
 	msg *v2.MsgBatchUpdateOrders,
 ) (*v2.MsgBatchUpdateOrdersResponse, error) {
 	//	no clever method shadowing here
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "FixedGasBatchUpdateOrders")()
 
-	cc, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(cc)
 	sender, _ := sdk.AccAddressFromBech32(msg.Sender)
 
 	subaccountId := msg.SubaccountId

@@ -17,6 +17,7 @@ func (k Keeper) needsDenomCreationFee(ctx sdk.Context, denom string) bool {
 
 // chargeDenomCreationFee sends denom creation fee to community pool
 func (k Keeper) chargeDenomCreationFee(ctx sdk.Context, payerAddr sdk.AccAddress) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "chargeDenomCreationFee")()
 	// Send creation fee to community pool
 	creationFee := k.GetParams(ctx).DenomCreationFee
 	if creationFee.Amount.IsPositive() {
@@ -30,6 +31,7 @@ func (k Keeper) chargeDenomCreationFee(ctx sdk.Context, payerAddr sdk.AccAddress
 // MintERC20 mints new erc20 denoms.
 func (k Keeper) MintERC20(c context.Context, erc20Addr common.Address, minter sdk.AccAddress, amt sdkmath.Int) error {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "MintERC20")()
 
 	denom := types.DenomPrefix + erc20Addr.Hex()
 
@@ -54,6 +56,7 @@ func (k Keeper) MintERC20(c context.Context, erc20Addr common.Address, minter sd
 // BurnERC20 burns the erc20 denom on burner address.
 func (k Keeper) BurnERC20(c context.Context, erc20Addr common.Address, burner sdk.AccAddress, amt sdkmath.Int) error {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BurnERC20")()
 
 	denom := types.DenomPrefix + erc20Addr.Hex()
 

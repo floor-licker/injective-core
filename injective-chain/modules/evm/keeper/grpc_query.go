@@ -46,6 +46,9 @@ const (
 
 // Account implements the Query/Account gRPC method
 func (k Keeper) Account(c context.Context, req *types.QueryAccountRequest) (*types.QueryAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Account")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -58,7 +61,6 @@ func (k Keeper) Account(c context.Context, req *types.QueryAccountRequest) (*typ
 
 	addr := common.HexToAddress(req.Address)
 
-	ctx := sdk.UnwrapSDKContext(c)
 	acct := k.GetAccountOrEmpty(ctx, addr)
 	balance := k.GetEVMDenomBalance(ctx, addr)
 
@@ -70,6 +72,9 @@ func (k Keeper) Account(c context.Context, req *types.QueryAccountRequest) (*typ
 }
 
 func (k Keeper) CosmosAccount(c context.Context, req *types.QueryCosmosAccountRequest) (*types.QueryCosmosAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CosmosAccount")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -79,8 +84,6 @@ func (k Keeper) CosmosAccount(c context.Context, req *types.QueryCosmosAccountRe
 			codes.InvalidArgument, err.Error(),
 		)
 	}
-
-	ctx := sdk.UnwrapSDKContext(c)
 
 	ethAddr := common.HexToAddress(req.Address)
 	cosmosAddr := sdk.AccAddress(ethAddr.Bytes())
@@ -100,6 +103,9 @@ func (k Keeper) CosmosAccount(c context.Context, req *types.QueryCosmosAccountRe
 
 // ValidatorAccount implements the Query/Balance gRPC method
 func (k Keeper) ValidatorAccount(c context.Context, req *types.QueryValidatorAccountRequest) (*types.QueryValidatorAccountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ValidatorAccount")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -110,8 +116,6 @@ func (k Keeper) ValidatorAccount(c context.Context, req *types.QueryValidatorAcc
 			codes.InvalidArgument, err.Error(),
 		)
 	}
-
-	ctx := sdk.UnwrapSDKContext(c)
 
 	validator, err := k.stakingKeeper.GetValidatorByConsAddr(ctx, consAddr)
 	if err != nil {
@@ -138,6 +142,9 @@ func (k Keeper) ValidatorAccount(c context.Context, req *types.QueryValidatorAcc
 
 // Balance implements the Query/Balance gRPC method
 func (k Keeper) Balance(c context.Context, req *types.QueryBalanceRequest) (*types.QueryBalanceResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Balance")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -148,8 +155,6 @@ func (k Keeper) Balance(c context.Context, req *types.QueryBalanceRequest) (*typ
 			types.ErrZeroAddress.Error(),
 		)
 	}
-
-	ctx := sdk.UnwrapSDKContext(c)
 
 	balanceInt := k.GetEVMDenomBalance(ctx, common.HexToAddress(req.Address))
 
@@ -160,6 +165,9 @@ func (k Keeper) Balance(c context.Context, req *types.QueryBalanceRequest) (*typ
 
 // Storage implements the Query/Storage gRPC method
 func (k Keeper) Storage(c context.Context, req *types.QueryStorageRequest) (*types.QueryStorageResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Storage")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -170,8 +178,6 @@ func (k Keeper) Storage(c context.Context, req *types.QueryStorageRequest) (*typ
 			types.ErrZeroAddress.Error(),
 		)
 	}
-
-	ctx := sdk.UnwrapSDKContext(c)
 
 	address := common.HexToAddress(req.Address)
 	key := common.HexToHash(req.Key)
@@ -186,6 +192,9 @@ func (k Keeper) Storage(c context.Context, req *types.QueryStorageRequest) (*typ
 
 // Code implements the Query/Code gRPC method
 func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.QueryCodeResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Code")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -196,8 +205,6 @@ func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.Que
 			types.ErrZeroAddress.Error(),
 		)
 	}
-
-	ctx := sdk.UnwrapSDKContext(c)
 
 	address := common.HexToAddress(req.Address)
 	acct := k.GetAccount(ctx, address)
@@ -215,6 +222,8 @@ func (k Keeper) Code(c context.Context, req *types.QueryCodeRequest) (*types.Que
 // Params implements the Query/Params gRPC method
 func (k Keeper) Params(c context.Context, _ *types.QueryParamsRequest) (*types.QueryParamsResponse, error) {
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Params")()
+
 	params := k.GetParams(ctx)
 
 	return &types.QueryParamsResponse{
@@ -224,11 +233,13 @@ func (k Keeper) Params(c context.Context, _ *types.QueryParamsRequest) (*types.Q
 
 // EthCall implements eth_call rpc api.
 func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.MsgEthereumTxResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "EthCall")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	ctx := sdk.UnwrapSDKContext(c)
 	defer func() {
 		if r := recover(); r != nil {
 			k.Logger(ctx).Error("panic in eth_call", "panic", r, "stack", string(debug.Stack()))
@@ -290,11 +301,13 @@ func (k Keeper) EthCall(c context.Context, req *types.EthCallRequest) (*types.Ms
 
 // EstimateGas implements eth_estimateGas rpc api.
 func (k Keeper) EstimateGas(c context.Context, req *types.EthCallRequest) (*types.EstimateGasResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "EstimateGas")()
+
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
 
-	ctx := sdk.UnwrapSDKContext(c)
 	defer func() {
 		if r := recover(); r != nil {
 			k.Logger(ctx).Error("panic in eth_estimateGas", "panic", r, "stack", string(debug.Stack()))
@@ -444,6 +457,9 @@ func execTrace[T traceRequest](
 		cfg *EVMConfig,
 	) (*core.Message, error),
 ) ([]byte, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "execTrace")()
+
 	var zero T
 	if req == zero {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
@@ -460,7 +476,6 @@ func execTrace[T traceRequest](
 		contextHeight = 1
 	}
 
-	ctx := sdk.UnwrapSDKContext(c)
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.GetBlockTime())
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.GetBlockHash()))
@@ -498,11 +513,13 @@ func execTrace[T traceRequest](
 // executes the given message in the provided environment. The return value will
 // be tracer dependent.
 func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*types.QueryTraceTxResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "TraceTx")()
+
 	if !k.grpcTracingEnabled {
 		return nil, status.Error(codes.Unavailable, "TraceTx is disabled on this node")
 	}
 
-	ctx := sdk.UnwrapSDKContext(c)
 	defer func() {
 		if r := recover(); r != nil {
 			k.Logger(ctx).Error("panic in trace_call", "panic", r, "stack", string(debug.Stack()))
@@ -511,7 +528,7 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 	}()
 
 	resultData, err := execTrace(
-		c,
+		ctx,
 		req,
 		k,
 		func(ctx sdk.Context, cfg *EVMConfig) (*core.Message, error) {
@@ -572,6 +589,9 @@ func (k Keeper) TraceTx(c context.Context, req *types.QueryTraceTxRequest) (*typ
 // executes the given message in the provided environment for all the transactions in the queried block.
 // The return value will be tracer dependent.
 func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest) (*types.QueryTraceBlockResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "TraceBlock")()
+
 	if !k.grpcTracingEnabled {
 		return nil, status.Error(codes.Unavailable, "TraceBlock is disabled on this node")
 	}
@@ -591,7 +611,6 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 		contextHeight = 1
 	}
 
-	ctx := sdk.UnwrapSDKContext(c)
 	ctx = ctx.WithBlockHeight(contextHeight)
 	ctx = ctx.WithBlockTime(req.BlockTime)
 	ctx = ctx.WithHeaderHash(common.Hex2Bytes(req.BlockHash))
@@ -644,12 +663,15 @@ func (k Keeper) TraceBlock(c context.Context, req *types.QueryTraceBlockRequest)
 // executes the given call in the provided environment. The return value will
 // be tracer dependent.
 func (k Keeper) TraceCall(c context.Context, req *types.QueryTraceCallRequest) (*types.QueryTraceCallResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "TraceCall")()
+
 	if !k.grpcTracingEnabled {
 		return nil, status.Error(codes.Unavailable, "TraceCall is disabled on this node")
 	}
 
 	resultData, err := execTrace(
-		c,
+		ctx,
 		req,
 		k,
 		func(ctx sdk.Context, cfg *EVMConfig) (*core.Message, error) {
@@ -686,13 +708,14 @@ func (k *Keeper) prepareTrace(
 	msg *core.Message,
 	traceConfig *types.TraceConfig,
 	commitMessage bool,
-) (interface{}, uint, error) {
+) (traceResult interface{}, nextLogIndex uint, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "prepareTrace")(&err)
+
 	txConfig := cfg.TxConfig
 	// Assemble the structured logger or the JavaScript tracer
 	var (
 		tracer    *tracers.Tracer
 		overrides *ethparams.ChainConfig
-		err       error
 		timeout   = maxTraceTimeout
 	)
 
@@ -798,12 +821,12 @@ func (k *Keeper) prepareTrace(
 		}
 	}
 
-	result, err := tracer.GetResult()
+	traceResult, err = tracer.GetResult()
 	if err != nil {
 		return nil, 0, status.Error(codes.Internal, err.Error())
 	}
 
-	return result, txConfig.LogIndex + uint(len(res.Logs)), nil
+	return traceResult, txConfig.LogIndex + uint(len(res.Logs)), nil
 }
 
 // BaseFee implements the Query/BaseFee gRPC method

@@ -1,11 +1,12 @@
 package testutils
 
 import (
-	simapp "github.com/InjectiveLabs/injective-core/injective-chain/app"
 	abci "github.com/cometbft/cometbft/abci/types"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/secp256k1"
 	cryptotypes "github.com/cosmos/cosmos-sdk/crypto/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+
+	simapp "github.com/InjectiveLabs/injective-core/injective-chain/app"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/types"
 )
@@ -29,13 +30,6 @@ func EndBlockerAndCommit(app *simapp.InjectiveApp, ctx sdk.Context) (sdk.Context
 	defer iterator.Close()
 	for ; iterator.Valid(); iterator.Next() {
 		exchangeTStore.Delete(iterator.Key())
-	}
-
-	ocrTStore := ctx.TransientStore(app.OcrKeeper.GetTransientStoreKey())
-	iterator = ocrTStore.Iterator(nil, nil)
-	defer iterator.Close()
-	for ; iterator.Valid(); iterator.Next() {
-		ocrTStore.Delete(iterator.Key())
 	}
 
 	ctx = ctx.WithBlockHeight(ctx.BlockHeight() + 1)

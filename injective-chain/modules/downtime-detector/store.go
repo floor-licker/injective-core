@@ -9,7 +9,9 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/downtime-detector/types"
 )
 
-func (k *Keeper) GetLastBlockTime(ctx sdk.Context) (time.Time, error) {
+func (k *Keeper) GetLastBlockTime(ctx sdk.Context) (t time.Time, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetLastBlockTime")(&err)
+
 	store := ctx.KVStore(k.storeKey)
 	timeBz := store.Get(types.GetLastBlockTimestampKey())
 	if len(timeBz) == 0 {
@@ -23,12 +25,16 @@ func (k *Keeper) GetLastBlockTime(ctx sdk.Context) (time.Time, error) {
 }
 
 func (k *Keeper) StoreLastBlockTime(ctx sdk.Context, t time.Time) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "StoreLastBlockTime")()
+
 	store := ctx.KVStore(k.storeKey)
 	timeBz := FormatTimeString(t)
 	store.Set(types.GetLastBlockTimestampKey(), []byte(timeBz))
 }
 
-func (k *Keeper) GetLastDowntimeOfLength(ctx sdk.Context, dur types.Downtime) (time.Time, error) {
+func (k *Keeper) GetLastDowntimeOfLength(ctx sdk.Context, dur types.Downtime) (t time.Time, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetLastDowntimeOfLength")(&err)
+
 	store := ctx.KVStore(k.storeKey)
 	timeBz := store.Get(types.GetLastDowntimeOfLengthKey(dur))
 	if len(timeBz) == 0 {
@@ -42,6 +48,8 @@ func (k *Keeper) GetLastDowntimeOfLength(ctx sdk.Context, dur types.Downtime) (t
 }
 
 func (k *Keeper) StoreLastDowntimeOfLength(ctx sdk.Context, dur types.Downtime, t time.Time) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "StoreLastDowntimeOfLength")()
+
 	store := ctx.KVStore(k.storeKey)
 	timeBz := FormatTimeString(t)
 	store.Set(types.GetLastDowntimeOfLengthKey(dur), []byte(timeBz))

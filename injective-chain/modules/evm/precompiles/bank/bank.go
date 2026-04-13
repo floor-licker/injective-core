@@ -12,6 +12,7 @@ import (
 	errorsmod "cosmossdk.io/errors"
 	sdkmath "cosmossdk.io/math"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
@@ -166,7 +167,11 @@ func (bc *Contract) run(evm *vm.EVM, contract *vm.Contract, readonly bool) (outp
 	if err != nil {
 		return nil, err
 	}
+
 	stateDB := evm.StateDB.(precompiles.ExtStateDB)
+	defer func(origCtx sdk.Context) { *stateDB.ContextPtr() = origCtx }(stateDB.Context()) // put back original ctx to remove trace span set on the next line
+	defer stateDB.Meter().FuncTiming(stateDB.ContextPtr(), "run", metrics.Tag("svc", "bankpc"), metrics.Tag("method", method.Name))()
+
 	precompileAddr := bc.Address()
 	switch method.Name {
 	case MintMethodName, BurnMethodName:

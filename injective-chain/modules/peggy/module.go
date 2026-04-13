@@ -36,8 +36,9 @@ var (
 	_ module.HasServices         = AppModule{}
 	_ module.HasConsensusVersion = AppModule{}
 
-	_ appmodule.AppModule     = AppModule{}
-	_ appmodule.HasEndBlocker = AppModule{}
+	_ appmodule.AppModule       = AppModule{}
+	_ appmodule.HasBeginBlocker = AppModule{}
+	_ appmodule.HasEndBlocker   = AppModule{}
 )
 
 const ConsensusVersion = 2
@@ -163,6 +164,12 @@ func (am AppModule) InitGenesis(ctx sdk.Context, cdc codec.JSONCodec, data json.
 func (am AppModule) ExportGenesis(ctx sdk.Context, cdc codec.JSONCodec) json.RawMessage {
 	gs := keeper.ExportGenesis(ctx, am.keeper)
 	return cdc.MustMarshalJSON(&gs)
+}
+
+// BeginBlock implements app module
+func (am AppModule) BeginBlock(ctx context.Context) error {
+	am.blockHandler.BeginBlocker(sdk.UnwrapSDKContext(ctx))
+	return nil
 }
 
 // EndBlock implements app module

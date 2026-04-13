@@ -8,6 +8,8 @@ import (
 )
 
 func (k Keeper) GetDenomAdmin(ctx sdk.Context, denom string) (sdk.AccAddress, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDenomAdmin")()
+
 	authorityMetadata, err := k.GetAuthorityMetadata(ctx, denom)
 	if err != nil {
 		return nil, err
@@ -23,6 +25,8 @@ func (k Keeper) GetDenomAdmin(ctx sdk.Context, denom string) (sdk.AccAddress, er
 
 // GetAuthorityMetadata returns the authority metadata for a specific denom
 func (k Keeper) GetAuthorityMetadata(ctx sdk.Context, denom string) (types.DenomAuthorityMetadata, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAuthorityMetadata")()
+
 	bz := k.GetDenomPrefixStore(ctx, denom).Get(types.DenomAuthorityMetadataKey)
 
 	metadata := types.DenomAuthorityMetadata{}
@@ -35,6 +39,8 @@ func (k Keeper) GetAuthorityMetadata(ctx sdk.Context, denom string) (types.Denom
 
 // SetAuthorityMetadata stores authority metadata for a specific denom
 func (k Keeper) SetAuthorityMetadata(ctx sdk.Context, denom string, metadata types.DenomAuthorityMetadata) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAuthorityMetadata")()
+
 	err := metadata.Validate()
 	if err != nil {
 		return err
@@ -52,6 +58,8 @@ func (k Keeper) SetAuthorityMetadata(ctx sdk.Context, denom string, metadata typ
 }
 
 func (k Keeper) setAdmin(ctx sdk.Context, denom, admin string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setAdmin")()
+
 	metadata, err := k.GetAuthorityMetadata(ctx, denom)
 	if err != nil {
 		return err

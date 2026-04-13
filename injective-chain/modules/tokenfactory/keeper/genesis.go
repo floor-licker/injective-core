@@ -11,6 +11,9 @@ import (
 // InitGenesis initializes the tokenfactory module's state from a provided genesis
 // state.
 func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitGenesis")(&err)
+
 	k.CreateModuleAccount(ctx)
 
 	if genState.Params.DenomCreationFee == nil {
@@ -37,6 +40,9 @@ func (k Keeper) InitGenesis(ctx sdk.Context, genState types.GenesisState) {
 
 // ExportGenesis returns the tokenfactory module's exported genesis.
 func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	var err error
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExportGenesis")(&err)
+
 	genDenoms := make([]types.GenesisDenom, 0)
 	iterator := k.GetAllDenomsIterator(ctx)
 	defer iterator.Close()
@@ -44,7 +50,8 @@ func (k Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
 		denom := string(iterator.Value())
 		metadata, ok := k.bankKeeper.GetDenomMetaData(ctx, denom)
 		if !ok {
-			panic(fmt.Sprintf("denom metadata for %s not found", denom))
+			err = fmt.Errorf("denom metadata for %s not found", denom)
+			panic(err)
 		}
 		authorityMetadata, err := k.GetAuthorityMetadata(ctx, denom)
 		if err != nil {

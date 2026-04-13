@@ -2663,9 +2663,14 @@ paths:
                       admin operations
                   inj_auction_max_cap:
                     type: string
-                    title: >-
+                    description: >-
                       inj_auction_max_cap defines the maximum cap for INJ sent
-                      to auction
+                      to auction.
+
+                      Deprecated: the cap is now driven by the auction module's
+                      InjBasketMaxCap;
+
+                      this field is ignored.
                   fixed_gas_enabled:
                     type: boolean
                     title: >-
@@ -3760,9 +3765,14 @@ paths:
                           admin operations
                       inj_auction_max_cap:
                         type: string
-                        title: >-
+                        description: >-
                           inj_auction_max_cap defines the maximum cap for INJ
-                          sent to auction
+                          sent to auction.
+
+                          Deprecated: the cap is now driven by the auction
+                          module's InjBasketMaxCap;
+
+                          this field is ignored.
                       fixed_gas_enabled:
                         type: boolean
                         title: >-
@@ -10058,9 +10068,14 @@ paths:
                       admin operations
                   inj_auction_max_cap:
                     type: string
-                    title: >-
+                    description: >-
                       inj_auction_max_cap defines the maximum cap for INJ sent
-                      to auction
+                      to auction.
+
+                      Deprecated: the cap is now driven by the auction module's
+                      InjBasketMaxCap;
+
+                      this field is ignored.
                   fixed_gas_enabled:
                     type: boolean
                     title: >-
@@ -10143,6 +10158,24 @@ paths:
 
                       respective erc20: denoms, with their pause event
                       signatures
+                  white_knight_liquidators:
+                    type: array
+                    items:
+                      type: string
+                    title: >-
+                      white_knight_liquidators defines addresses that can
+                      liquidate positions
+
+                      with a dedicated white-knight reward share in positive
+                      payout liquidations
+                  white_knight_liquidator_reward_share_rate:
+                    type: string
+                    title: >-
+                      white_knight_liquidator_reward_share_rate defines the
+                      ratio of the split of
+
+                      the surplus collateral that goes to a white knight
+                      liquidator
             description: >-
               QueryExchangeParamsRequest is the response type for the
               Query/ExchangeParams
@@ -11275,9 +11308,14 @@ paths:
                           admin operations
                       inj_auction_max_cap:
                         type: string
-                        title: >-
+                        description: >-
                           inj_auction_max_cap defines the maximum cap for INJ
-                          sent to auction
+                          sent to auction.
+
+                          Deprecated: the cap is now driven by the auction
+                          module's InjBasketMaxCap;
+
+                          this field is ignored.
                       fixed_gas_enabled:
                         type: boolean
                         title: >-
@@ -11361,6 +11399,24 @@ paths:
 
                           respective erc20: denoms, with their pause event
                           signatures
+                      white_knight_liquidators:
+                        type: array
+                        items:
+                          type: string
+                        title: >-
+                          white_knight_liquidators defines addresses that can
+                          liquidate positions
+
+                          with a dedicated white-knight reward share in positive
+                          payout liquidations
+                      white_knight_liquidator_reward_share_rate:
+                        type: string
+                        title: >-
+                          white_knight_liquidator_reward_share_rate defines the
+                          ratio of the split of
+
+                          the surplus collateral that goes to a white knight
+                          liquidator
                     description: params defines all the parameters of related to exchange.
                   spot_markets:
                     type: array
@@ -16032,737 +16088,6 @@ paths:
           type: string
       tags:
         - Query
-  /chainlink/ocr/v1beta1/feed_config/{feed_id}:
-    get:
-      summary: Retrieves the OCR FeedConfig for a given FeedId
-      operationId: FeedConfig
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              feed_config_info:
-                type: object
-                properties:
-                  latest_config_digest:
-                    type: string
-                    format: byte
-                  f:
-                    type: integer
-                    format: int64
-                  'n':
-                    type: integer
-                    format: int64
-                  config_count:
-                    type: string
-                    format: uint64
-                    title: >-
-                      config_count ordinal number of this config setting among
-                      all config
-
-                      settings
-                  latest_config_block_number:
-                    type: string
-                    format: int64
-              feed_config:
-                type: object
-                properties:
-                  signers:
-                    type: array
-                    items:
-                      type: string
-                    title: >-
-                      signers ith element is address ith oracle uses to sign a
-                      report
-                  transmitters:
-                    type: array
-                    items:
-                      type: string
-                    title: >-
-                      transmitters ith element is address ith oracle uses to
-                      transmit a report
-
-                      via the transmit method
-                  f:
-                    type: integer
-                    format: int64
-                    title: >-
-                      f maximum number of faulty/dishonest oracles the protocol
-                      can tolerate
-
-                      while still working correctly
-                  onchain_config:
-                    type: string
-                    format: byte
-                    description: >-
-                      onchain_config serialized data with reporting plugin
-                      params on chain.
-                  offchain_config_version:
-                    type: string
-                    format: uint64
-                    title: >-
-                      offchain_config_version version of the serialization
-                      format used for
-
-                      "offchain_config" parameter
-                  offchain_config:
-                    type: string
-                    format: byte
-                    title: >-
-                      offchain_config serialized data used by oracles to
-                      configure their offchain
-
-                      operation
-                  module_params:
-                    description: feed-specific params for the Cosmos module.
-                    type: object
-                    properties:
-                      feed_id:
-                        type: string
-                        title: feed_id is an unique ID for the target of this config
-                      min_answer:
-                        type: string
-                        title: lowest answer the median of a report is allowed to be
-                      max_answer:
-                        type: string
-                        title: highest answer the median of a report is allowed to be
-                      link_per_observation:
-                        type: string
-                        title: Fixed LINK reward for each observer
-                      link_per_transmission:
-                        type: string
-                        title: Fixed LINK reward for transmitter
-                      link_denom:
-                        type: string
-                        title: Native denom for LINK coin in the bank keeper
-                      unique_reports:
-                        type: boolean
-                        title: Enables unique reports
-                      description:
-                        type: string
-                        title: >-
-                          short human-readable description of observable this
-                          feed's answers pertain
-
-                          to
-                      feed_admin:
-                        type: string
-                        title: feed administrator
-                      billing_admin:
-                        type: string
-                        title: feed billing administrator
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      parameters:
-        - name: feed_id
-          in: path
-          required: true
-          type: string
-      tags:
-        - Query
-  /chainlink/ocr/v1beta1/feed_config_info/{feed_id}:
-    get:
-      summary: Retrieves the OCR FeedConfigInfo for a given FeedId
-      operationId: FeedConfigInfo
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              feed_config_info:
-                type: object
-                properties:
-                  latest_config_digest:
-                    type: string
-                    format: byte
-                  f:
-                    type: integer
-                    format: int64
-                  'n':
-                    type: integer
-                    format: int64
-                  config_count:
-                    type: string
-                    format: uint64
-                    title: >-
-                      config_count ordinal number of this config setting among
-                      all config
-
-                      settings
-                  latest_config_block_number:
-                    type: string
-                    format: int64
-              epoch_and_round:
-                type: object
-                properties:
-                  epoch:
-                    type: string
-                    format: uint64
-                  round:
-                    type: string
-                    format: uint64
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      parameters:
-        - name: feed_id
-          in: path
-          required: true
-          type: string
-      tags:
-        - Query
-  /chainlink/ocr/v1beta1/latest_round/{feed_id}:
-    get:
-      summary: >-
-        Retrieves latest round ID and data, including median answer for that
-        round
-      operationId: LatestRound
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              latest_round_id:
-                type: string
-                format: uint64
-              data:
-                type: object
-                properties:
-                  answer:
-                    type: string
-                  observations_timestamp:
-                    type: string
-                    format: int64
-                  transmission_timestamp:
-                    type: string
-                    format: int64
-                title: >-
-                  Transmission records the median answer from the transmit
-                  transaction at
-
-                  time timestamp
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      parameters:
-        - name: feed_id
-          in: path
-          required: true
-          type: string
-      tags:
-        - Query
-  /chainlink/ocr/v1beta1/latest_transmission_details/{feed_id}:
-    get:
-      summary: |-
-        LatestTransmissionDetails returns details about the latest trasmission
-        recorded on chain for the given feed ID.
-      operationId: LatestTransmissionDetails
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              config_digest:
-                type: string
-                format: byte
-              epoch_and_round:
-                type: object
-                properties:
-                  epoch:
-                    type: string
-                    format: uint64
-                  round:
-                    type: string
-                    format: uint64
-              data:
-                type: object
-                properties:
-                  answer:
-                    type: string
-                  observations_timestamp:
-                    type: string
-                    format: int64
-                  transmission_timestamp:
-                    type: string
-                    format: int64
-                title: >-
-                  Transmission records the median answer from the transmit
-                  transaction at
-
-                  time timestamp
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      parameters:
-        - name: feed_id
-          in: path
-          required: true
-          type: string
-      tags:
-        - Query
-  /chainlink/ocr/v1beta1/module_state:
-    get:
-      summary: Retrieves the entire OCR module's state
-      operationId: OcrModuleState
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              state:
-                type: object
-                properties:
-                  params:
-                    description: params defines all the parameters of related to OCR.
-                    type: object
-                    properties:
-                      link_denom:
-                        type: string
-                        title: Native denom for LINK coin in the bank keeper
-                      payout_block_interval:
-                        type: string
-                        format: uint64
-                        title: The block number interval at which payouts are made
-                      module_admin:
-                        type: string
-                        title: The admin for the OCR module
-                  feed_configs:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        signers:
-                          type: array
-                          items:
-                            type: string
-                          title: >-
-                            signers ith element is address ith oracle uses to
-                            sign a report
-                        transmitters:
-                          type: array
-                          items:
-                            type: string
-                          title: >-
-                            transmitters ith element is address ith oracle uses
-                            to transmit a report
-
-                            via the transmit method
-                        f:
-                          type: integer
-                          format: int64
-                          title: >-
-                            f maximum number of faulty/dishonest oracles the
-                            protocol can tolerate
-
-                            while still working correctly
-                        onchain_config:
-                          type: string
-                          format: byte
-                          description: >-
-                            onchain_config serialized data with reporting plugin
-                            params on chain.
-                        offchain_config_version:
-                          type: string
-                          format: uint64
-                          title: >-
-                            offchain_config_version version of the serialization
-                            format used for
-
-                            "offchain_config" parameter
-                        offchain_config:
-                          type: string
-                          format: byte
-                          title: >-
-                            offchain_config serialized data used by oracles to
-                            configure their offchain
-
-                            operation
-                        module_params:
-                          description: feed-specific params for the Cosmos module.
-                          type: object
-                          properties:
-                            feed_id:
-                              type: string
-                              title: >-
-                                feed_id is an unique ID for the target of this
-                                config
-                            min_answer:
-                              type: string
-                              title: >-
-                                lowest answer the median of a report is allowed
-                                to be
-                            max_answer:
-                              type: string
-                              title: >-
-                                highest answer the median of a report is allowed
-                                to be
-                            link_per_observation:
-                              type: string
-                              title: Fixed LINK reward for each observer
-                            link_per_transmission:
-                              type: string
-                              title: Fixed LINK reward for transmitter
-                            link_denom:
-                              type: string
-                              title: Native denom for LINK coin in the bank keeper
-                            unique_reports:
-                              type: boolean
-                              title: Enables unique reports
-                            description:
-                              type: string
-                              title: >-
-                                short human-readable description of observable
-                                this feed's answers pertain
-
-                                to
-                            feed_admin:
-                              type: string
-                              title: feed administrator
-                            billing_admin:
-                              type: string
-                              title: feed billing administrator
-                    title: feed_configs stores all of the supported OCR feeds
-                  latest_epoch_and_rounds:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        epoch_and_round:
-                          type: object
-                          properties:
-                            epoch:
-                              type: string
-                              format: uint64
-                            round:
-                              type: string
-                              format: uint64
-                    title: >-
-                      latest_epoch_and_rounds stores the latest epoch and round
-                      for each feedId
-                  feed_transmissions:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        transmission:
-                          type: object
-                          properties:
-                            answer:
-                              type: string
-                            observations_timestamp:
-                              type: string
-                              format: int64
-                            transmission_timestamp:
-                              type: string
-                              format: int64
-                          title: >-
-                            Transmission records the median answer from the
-                            transmit transaction at
-
-                            time timestamp
-                    title: >-
-                      feed_transmissions stores the last transmission for each
-                      feed
-                  latest_aggregator_round_ids:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        aggregator_round_id:
-                          type: string
-                          format: uint64
-                    title: >-
-                      latest_aggregator_round_ids stores the latest aggregator
-                      round ID for each
-
-                      feedId
-                  reward_pools:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        amount:
-                          type: object
-                          properties:
-                            denom:
-                              type: string
-                            amount:
-                              type: string
-                          description: >-
-                            Coin defines a token with a denomination and an
-                            amount.
-
-
-                            NOTE: The amount field is an Int which implements
-                            the custom method
-
-                            signatures required by gogoproto.
-                    title: reward_pools stores the reward pools
-                  feed_observation_counts:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        counts:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              address:
-                                type: string
-                              count:
-                                type: string
-                                format: uint64
-                    title: feed_observation_counts stores the feed observation counts
-                  feed_transmission_counts:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        counts:
-                          type: array
-                          items:
-                            type: object
-                            properties:
-                              address:
-                                type: string
-                              count:
-                                type: string
-                                format: uint64
-                    title: >-
-                      feed_transmission_counts stores the feed transmission
-                      counts
-                  pending_payeeships:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        feed_id:
-                          type: string
-                        transmitter:
-                          type: string
-                        proposed_payee:
-                          type: string
-                    title: pending_payeeships stores the pending payeeships
-                description: GenesisState defines the OCR module's genesis state.
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      tags:
-        - Query
-  /chainlink/ocr/v1beta1/owed_amount/{transmitter}:
-    get:
-      summary: Retrieves transmitter's owed amount
-      operationId: OwedAmount
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              amount:
-                type: object
-                properties:
-                  denom:
-                    type: string
-                  amount:
-                    type: string
-                description: >-
-                  Coin defines a token with a denomination and an amount.
-
-
-                  NOTE: The amount field is an Int which implements the custom
-                  method
-
-                  signatures required by gogoproto.
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      parameters:
-        - name: transmitter
-          in: path
-          required: true
-          type: string
-      tags:
-        - Query
-  /chainlink/ocr/v1beta1/params:
-    get:
-      operationId: OcrParams
-      responses:
-        '200':
-          description: A successful response.
-          schema:
-            type: object
-            properties:
-              params:
-                type: object
-                properties:
-                  link_denom:
-                    type: string
-                    title: Native denom for LINK coin in the bank keeper
-                  payout_block_interval:
-                    type: string
-                    format: uint64
-                    title: The block number interval at which payouts are made
-                  module_admin:
-                    type: string
-                    title: The admin for the OCR module
-        default:
-          description: An unexpected error response.
-          schema:
-            type: object
-            properties:
-              error:
-                type: string
-              code:
-                type: integer
-                format: int32
-              message:
-                type: string
-              details:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    type_url:
-                      type: string
-                    value:
-                      type: string
-                      format: byte
-      tags:
-        - Query
   /injective/auction/v1beta1/basket:
     get:
       summary: Retrieves current auction basket with current highest bid and bidder
@@ -17000,6 +16325,34 @@ paths:
                         format: uint64
                         title: round defines the round number of auction
                     title: last auction result
+                  vouchers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        address:
+                          type: string
+                          description: The bech32 address of the voucher holder.
+                        voucher:
+                          type: object
+                          properties:
+                            denom:
+                              type: string
+                            amount:
+                              type: string
+                          description: >-
+                            Coin defines a token with a denomination and an
+                            amount.
+
+
+                            NOTE: The amount field is an Int which implements
+                            the custom method
+
+                            signatures required by gogoproto.
+                      description: >-
+                        AddressVoucher pairs a bech32 address with its
+                        outstanding voucher coin.
+                    title: outstanding vouchers (failed basket deliveries)
                 description: GenesisState defines the auction module's genesis state.
             description: |-
               QueryModuleStateResponse is the response type for the
@@ -17098,6 +16451,135 @@ paths:
                     value:
                       type: string
                       format: byte
+      tags:
+        - Query
+  /injective/auction/v1beta1/voucher:
+    get:
+      summary: Voucher retrieves a single voucher for a given denom and address
+      operationId: AuctionVoucher
+      responses:
+        '200':
+          description: A successful response.
+          schema:
+            type: object
+            properties:
+              voucher:
+                type: object
+                properties:
+                  denom:
+                    type: string
+                  amount:
+                    type: string
+                description: >-
+                  Coin defines a token with a denomination and an amount.
+
+
+                  NOTE: The amount field is an Int which implements the custom
+                  method
+
+                  signatures required by gogoproto.
+        default:
+          description: An unexpected error response.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer
+                format: int32
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type_url:
+                      type: string
+                    value:
+                      type: string
+                      format: byte
+      parameters:
+        - name: denom
+          description: Required. The token denom to look up.
+          in: query
+          required: false
+          type: string
+        - name: address
+          description: Required. The bech32 address of the voucher holder.
+          in: query
+          required: false
+          type: string
+      tags:
+        - Query
+  /injective/auction/v1beta1/vouchers:
+    get:
+      summary: >-
+        Vouchers retrieves all outstanding vouchers; pass an empty denom to get
+        all
+      operationId: AuctionVouchers
+      responses:
+        '200':
+          description: A successful response.
+          schema:
+            type: object
+            properties:
+              vouchers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    address:
+                      type: string
+                      description: The bech32 address of the voucher holder.
+                    voucher:
+                      type: object
+                      properties:
+                        denom:
+                          type: string
+                        amount:
+                          type: string
+                      description: >-
+                        Coin defines a token with a denomination and an amount.
+
+
+                        NOTE: The amount field is an Int which implements the
+                        custom method
+
+                        signatures required by gogoproto.
+                  description: >-
+                    AddressVoucher pairs a bech32 address with its outstanding
+                    voucher coin.
+                description: List of outstanding vouchers matching the request filter.
+        default:
+          description: An unexpected error response.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer
+                format: int32
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type_url:
+                      type: string
+                    value:
+                      type: string
+                      format: byte
+      parameters:
+        - name: denom
+          description: denom filter; empty string returns all vouchers.
+          in: query
+          required: false
+          type: string
       tags:
         - Query
   /injective/oracle/v1beta1/band_ibc_price_states:
@@ -17304,6 +16786,9 @@ paths:
                         timestamp:
                           type: string
                           format: int64
+                    expires_at:
+                      type: string
+                      format: uint64
             description: >-
               QueryChainlinkDataStreamsPriceStatesResponse is the response type
               for the
@@ -17515,8 +17000,6 @@ paths:
                         type: string
                       chainlink_verifier_proxy_contract:
                         type: string
-                      accept_unverified_chainlink_data_streams_reports:
-                        type: boolean
                       chainlink_data_streams_verification_gas_limit:
                         type: string
                         format: uint64
@@ -17935,6 +17418,9 @@ paths:
                             timestamp:
                               type: string
                               format: int64
+                        expires_at:
+                          type: string
+                          format: uint64
                 description: GenesisState defines the oracle module's genesis state.
             description: >-
               QueryModuleStateResponse is the response type for the
@@ -17982,8 +17468,6 @@ paths:
                     type: string
                   chainlink_verifier_proxy_contract:
                     type: string
-                  accept_unverified_chainlink_data_streams_reports:
-                    type: boolean
                   chainlink_data_streams_verification_gas_limit:
                     type: string
                     format: uint64
@@ -18832,6 +18316,90 @@ paths:
           type: string
       tags:
         - Query
+  /injective/insurance/v1beta1/failed_redemptions:
+    get:
+      summary: Retrieves all failed redemption schedules
+      operationId: FailedRedemptions
+      responses:
+        '200':
+          description: A successful response.
+          schema:
+            type: object
+            properties:
+              schedules:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uint64
+                      title: id of the failed redemption
+                    schedule:
+                      title: the original redemption schedule that failed to execute
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uint64
+                          title: id of redemption schedule
+                        marketId:
+                          type: string
+                          title: marketId of insurance fund for the redemption
+                        redeemer:
+                          type: string
+                          title: address of the redeemer
+                        claimable_redemption_time:
+                          type: string
+                          format: date-time
+                          title: the time after which the redemption can be claimed
+                        redemption_amount:
+                          type: object
+                          properties:
+                            denom:
+                              type: string
+                            amount:
+                              type: string
+                          description: >-
+                            Coin defines a token with a denomination and an
+                            amount.
+
+
+                            NOTE: The amount field is an Int which implements
+                            the custom method
+
+                            signatures required by gogoproto.
+                          title: the insurance_pool_token amount to redeem
+                    err:
+                      type: string
+                      title: the error message from the failed withdrawal attempt
+            description: |-
+              QueryFailedRedemptionsResponse is the response type for the
+              Query/FailedRedemptions RPC method.
+        default:
+          description: An unexpected error response.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer
+                format: int32
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type_url:
+                      type: string
+                    value:
+                      type: string
+                      format: byte
+      tags:
+        - Query
   /injective/insurance/v1beta1/insurance_fund/{market_id}:
     get:
       summary: Retrieves individual insurance fund information from market id
@@ -19234,6 +18802,99 @@ paths:
 
                       used for next schedule incremented by 1 per redemption
                       request
+                  failed_redemption_schedules:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                          format: uint64
+                          title: id of the failed redemption
+                        schedule:
+                          title: >-
+                            the original redemption schedule that failed to
+                            execute
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              format: uint64
+                              title: id of redemption schedule
+                            marketId:
+                              type: string
+                              title: marketId of insurance fund for the redemption
+                            redeemer:
+                              type: string
+                              title: address of the redeemer
+                            claimable_redemption_time:
+                              type: string
+                              format: date-time
+                              title: >-
+                                the time after which the redemption can be
+                                claimed
+                            redemption_amount:
+                              type: object
+                              properties:
+                                denom:
+                                  type: string
+                                amount:
+                                  type: string
+                              description: >-
+                                Coin defines a token with a denomination and an
+                                amount.
+
+
+                                NOTE: The amount field is an Int which
+                                implements the custom method
+
+                                signatures required by gogoproto.
+                              title: the insurance_pool_token amount to redeem
+                        err:
+                          type: string
+                          title: the error message from the failed withdrawal attempt
+                    title: >-
+                      failed_redemption_schedules describes redemptions that
+                      failed during
+
+                      settlement and are preserved for manual resolution
+                  next_failed_redemption_schedule_id:
+                    type: string
+                    format: uint64
+                    title: >-
+                      next_failed_redemption_schedule_id describes the next id
+                      for failed
+
+                      redemption schedules, incremented by 1 per failed
+                      settlement
+                  vouchers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        address:
+                          type: string
+                          description: The bech32 address of the voucher holder.
+                        voucher:
+                          type: object
+                          properties:
+                            denom:
+                              type: string
+                            amount:
+                              type: string
+                          description: >-
+                            Coin defines a token with a denomination and an
+                            amount.
+
+
+                            NOTE: The amount field is an Int which implements
+                            the custom method
+
+                            signatures required by gogoproto.
+                      description: >-
+                        AddressVoucher pairs a bech32 address with its
+                        outstanding voucher coin.
+                    title: outstanding vouchers (failed redemption deliveries)
                 description: GenesisState defines the insurance module's genesis state.
             description: |-
               QueryModuleStateResponse is the response type for the
@@ -19371,6 +19032,135 @@ paths:
           required: false
           type: string
         - name: address
+          in: query
+          required: false
+          type: string
+      tags:
+        - Query
+  /injective/insurance/v1beta1/voucher:
+    get:
+      summary: Voucher retrieves a single voucher for a given denom and address
+      operationId: InsuranceVoucher
+      responses:
+        '200':
+          description: A successful response.
+          schema:
+            type: object
+            properties:
+              voucher:
+                type: object
+                properties:
+                  denom:
+                    type: string
+                  amount:
+                    type: string
+                description: >-
+                  Coin defines a token with a denomination and an amount.
+
+
+                  NOTE: The amount field is an Int which implements the custom
+                  method
+
+                  signatures required by gogoproto.
+        default:
+          description: An unexpected error response.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer
+                format: int32
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type_url:
+                      type: string
+                    value:
+                      type: string
+                      format: byte
+      parameters:
+        - name: denom
+          description: Required. The token denom to look up.
+          in: query
+          required: false
+          type: string
+        - name: address
+          description: Required. The bech32 address of the voucher holder.
+          in: query
+          required: false
+          type: string
+      tags:
+        - Query
+  /injective/insurance/v1beta1/vouchers:
+    get:
+      summary: >-
+        Vouchers retrieves all outstanding vouchers; pass an empty denom to get
+        all
+      operationId: InsuranceVouchers
+      responses:
+        '200':
+          description: A successful response.
+          schema:
+            type: object
+            properties:
+              vouchers:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    address:
+                      type: string
+                      description: The bech32 address of the voucher holder.
+                    voucher:
+                      type: object
+                      properties:
+                        denom:
+                          type: string
+                        amount:
+                          type: string
+                      description: >-
+                        Coin defines a token with a denomination and an amount.
+
+
+                        NOTE: The amount field is an Int which implements the
+                        custom method
+
+                        signatures required by gogoproto.
+                  description: >-
+                    AddressVoucher pairs a bech32 address with its outstanding
+                    voucher coin.
+                description: List of outstanding vouchers matching the request filter.
+        default:
+          description: An unexpected error response.
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+              code:
+                type: integer
+                format: int32
+              message:
+                type: string
+              details:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    type_url:
+                      type: string
+                    value:
+                      type: string
+                      format: byte
+      parameters:
+        - name: denom
+          description: denom filter; empty string returns all vouchers.
           in: query
           required: false
           type: string
@@ -22357,8 +22147,8 @@ paths:
                         absolute_mint_limit:
                           type: string
                           title: >-
-                            the absolute amount of tokens that can be minted on
-                            Injective
+                            [DEPRECATED] the absolute amount of tokens that can
+                            be minted on Injective
                         transfers:
                           type: array
                           items:
@@ -22377,6 +22167,55 @@ paths:
                                 type: boolean
                                 title: type of transfer (withdrawal/deposit)
                           title: transfers that occurred within the sliding window
+                  rate_limit_transfers:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                          title: contract address of the erc20 on Ethereum
+                        inflows:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              block_number:
+                                type: string
+                                format: uint64
+                                title: block number at which the transfers occurred
+                              amount:
+                                type: string
+                                title: >-
+                                  sum amount of transfers that happened in that
+                                  block
+                          title: records of deposit transfers across blocks
+                        outflows:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              block_number:
+                                type: string
+                                format: uint64
+                                title: block number at which the transfers occurred
+                              amount:
+                                type: string
+                                title: >-
+                                  sum amount of transfers that happened in that
+                                  block
+                          title: records of withdrawal transfers across blocks
+                  mint_amounts:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        token:
+                          type: string
+                          title: address of the erc20 bridged in
+                        amount:
+                          type: string
+                          title: amount currently minted on chain
                 title: GenesisState struct
             description: >-
               QueryModuleStateResponse is the response type for the
@@ -25911,27 +25750,18 @@ paths:
                       properties:
                         address:
                           type: string
-                          title: The Injective address that the voucher is for
+                          description: The bech32 address of the voucher holder.
                         voucher:
-                          title: The voucher amount
+                          description: The outstanding voucher coin.
                           type: object
                           properties:
                             denom:
                               type: string
                             amount:
                               type: string
-                          description: >-
-                            Coin defines a token with a denomination and an
-                            amount.
-
-
-                            NOTE: The amount field is an Int which implements
-                            the custom method
-
-                            signatures required by gogoproto.
-                      title: >-
-                        AddressVoucher is used to represent a voucher for a
-                        specific address
+                      description: >-
+                        AddressVoucher pairs a bech32 address with its
+                        outstanding voucher coin.
                     title: vouchers defines the vouchers of the module
                 description: GenesisState defines the permissions module's genesis state.
             description: |-
@@ -26856,7 +26686,7 @@ paths:
           type: string
       tags:
         - Query
-  /injective/permissions/v1beta1/voucher/{denom}/{address}:
+  /injective/permissions/v1beta1/voucher:
     get:
       summary: >-
         Voucher defines a gRPC query method for the vouchers for a given denom
@@ -26910,18 +26740,18 @@ paths:
                       format: byte
       parameters:
         - name: denom
-          description: The token denom
-          in: path
-          required: true
+          description: The token denom.
+          in: query
+          required: false
           type: string
         - name: address
-          description: The Injective address of the receiver
-          in: path
-          required: true
+          description: The Injective address of the receiver.
+          in: query
+          required: false
           type: string
       tags:
         - Query
-  /injective/permissions/v1beta1/vouchers/{denom}:
+  /injective/permissions/v1beta1/vouchers:
     get:
       summary: Vouchers defines a gRPC query method for the vouchers for a given denom
       operationId: Vouchers
@@ -26938,27 +26768,19 @@ paths:
                   properties:
                     address:
                       type: string
-                      title: The Injective address that the voucher is for
+                      description: The bech32 address of the voucher holder.
                     voucher:
-                      title: The voucher amount
+                      description: The outstanding voucher coin.
                       type: object
                       properties:
                         denom:
                           type: string
                         amount:
                           type: string
-                      description: >-
-                        Coin defines a token with a denomination and an amount.
-
-
-                        NOTE: The amount field is an Int which implements the
-                        custom method
-
-                        signatures required by gogoproto.
-                  title: >-
-                    AddressVoucher is used to represent a voucher for a specific
-                    address
-                title: List of vouchers
+                  description: >-
+                    AddressVoucher pairs a bech32 address with its outstanding
+                    voucher coin.
+                description: List of outstanding vouchers matching the request filter.
         default:
           description: An unexpected error response.
           schema:
@@ -26983,9 +26805,9 @@ paths:
                       format: byte
       parameters:
         - name: denom
-          description: The token denom
-          in: path
-          required: true
+          description: The token denom.
+          in: query
+          required: false
           type: string
       tags:
         - Query
@@ -94917,9 +94739,14 @@ definitions:
               operations
           inj_auction_max_cap:
             type: string
-            title: >-
+            description: >-
               inj_auction_max_cap defines the maximum cap for INJ sent to
-              auction
+              auction.
+
+              Deprecated: the cap is now driven by the auction module's
+              InjBasketMaxCap;
+
+              this field is ignored.
           fixed_gas_enabled:
             type: boolean
             title: >-
@@ -96614,7 +96441,13 @@ definitions:
           operations
       inj_auction_max_cap:
         type: string
-        title: inj_auction_max_cap defines the maximum cap for INJ sent to auction
+        description: >-
+          inj_auction_max_cap defines the maximum cap for INJ sent to auction.
+
+          Deprecated: the cap is now driven by the auction module's
+          InjBasketMaxCap;
+
+          this field is ignored.
       fixed_gas_enabled:
         type: boolean
         title: >-
@@ -98071,9 +97904,14 @@ definitions:
               operations
           inj_auction_max_cap:
             type: string
-            title: >-
+            description: >-
               inj_auction_max_cap defines the maximum cap for INJ sent to
-              auction
+              auction.
+
+              Deprecated: the cap is now driven by the auction module's
+              InjBasketMaxCap;
+
+              this field is ignored.
           fixed_gas_enabled:
             type: boolean
             title: >-
@@ -98933,9 +98771,14 @@ definitions:
                   operations
               inj_auction_max_cap:
                 type: string
-                title: >-
+                description: >-
                   inj_auction_max_cap defines the maximum cap for INJ sent to
-                  auction
+                  auction.
+
+                  Deprecated: the cap is now driven by the auction module's
+                  InjBasketMaxCap;
+
+                  this field is ignored.
               fixed_gas_enabled:
                 type: boolean
                 title: >-
@@ -103657,9 +103500,14 @@ definitions:
               operations
           inj_auction_max_cap:
             type: string
-            title: >-
+            description: >-
               inj_auction_max_cap defines the maximum cap for INJ sent to
-              auction
+              auction.
+
+              Deprecated: the cap is now driven by the auction module's
+              InjBasketMaxCap;
+
+              this field is ignored.
           fixed_gas_enabled:
             type: boolean
             title: >-
@@ -103740,6 +103588,23 @@ definitions:
               denominated in
 
               respective erc20: denoms, with their pause event signatures
+          white_knight_liquidators:
+            type: array
+            items:
+              type: string
+            title: >-
+              white_knight_liquidators defines addresses that can liquidate
+              positions
+
+              with a dedicated white-knight reward share in positive payout
+              liquidations
+          white_knight_liquidator_reward_share_rate:
+            type: string
+            title: >-
+              white_knight_liquidator_reward_share_rate defines the ratio of the
+              split of
+
+              the surplus collateral that goes to a white knight liquidator
         description: params defines all the parameters of related to exchange.
       spot_markets:
         type: array
@@ -105607,7 +105472,13 @@ definitions:
           operations
       inj_auction_max_cap:
         type: string
-        title: inj_auction_max_cap defines the maximum cap for INJ sent to auction
+        description: >-
+          inj_auction_max_cap defines the maximum cap for INJ sent to auction.
+
+          Deprecated: the cap is now driven by the auction module's
+          InjBasketMaxCap;
+
+          this field is ignored.
       fixed_gas_enabled:
         type: boolean
         title: >-
@@ -105681,6 +105552,23 @@ definitions:
           in
 
           respective erc20: denoms, with their pause event signatures
+      white_knight_liquidators:
+        type: array
+        items:
+          type: string
+        title: >-
+          white_knight_liquidators defines addresses that can liquidate
+          positions
+
+          with a dedicated white-knight reward share in positive payout
+          liquidations
+      white_knight_liquidator_reward_share_rate:
+        type: string
+        title: >-
+          white_knight_liquidator_reward_share_rate defines the ratio of the
+          split of
+
+          the surplus collateral that goes to a white knight liquidator
   injective.exchange.v2.PerpetualMarketFunding:
     type: object
     properties:
@@ -107317,9 +107205,14 @@ definitions:
               operations
           inj_auction_max_cap:
             type: string
-            title: >-
+            description: >-
               inj_auction_max_cap defines the maximum cap for INJ sent to
-              auction
+              auction.
+
+              Deprecated: the cap is now driven by the auction module's
+              InjBasketMaxCap;
+
+              this field is ignored.
           fixed_gas_enabled:
             type: boolean
             title: >-
@@ -107400,6 +107293,23 @@ definitions:
               denominated in
 
               respective erc20: denoms, with their pause event signatures
+          white_knight_liquidators:
+            type: array
+            items:
+              type: string
+            title: >-
+              white_knight_liquidators defines addresses that can liquidate
+              positions
+
+              with a dedicated white-knight reward share in positive payout
+              liquidations
+          white_knight_liquidator_reward_share_rate:
+            type: string
+            title: >-
+              white_knight_liquidator_reward_share_rate defines the ratio of the
+              split of
+
+              the surplus collateral that goes to a white knight liquidator
     description: >-
       QueryExchangeParamsRequest is the response type for the
       Query/ExchangeParams
@@ -108321,9 +108231,14 @@ definitions:
                   operations
               inj_auction_max_cap:
                 type: string
-                title: >-
+                description: >-
                   inj_auction_max_cap defines the maximum cap for INJ sent to
-                  auction
+                  auction.
+
+                  Deprecated: the cap is now driven by the auction module's
+                  InjBasketMaxCap;
+
+                  this field is ignored.
               fixed_gas_enabled:
                 type: boolean
                 title: >-
@@ -108405,6 +108320,23 @@ definitions:
                   denominated in
 
                   respective erc20: denoms, with their pause event signatures
+              white_knight_liquidators:
+                type: array
+                items:
+                  type: string
+                title: >-
+                  white_knight_liquidators defines addresses that can liquidate
+                  positions
+
+                  with a dedicated white-knight reward share in positive payout
+                  liquidations
+              white_knight_liquidator_reward_share_rate:
+                type: string
+                title: >-
+                  white_knight_liquidator_reward_share_rate defines the ratio of
+                  the split of
+
+                  the surplus collateral that goes to a white knight liquidator
             description: params defines all the parameters of related to exchange.
           spot_markets:
             type: array
@@ -111944,976 +111876,6 @@ definitions:
               - GrantOnly
               - Dual
             default: Unspecified
-  injective.ocr.v1beta1.Count:
-    type: object
-    properties:
-      address:
-        type: string
-      count:
-        type: string
-        format: uint64
-  injective.ocr.v1beta1.EpochAndRound:
-    type: object
-    properties:
-      epoch:
-        type: string
-        format: uint64
-      round:
-        type: string
-        format: uint64
-  injective.ocr.v1beta1.FeedConfig:
-    type: object
-    properties:
-      signers:
-        type: array
-        items:
-          type: string
-        title: signers ith element is address ith oracle uses to sign a report
-      transmitters:
-        type: array
-        items:
-          type: string
-        title: >-
-          transmitters ith element is address ith oracle uses to transmit a
-          report
-
-          via the transmit method
-      f:
-        type: integer
-        format: int64
-        title: |-
-          f maximum number of faulty/dishonest oracles the protocol can tolerate
-          while still working correctly
-      onchain_config:
-        type: string
-        format: byte
-        description: onchain_config serialized data with reporting plugin params on chain.
-      offchain_config_version:
-        type: string
-        format: uint64
-        title: |-
-          offchain_config_version version of the serialization format used for
-          "offchain_config" parameter
-      offchain_config:
-        type: string
-        format: byte
-        title: >-
-          offchain_config serialized data used by oracles to configure their
-          offchain
-
-          operation
-      module_params:
-        description: feed-specific params for the Cosmos module.
-        type: object
-        properties:
-          feed_id:
-            type: string
-            title: feed_id is an unique ID for the target of this config
-          min_answer:
-            type: string
-            title: lowest answer the median of a report is allowed to be
-          max_answer:
-            type: string
-            title: highest answer the median of a report is allowed to be
-          link_per_observation:
-            type: string
-            title: Fixed LINK reward for each observer
-          link_per_transmission:
-            type: string
-            title: Fixed LINK reward for transmitter
-          link_denom:
-            type: string
-            title: Native denom for LINK coin in the bank keeper
-          unique_reports:
-            type: boolean
-            title: Enables unique reports
-          description:
-            type: string
-            title: >-
-              short human-readable description of observable this feed's answers
-              pertain
-
-              to
-          feed_admin:
-            type: string
-            title: feed administrator
-          billing_admin:
-            type: string
-            title: feed billing administrator
-  injective.ocr.v1beta1.FeedConfigInfo:
-    type: object
-    properties:
-      latest_config_digest:
-        type: string
-        format: byte
-      f:
-        type: integer
-        format: int64
-      'n':
-        type: integer
-        format: int64
-      config_count:
-        type: string
-        format: uint64
-        title: |-
-          config_count ordinal number of this config setting among all config
-          settings
-      latest_config_block_number:
-        type: string
-        format: int64
-  injective.ocr.v1beta1.FeedCounts:
-    type: object
-    properties:
-      feed_id:
-        type: string
-      counts:
-        type: array
-        items:
-          type: object
-          properties:
-            address:
-              type: string
-            count:
-              type: string
-              format: uint64
-  injective.ocr.v1beta1.FeedEpochAndRound:
-    type: object
-    properties:
-      feed_id:
-        type: string
-      epoch_and_round:
-        type: object
-        properties:
-          epoch:
-            type: string
-            format: uint64
-          round:
-            type: string
-            format: uint64
-  injective.ocr.v1beta1.FeedLatestAggregatorRoundIDs:
-    type: object
-    properties:
-      feed_id:
-        type: string
-      aggregator_round_id:
-        type: string
-        format: uint64
-  injective.ocr.v1beta1.FeedTransmission:
-    type: object
-    properties:
-      feed_id:
-        type: string
-      transmission:
-        type: object
-        properties:
-          answer:
-            type: string
-          observations_timestamp:
-            type: string
-            format: int64
-          transmission_timestamp:
-            type: string
-            format: int64
-        title: >-
-          Transmission records the median answer from the transmit transaction
-          at
-
-          time timestamp
-  injective.ocr.v1beta1.GenesisState:
-    type: object
-    properties:
-      params:
-        description: params defines all the parameters of related to OCR.
-        type: object
-        properties:
-          link_denom:
-            type: string
-            title: Native denom for LINK coin in the bank keeper
-          payout_block_interval:
-            type: string
-            format: uint64
-            title: The block number interval at which payouts are made
-          module_admin:
-            type: string
-            title: The admin for the OCR module
-      feed_configs:
-        type: array
-        items:
-          type: object
-          properties:
-            signers:
-              type: array
-              items:
-                type: string
-              title: signers ith element is address ith oracle uses to sign a report
-            transmitters:
-              type: array
-              items:
-                type: string
-              title: >-
-                transmitters ith element is address ith oracle uses to transmit
-                a report
-
-                via the transmit method
-            f:
-              type: integer
-              format: int64
-              title: >-
-                f maximum number of faulty/dishonest oracles the protocol can
-                tolerate
-
-                while still working correctly
-            onchain_config:
-              type: string
-              format: byte
-              description: >-
-                onchain_config serialized data with reporting plugin params on
-                chain.
-            offchain_config_version:
-              type: string
-              format: uint64
-              title: >-
-                offchain_config_version version of the serialization format used
-                for
-
-                "offchain_config" parameter
-            offchain_config:
-              type: string
-              format: byte
-              title: >-
-                offchain_config serialized data used by oracles to configure
-                their offchain
-
-                operation
-            module_params:
-              description: feed-specific params for the Cosmos module.
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                  title: feed_id is an unique ID for the target of this config
-                min_answer:
-                  type: string
-                  title: lowest answer the median of a report is allowed to be
-                max_answer:
-                  type: string
-                  title: highest answer the median of a report is allowed to be
-                link_per_observation:
-                  type: string
-                  title: Fixed LINK reward for each observer
-                link_per_transmission:
-                  type: string
-                  title: Fixed LINK reward for transmitter
-                link_denom:
-                  type: string
-                  title: Native denom for LINK coin in the bank keeper
-                unique_reports:
-                  type: boolean
-                  title: Enables unique reports
-                description:
-                  type: string
-                  title: >-
-                    short human-readable description of observable this feed's
-                    answers pertain
-
-                    to
-                feed_admin:
-                  type: string
-                  title: feed administrator
-                billing_admin:
-                  type: string
-                  title: feed billing administrator
-        title: feed_configs stores all of the supported OCR feeds
-      latest_epoch_and_rounds:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            epoch_and_round:
-              type: object
-              properties:
-                epoch:
-                  type: string
-                  format: uint64
-                round:
-                  type: string
-                  format: uint64
-        title: >-
-          latest_epoch_and_rounds stores the latest epoch and round for each
-          feedId
-      feed_transmissions:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            transmission:
-              type: object
-              properties:
-                answer:
-                  type: string
-                observations_timestamp:
-                  type: string
-                  format: int64
-                transmission_timestamp:
-                  type: string
-                  format: int64
-              title: >-
-                Transmission records the median answer from the transmit
-                transaction at
-
-                time timestamp
-        title: feed_transmissions stores the last transmission for each feed
-      latest_aggregator_round_ids:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            aggregator_round_id:
-              type: string
-              format: uint64
-        title: >-
-          latest_aggregator_round_ids stores the latest aggregator round ID for
-          each
-
-          feedId
-      reward_pools:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            amount:
-              type: object
-              properties:
-                denom:
-                  type: string
-                amount:
-                  type: string
-              description: >-
-                Coin defines a token with a denomination and an amount.
-
-
-                NOTE: The amount field is an Int which implements the custom
-                method
-
-                signatures required by gogoproto.
-        title: reward_pools stores the reward pools
-      feed_observation_counts:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            counts:
-              type: array
-              items:
-                type: object
-                properties:
-                  address:
-                    type: string
-                  count:
-                    type: string
-                    format: uint64
-        title: feed_observation_counts stores the feed observation counts
-      feed_transmission_counts:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            counts:
-              type: array
-              items:
-                type: object
-                properties:
-                  address:
-                    type: string
-                  count:
-                    type: string
-                    format: uint64
-        title: feed_transmission_counts stores the feed transmission counts
-      pending_payeeships:
-        type: array
-        items:
-          type: object
-          properties:
-            feed_id:
-              type: string
-            transmitter:
-              type: string
-            proposed_payee:
-              type: string
-        title: pending_payeeships stores the pending payeeships
-    description: GenesisState defines the OCR module's genesis state.
-  injective.ocr.v1beta1.ModuleParams:
-    type: object
-    properties:
-      feed_id:
-        type: string
-        title: feed_id is an unique ID for the target of this config
-      min_answer:
-        type: string
-        title: lowest answer the median of a report is allowed to be
-      max_answer:
-        type: string
-        title: highest answer the median of a report is allowed to be
-      link_per_observation:
-        type: string
-        title: Fixed LINK reward for each observer
-      link_per_transmission:
-        type: string
-        title: Fixed LINK reward for transmitter
-      link_denom:
-        type: string
-        title: Native denom for LINK coin in the bank keeper
-      unique_reports:
-        type: boolean
-        title: Enables unique reports
-      description:
-        type: string
-        title: >-
-          short human-readable description of observable this feed's answers
-          pertain
-
-          to
-      feed_admin:
-        type: string
-        title: feed administrator
-      billing_admin:
-        type: string
-        title: feed billing administrator
-  injective.ocr.v1beta1.Params:
-    type: object
-    properties:
-      link_denom:
-        type: string
-        title: Native denom for LINK coin in the bank keeper
-      payout_block_interval:
-        type: string
-        format: uint64
-        title: The block number interval at which payouts are made
-      module_admin:
-        type: string
-        title: The admin for the OCR module
-  injective.ocr.v1beta1.PendingPayeeship:
-    type: object
-    properties:
-      feed_id:
-        type: string
-      transmitter:
-        type: string
-      proposed_payee:
-        type: string
-  injective.ocr.v1beta1.QueryFeedConfigInfoResponse:
-    type: object
-    properties:
-      feed_config_info:
-        type: object
-        properties:
-          latest_config_digest:
-            type: string
-            format: byte
-          f:
-            type: integer
-            format: int64
-          'n':
-            type: integer
-            format: int64
-          config_count:
-            type: string
-            format: uint64
-            title: >-
-              config_count ordinal number of this config setting among all
-              config
-
-              settings
-          latest_config_block_number:
-            type: string
-            format: int64
-      epoch_and_round:
-        type: object
-        properties:
-          epoch:
-            type: string
-            format: uint64
-          round:
-            type: string
-            format: uint64
-  injective.ocr.v1beta1.QueryFeedConfigResponse:
-    type: object
-    properties:
-      feed_config_info:
-        type: object
-        properties:
-          latest_config_digest:
-            type: string
-            format: byte
-          f:
-            type: integer
-            format: int64
-          'n':
-            type: integer
-            format: int64
-          config_count:
-            type: string
-            format: uint64
-            title: >-
-              config_count ordinal number of this config setting among all
-              config
-
-              settings
-          latest_config_block_number:
-            type: string
-            format: int64
-      feed_config:
-        type: object
-        properties:
-          signers:
-            type: array
-            items:
-              type: string
-            title: signers ith element is address ith oracle uses to sign a report
-          transmitters:
-            type: array
-            items:
-              type: string
-            title: >-
-              transmitters ith element is address ith oracle uses to transmit a
-              report
-
-              via the transmit method
-          f:
-            type: integer
-            format: int64
-            title: >-
-              f maximum number of faulty/dishonest oracles the protocol can
-              tolerate
-
-              while still working correctly
-          onchain_config:
-            type: string
-            format: byte
-            description: >-
-              onchain_config serialized data with reporting plugin params on
-              chain.
-          offchain_config_version:
-            type: string
-            format: uint64
-            title: >-
-              offchain_config_version version of the serialization format used
-              for
-
-              "offchain_config" parameter
-          offchain_config:
-            type: string
-            format: byte
-            title: >-
-              offchain_config serialized data used by oracles to configure their
-              offchain
-
-              operation
-          module_params:
-            description: feed-specific params for the Cosmos module.
-            type: object
-            properties:
-              feed_id:
-                type: string
-                title: feed_id is an unique ID for the target of this config
-              min_answer:
-                type: string
-                title: lowest answer the median of a report is allowed to be
-              max_answer:
-                type: string
-                title: highest answer the median of a report is allowed to be
-              link_per_observation:
-                type: string
-                title: Fixed LINK reward for each observer
-              link_per_transmission:
-                type: string
-                title: Fixed LINK reward for transmitter
-              link_denom:
-                type: string
-                title: Native denom for LINK coin in the bank keeper
-              unique_reports:
-                type: boolean
-                title: Enables unique reports
-              description:
-                type: string
-                title: >-
-                  short human-readable description of observable this feed's
-                  answers pertain
-
-                  to
-              feed_admin:
-                type: string
-                title: feed administrator
-              billing_admin:
-                type: string
-                title: feed billing administrator
-  injective.ocr.v1beta1.QueryLatestRoundResponse:
-    type: object
-    properties:
-      latest_round_id:
-        type: string
-        format: uint64
-      data:
-        type: object
-        properties:
-          answer:
-            type: string
-          observations_timestamp:
-            type: string
-            format: int64
-          transmission_timestamp:
-            type: string
-            format: int64
-        title: >-
-          Transmission records the median answer from the transmit transaction
-          at
-
-          time timestamp
-  injective.ocr.v1beta1.QueryLatestTransmissionDetailsResponse:
-    type: object
-    properties:
-      config_digest:
-        type: string
-        format: byte
-      epoch_and_round:
-        type: object
-        properties:
-          epoch:
-            type: string
-            format: uint64
-          round:
-            type: string
-            format: uint64
-      data:
-        type: object
-        properties:
-          answer:
-            type: string
-          observations_timestamp:
-            type: string
-            format: int64
-          transmission_timestamp:
-            type: string
-            format: int64
-        title: >-
-          Transmission records the median answer from the transmit transaction
-          at
-
-          time timestamp
-  injective.ocr.v1beta1.QueryModuleStateResponse:
-    type: object
-    properties:
-      state:
-        type: object
-        properties:
-          params:
-            description: params defines all the parameters of related to OCR.
-            type: object
-            properties:
-              link_denom:
-                type: string
-                title: Native denom for LINK coin in the bank keeper
-              payout_block_interval:
-                type: string
-                format: uint64
-                title: The block number interval at which payouts are made
-              module_admin:
-                type: string
-                title: The admin for the OCR module
-          feed_configs:
-            type: array
-            items:
-              type: object
-              properties:
-                signers:
-                  type: array
-                  items:
-                    type: string
-                  title: >-
-                    signers ith element is address ith oracle uses to sign a
-                    report
-                transmitters:
-                  type: array
-                  items:
-                    type: string
-                  title: >-
-                    transmitters ith element is address ith oracle uses to
-                    transmit a report
-
-                    via the transmit method
-                f:
-                  type: integer
-                  format: int64
-                  title: >-
-                    f maximum number of faulty/dishonest oracles the protocol
-                    can tolerate
-
-                    while still working correctly
-                onchain_config:
-                  type: string
-                  format: byte
-                  description: >-
-                    onchain_config serialized data with reporting plugin params
-                    on chain.
-                offchain_config_version:
-                  type: string
-                  format: uint64
-                  title: >-
-                    offchain_config_version version of the serialization format
-                    used for
-
-                    "offchain_config" parameter
-                offchain_config:
-                  type: string
-                  format: byte
-                  title: >-
-                    offchain_config serialized data used by oracles to configure
-                    their offchain
-
-                    operation
-                module_params:
-                  description: feed-specific params for the Cosmos module.
-                  type: object
-                  properties:
-                    feed_id:
-                      type: string
-                      title: feed_id is an unique ID for the target of this config
-                    min_answer:
-                      type: string
-                      title: lowest answer the median of a report is allowed to be
-                    max_answer:
-                      type: string
-                      title: highest answer the median of a report is allowed to be
-                    link_per_observation:
-                      type: string
-                      title: Fixed LINK reward for each observer
-                    link_per_transmission:
-                      type: string
-                      title: Fixed LINK reward for transmitter
-                    link_denom:
-                      type: string
-                      title: Native denom for LINK coin in the bank keeper
-                    unique_reports:
-                      type: boolean
-                      title: Enables unique reports
-                    description:
-                      type: string
-                      title: >-
-                        short human-readable description of observable this
-                        feed's answers pertain
-
-                        to
-                    feed_admin:
-                      type: string
-                      title: feed administrator
-                    billing_admin:
-                      type: string
-                      title: feed billing administrator
-            title: feed_configs stores all of the supported OCR feeds
-          latest_epoch_and_rounds:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                epoch_and_round:
-                  type: object
-                  properties:
-                    epoch:
-                      type: string
-                      format: uint64
-                    round:
-                      type: string
-                      format: uint64
-            title: >-
-              latest_epoch_and_rounds stores the latest epoch and round for each
-              feedId
-          feed_transmissions:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                transmission:
-                  type: object
-                  properties:
-                    answer:
-                      type: string
-                    observations_timestamp:
-                      type: string
-                      format: int64
-                    transmission_timestamp:
-                      type: string
-                      format: int64
-                  title: >-
-                    Transmission records the median answer from the transmit
-                    transaction at
-
-                    time timestamp
-            title: feed_transmissions stores the last transmission for each feed
-          latest_aggregator_round_ids:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                aggregator_round_id:
-                  type: string
-                  format: uint64
-            title: >-
-              latest_aggregator_round_ids stores the latest aggregator round ID
-              for each
-
-              feedId
-          reward_pools:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                amount:
-                  type: object
-                  properties:
-                    denom:
-                      type: string
-                    amount:
-                      type: string
-                  description: >-
-                    Coin defines a token with a denomination and an amount.
-
-
-                    NOTE: The amount field is an Int which implements the custom
-                    method
-
-                    signatures required by gogoproto.
-            title: reward_pools stores the reward pools
-          feed_observation_counts:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                counts:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      address:
-                        type: string
-                      count:
-                        type: string
-                        format: uint64
-            title: feed_observation_counts stores the feed observation counts
-          feed_transmission_counts:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                counts:
-                  type: array
-                  items:
-                    type: object
-                    properties:
-                      address:
-                        type: string
-                      count:
-                        type: string
-                        format: uint64
-            title: feed_transmission_counts stores the feed transmission counts
-          pending_payeeships:
-            type: array
-            items:
-              type: object
-              properties:
-                feed_id:
-                  type: string
-                transmitter:
-                  type: string
-                proposed_payee:
-                  type: string
-            title: pending_payeeships stores the pending payeeships
-        description: GenesisState defines the OCR module's genesis state.
-  injective.ocr.v1beta1.QueryOwedAmountResponse:
-    type: object
-    properties:
-      amount:
-        type: object
-        properties:
-          denom:
-            type: string
-          amount:
-            type: string
-        description: |-
-          Coin defines a token with a denomination and an amount.
-
-          NOTE: The amount field is an Int which implements the custom method
-          signatures required by gogoproto.
-  injective.ocr.v1beta1.QueryParamsResponse:
-    type: object
-    properties:
-      params:
-        type: object
-        properties:
-          link_denom:
-            type: string
-            title: Native denom for LINK coin in the bank keeper
-          payout_block_interval:
-            type: string
-            format: uint64
-            title: The block number interval at which payouts are made
-          module_admin:
-            type: string
-            title: The admin for the OCR module
-  injective.ocr.v1beta1.RewardPool:
-    type: object
-    properties:
-      feed_id:
-        type: string
-      amount:
-        type: object
-        properties:
-          denom:
-            type: string
-          amount:
-            type: string
-        description: |-
-          Coin defines a token with a denomination and an amount.
-
-          NOTE: The amount field is an Int which implements the custom method
-          signatures required by gogoproto.
-  injective.ocr.v1beta1.Transmission:
-    type: object
-    properties:
-      answer:
-        type: string
-      observations_timestamp:
-        type: string
-        format: int64
-      transmission_timestamp:
-        type: string
-        format: int64
-    title: |-
-      Transmission records the median answer from the transmit transaction at
-      time timestamp
   injective.auction.v1beta1.Bid:
     type: object
     properties:
@@ -113022,6 +111984,33 @@ definitions:
             format: uint64
             title: round defines the round number of auction
         title: last auction result
+      vouchers:
+        type: array
+        items:
+          type: object
+          properties:
+            address:
+              type: string
+              description: The bech32 address of the voucher holder.
+            voucher:
+              type: object
+              properties:
+                denom:
+                  type: string
+                amount:
+                  type: string
+              description: >-
+                Coin defines a token with a denomination and an amount.
+
+
+                NOTE: The amount field is an Int which implements the custom
+                method
+
+                signatures required by gogoproto.
+          description: >-
+            AddressVoucher pairs a bech32 address with its outstanding voucher
+            coin.
+        title: outstanding vouchers (failed basket deliveries)
     description: GenesisState defines the auction module's genesis state.
   injective.auction.v1beta1.LastAuctionResult:
     type: object
@@ -113272,10 +112261,101 @@ definitions:
                 format: uint64
                 title: round defines the round number of auction
             title: last auction result
+          vouchers:
+            type: array
+            items:
+              type: object
+              properties:
+                address:
+                  type: string
+                  description: The bech32 address of the voucher holder.
+                voucher:
+                  type: object
+                  properties:
+                    denom:
+                      type: string
+                    amount:
+                      type: string
+                  description: >-
+                    Coin defines a token with a denomination and an amount.
+
+
+                    NOTE: The amount field is an Int which implements the custom
+                    method
+
+                    signatures required by gogoproto.
+              description: >-
+                AddressVoucher pairs a bech32 address with its outstanding
+                voucher coin.
+            title: outstanding vouchers (failed basket deliveries)
         description: GenesisState defines the auction module's genesis state.
     description: |-
       QueryModuleStateResponse is the response type for the
       Query/AuctionModuleState RPC method.
+  injective.auction.v1beta1.QueryVoucherResponse:
+    type: object
+    properties:
+      voucher:
+        type: object
+        properties:
+          denom:
+            type: string
+          amount:
+            type: string
+        description: |-
+          Coin defines a token with a denomination and an amount.
+
+          NOTE: The amount field is an Int which implements the custom method
+          signatures required by gogoproto.
+  injective.auction.v1beta1.QueryVouchersResponse:
+    type: object
+    properties:
+      vouchers:
+        type: array
+        items:
+          type: object
+          properties:
+            address:
+              type: string
+              description: The bech32 address of the voucher holder.
+            voucher:
+              type: object
+              properties:
+                denom:
+                  type: string
+                amount:
+                  type: string
+              description: >-
+                Coin defines a token with a denomination and an amount.
+
+
+                NOTE: The amount field is an Int which implements the custom
+                method
+
+                signatures required by gogoproto.
+          description: >-
+            AddressVoucher pairs a bech32 address with its outstanding voucher
+            coin.
+        description: List of outstanding vouchers matching the request filter.
+  injective.common.vouchers.v1.AddressVoucher:
+    type: object
+    properties:
+      address:
+        type: string
+        description: The bech32 address of the voucher holder.
+      voucher:
+        type: object
+        properties:
+          denom:
+            type: string
+          amount:
+            type: string
+        description: |-
+          Coin defines a token with a denomination and an amount.
+
+          NOTE: The amount field is an Int which implements the custom method
+          signatures required by gogoproto.
+    description: AddressVoucher pairs a bech32 address with its outstanding voucher coin.
   injective.oracle.v1beta1.BandIBCParams:
     type: object
     properties:
@@ -113430,6 +112510,9 @@ definitions:
           timestamp:
             type: string
             format: int64
+      expires_at:
+        type: string
+        format: uint64
   injective.oracle.v1beta1.ChainlinkPriceState:
     type: object
     properties:
@@ -113489,8 +112572,6 @@ definitions:
             type: string
           chainlink_verifier_proxy_contract:
             type: string
-          accept_unverified_chainlink_data_streams_reports:
-            type: boolean
           chainlink_data_streams_verification_gas_limit:
             type: string
             format: uint64
@@ -113896,6 +112977,9 @@ definitions:
                 timestamp:
                   type: string
                   format: int64
+            expires_at:
+              type: string
+              format: uint64
     description: GenesisState defines the oracle module's genesis state.
   injective.oracle.v1beta1.OracleHistoryOptions:
     type: object
@@ -113952,8 +113036,6 @@ definitions:
         type: string
       chainlink_verifier_proxy_contract:
         type: string
-      accept_unverified_chainlink_data_streams_reports:
-        type: boolean
       chainlink_data_streams_verification_gas_limit:
         type: string
         format: uint64
@@ -114229,6 +113311,9 @@ definitions:
                 timestamp:
                   type: string
                   format: int64
+            expires_at:
+              type: string
+              format: uint64
     description: |-
       QueryChainlinkDataStreamsPriceStatesResponse is the response type for the
       Query/ChainlinkDataStreamsPriceStates RPC method.
@@ -114320,8 +113405,6 @@ definitions:
                 type: string
               chainlink_verifier_proxy_contract:
                 type: string
-              accept_unverified_chainlink_data_streams_reports:
-                type: boolean
               chainlink_data_streams_verification_gas_limit:
                 type: string
                 format: uint64
@@ -114727,6 +113810,9 @@ definitions:
                     timestamp:
                       type: string
                       format: int64
+                expires_at:
+                  type: string
+                  format: uint64
         description: GenesisState defines the oracle module's genesis state.
     description: >-
       QueryModuleStateResponse is the response type for the
@@ -114892,8 +113978,6 @@ definitions:
             type: string
           chainlink_verifier_proxy_contract:
             type: string
-          accept_unverified_chainlink_data_streams_reports:
-            type: boolean
           chainlink_data_streams_verification_gas_limit:
             type: string
             format: uint64
@@ -115088,6 +114172,50 @@ definitions:
             type: string
             format: int64
         title: the price state
+  injective.insurance.v1beta1.FailedRedemptionSchedule:
+    type: object
+    properties:
+      id:
+        type: string
+        format: uint64
+        title: id of the failed redemption
+      schedule:
+        title: the original redemption schedule that failed to execute
+        type: object
+        properties:
+          id:
+            type: string
+            format: uint64
+            title: id of redemption schedule
+          marketId:
+            type: string
+            title: marketId of insurance fund for the redemption
+          redeemer:
+            type: string
+            title: address of the redeemer
+          claimable_redemption_time:
+            type: string
+            format: date-time
+            title: the time after which the redemption can be claimed
+          redemption_amount:
+            type: object
+            properties:
+              denom:
+                type: string
+              amount:
+                type: string
+            description: >-
+              Coin defines a token with a denomination and an amount.
+
+
+              NOTE: The amount field is an Int which implements the custom
+              method
+
+              signatures required by gogoproto.
+            title: the insurance_pool_token amount to redeem
+      err:
+        type: string
+        title: the error message from the failed withdrawal attempt
   injective.insurance.v1beta1.GenesisState:
     type: object
     properties:
@@ -115235,6 +114363,88 @@ definitions:
           be
 
           used for next schedule incremented by 1 per redemption request
+      failed_redemption_schedules:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uint64
+              title: id of the failed redemption
+            schedule:
+              title: the original redemption schedule that failed to execute
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uint64
+                  title: id of redemption schedule
+                marketId:
+                  type: string
+                  title: marketId of insurance fund for the redemption
+                redeemer:
+                  type: string
+                  title: address of the redeemer
+                claimable_redemption_time:
+                  type: string
+                  format: date-time
+                  title: the time after which the redemption can be claimed
+                redemption_amount:
+                  type: object
+                  properties:
+                    denom:
+                      type: string
+                    amount:
+                      type: string
+                  description: >-
+                    Coin defines a token with a denomination and an amount.
+
+
+                    NOTE: The amount field is an Int which implements the custom
+                    method
+
+                    signatures required by gogoproto.
+                  title: the insurance_pool_token amount to redeem
+            err:
+              type: string
+              title: the error message from the failed withdrawal attempt
+        title: |-
+          failed_redemption_schedules describes redemptions that failed during
+          settlement and are preserved for manual resolution
+      next_failed_redemption_schedule_id:
+        type: string
+        format: uint64
+        title: |-
+          next_failed_redemption_schedule_id describes the next id for failed
+          redemption schedules, incremented by 1 per failed settlement
+      vouchers:
+        type: array
+        items:
+          type: object
+          properties:
+            address:
+              type: string
+              description: The bech32 address of the voucher holder.
+            voucher:
+              type: object
+              properties:
+                denom:
+                  type: string
+                amount:
+                  type: string
+              description: >-
+                Coin defines a token with a denomination and an amount.
+
+
+                NOTE: The amount field is an Int which implements the custom
+                method
+
+                signatures required by gogoproto.
+          description: >-
+            AddressVoucher pairs a bech32 address with its outstanding voucher
+            coin.
+        title: outstanding vouchers (failed redemption deliveries)
     description: GenesisState defines the insurance module's genesis state.
   injective.insurance.v1beta1.InsuranceFund:
     type: object
@@ -115336,6 +114546,58 @@ definitions:
     description: |-
       QueryEstimatedRedemptionsResponse is the response type for the
       Query/EstimatedRedemptions RPC method.
+  injective.insurance.v1beta1.QueryFailedRedemptionsResponse:
+    type: object
+    properties:
+      schedules:
+        type: array
+        items:
+          type: object
+          properties:
+            id:
+              type: string
+              format: uint64
+              title: id of the failed redemption
+            schedule:
+              title: the original redemption schedule that failed to execute
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uint64
+                  title: id of redemption schedule
+                marketId:
+                  type: string
+                  title: marketId of insurance fund for the redemption
+                redeemer:
+                  type: string
+                  title: address of the redeemer
+                claimable_redemption_time:
+                  type: string
+                  format: date-time
+                  title: the time after which the redemption can be claimed
+                redemption_amount:
+                  type: object
+                  properties:
+                    denom:
+                      type: string
+                    amount:
+                      type: string
+                  description: >-
+                    Coin defines a token with a denomination and an amount.
+
+
+                    NOTE: The amount field is an Int which implements the custom
+                    method
+
+                    signatures required by gogoproto.
+                  title: the insurance_pool_token amount to redeem
+            err:
+              type: string
+              title: the error message from the failed withdrawal attempt
+    description: |-
+      QueryFailedRedemptionsResponse is the response type for the
+      Query/FailedRedemptions RPC method.
   injective.insurance.v1beta1.QueryInsuranceFundResponse:
     type: object
     properties:
@@ -115674,6 +114936,92 @@ definitions:
               to be
 
               used for next schedule incremented by 1 per redemption request
+          failed_redemption_schedules:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: string
+                  format: uint64
+                  title: id of the failed redemption
+                schedule:
+                  title: the original redemption schedule that failed to execute
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                      format: uint64
+                      title: id of redemption schedule
+                    marketId:
+                      type: string
+                      title: marketId of insurance fund for the redemption
+                    redeemer:
+                      type: string
+                      title: address of the redeemer
+                    claimable_redemption_time:
+                      type: string
+                      format: date-time
+                      title: the time after which the redemption can be claimed
+                    redemption_amount:
+                      type: object
+                      properties:
+                        denom:
+                          type: string
+                        amount:
+                          type: string
+                      description: >-
+                        Coin defines a token with a denomination and an amount.
+
+
+                        NOTE: The amount field is an Int which implements the
+                        custom method
+
+                        signatures required by gogoproto.
+                      title: the insurance_pool_token amount to redeem
+                err:
+                  type: string
+                  title: the error message from the failed withdrawal attempt
+            title: >-
+              failed_redemption_schedules describes redemptions that failed
+              during
+
+              settlement and are preserved for manual resolution
+          next_failed_redemption_schedule_id:
+            type: string
+            format: uint64
+            title: >-
+              next_failed_redemption_schedule_id describes the next id for
+              failed
+
+              redemption schedules, incremented by 1 per failed settlement
+          vouchers:
+            type: array
+            items:
+              type: object
+              properties:
+                address:
+                  type: string
+                  description: The bech32 address of the voucher holder.
+                voucher:
+                  type: object
+                  properties:
+                    denom:
+                      type: string
+                    amount:
+                      type: string
+                  description: >-
+                    Coin defines a token with a denomination and an amount.
+
+
+                    NOTE: The amount field is an Int which implements the custom
+                    method
+
+                    signatures required by gogoproto.
+              description: >-
+                AddressVoucher pairs a bech32 address with its outstanding
+                voucher coin.
+            title: outstanding vouchers (failed redemption deliveries)
         description: GenesisState defines the insurance module's genesis state.
     description: |-
       QueryModuleStateResponse is the response type for the
@@ -115698,6 +115046,51 @@ definitions:
     description: |-
       QueryPendingRedemptionsResponse is the response type for the
       Query/PendingRedemptions RPC method.
+  injective.insurance.v1beta1.QueryVoucherResponse:
+    type: object
+    properties:
+      voucher:
+        type: object
+        properties:
+          denom:
+            type: string
+          amount:
+            type: string
+        description: |-
+          Coin defines a token with a denomination and an amount.
+
+          NOTE: The amount field is an Int which implements the custom method
+          signatures required by gogoproto.
+  injective.insurance.v1beta1.QueryVouchersResponse:
+    type: object
+    properties:
+      vouchers:
+        type: array
+        items:
+          type: object
+          properties:
+            address:
+              type: string
+              description: The bech32 address of the voucher holder.
+            voucher:
+              type: object
+              properties:
+                denom:
+                  type: string
+                amount:
+                  type: string
+              description: >-
+                Coin defines a token with a denomination and an amount.
+
+
+                NOTE: The amount field is an Int which implements the custom
+                method
+
+                signatures required by gogoproto.
+          description: >-
+            AddressVoucher pairs a bech32 address with its outstanding voucher
+            coin.
+        description: List of outstanding vouchers matching the request filter.
   injective.insurance.v1beta1.RedemptionSchedule:
     type: object
     properties:
@@ -115943,6 +115336,16 @@ definitions:
         type: string
       total_fees:
         type: string
+  injective.peggy.v1.BlockTransferRecord:
+    type: object
+    properties:
+      block_number:
+        type: string
+        format: uint64
+        title: block number at which the transfers occurred
+      amount:
+        type: string
+        title: sum amount of transfers that happened in that block
   injective.peggy.v1.BridgeTransfer:
     type: object
     properties:
@@ -116697,7 +116100,9 @@ definitions:
                 token)
             absolute_mint_limit:
               type: string
-              title: the absolute amount of tokens that can be minted on Injective
+              title: >-
+                [DEPRECATED] the absolute amount of tokens that can be minted on
+                Injective
             transfers:
               type: array
               items:
@@ -116714,6 +116119,51 @@ definitions:
                     type: boolean
                     title: type of transfer (withdrawal/deposit)
               title: transfers that occurred within the sliding window
+      rate_limit_transfers:
+        type: array
+        items:
+          type: object
+          properties:
+            token:
+              type: string
+              title: contract address of the erc20 on Ethereum
+            inflows:
+              type: array
+              items:
+                type: object
+                properties:
+                  block_number:
+                    type: string
+                    format: uint64
+                    title: block number at which the transfers occurred
+                  amount:
+                    type: string
+                    title: sum amount of transfers that happened in that block
+              title: records of deposit transfers across blocks
+            outflows:
+              type: array
+              items:
+                type: object
+                properties:
+                  block_number:
+                    type: string
+                    format: uint64
+                    title: block number at which the transfers occurred
+                  amount:
+                    type: string
+                    title: sum amount of transfers that happened in that block
+              title: records of withdrawal transfers across blocks
+      mint_amounts:
+        type: array
+        items:
+          type: object
+          properties:
+            token:
+              type: string
+              title: address of the erc20 bridged in
+            amount:
+              type: string
+              title: amount currently minted on chain
     title: GenesisState struct
   injective.peggy.v1.LastClaimEvent:
     type: object
@@ -116725,6 +116175,15 @@ definitions:
         type: string
         format: uint64
     description: LastClaimEvent stores last claim event details of validator.
+  injective.peggy.v1.MintAmount:
+    type: object
+    properties:
+      token:
+        type: string
+        title: address of the erc20 bridged in
+      amount:
+        type: string
+        title: amount currently minted on chain
   injective.peggy.v1.MissingNoncesResponse:
     type: object
     properties:
@@ -118130,8 +117589,8 @@ definitions:
                 absolute_mint_limit:
                   type: string
                   title: >-
-                    the absolute amount of tokens that can be minted on
-                    Injective
+                    [DEPRECATED] the absolute amount of tokens that can be
+                    minted on Injective
                 transfers:
                   type: array
                   items:
@@ -118148,6 +117607,51 @@ definitions:
                         type: boolean
                         title: type of transfer (withdrawal/deposit)
                   title: transfers that occurred within the sliding window
+          rate_limit_transfers:
+            type: array
+            items:
+              type: object
+              properties:
+                token:
+                  type: string
+                  title: contract address of the erc20 on Ethereum
+                inflows:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      block_number:
+                        type: string
+                        format: uint64
+                        title: block number at which the transfers occurred
+                      amount:
+                        type: string
+                        title: sum amount of transfers that happened in that block
+                  title: records of deposit transfers across blocks
+                outflows:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      block_number:
+                        type: string
+                        format: uint64
+                        title: block number at which the transfers occurred
+                      amount:
+                        type: string
+                        title: sum amount of transfers that happened in that block
+                  title: records of withdrawal transfers across blocks
+          mint_amounts:
+            type: array
+            items:
+              type: object
+              properties:
+                token:
+                  type: string
+                  title: address of the erc20 bridged in
+                amount:
+                  type: string
+                  title: amount currently minted on chain
         title: GenesisState struct
     description: >-
       QueryModuleStateResponse is the response type for the
@@ -118601,7 +118105,9 @@ definitions:
         title: the notional USD limit imposed on all outgoing traffic (per token)
       absolute_mint_limit:
         type: string
-        title: the absolute amount of tokens that can be minted on Injective
+        title: >-
+          [DEPRECATED] the absolute amount of tokens that can be minted on
+          Injective
       transfers:
         type: array
         items:
@@ -118618,6 +118124,38 @@ definitions:
               type: boolean
               title: type of transfer (withdrawal/deposit)
         title: transfers that occurred within the sliding window
+  injective.peggy.v1.RateLimitTransfers:
+    type: object
+    properties:
+      token:
+        type: string
+        title: contract address of the erc20 on Ethereum
+      inflows:
+        type: array
+        items:
+          type: object
+          properties:
+            block_number:
+              type: string
+              format: uint64
+              title: block number at which the transfers occurred
+            amount:
+              type: string
+              title: sum amount of transfers that happened in that block
+        title: records of deposit transfers across blocks
+      outflows:
+        type: array
+        items:
+          type: object
+          properties:
+            block_number:
+              type: string
+              format: uint64
+              title: block number at which the transfers occurred
+            amount:
+              type: string
+              title: sum amount of transfers that happened in that block
+        title: records of withdrawal transfers across blocks
   injective.peggy.v1.Valset:
     type: object
     properties:
@@ -118966,26 +118504,6 @@ definitions:
           type: string
         title: The roles for the actor
     title: AddressRoles defines roles for an actor
-  injective.permissions.v1beta1.AddressVoucher:
-    type: object
-    properties:
-      address:
-        type: string
-        title: The Injective address that the voucher is for
-      voucher:
-        title: The voucher amount
-        type: object
-        properties:
-          denom:
-            type: string
-          amount:
-            type: string
-        description: |-
-          Coin defines a token with a denomination and an amount.
-
-          NOTE: The amount field is an Int which implements the custom method
-          signatures required by gogoproto.
-    title: AddressVoucher is used to represent a voucher for a specific address
   injective.permissions.v1beta1.EnforcedRestrictionsEVMContract:
     type: object
     properties:
@@ -119229,24 +118747,18 @@ definitions:
           properties:
             address:
               type: string
-              title: The Injective address that the voucher is for
+              description: The bech32 address of the voucher holder.
             voucher:
-              title: The voucher amount
+              description: The outstanding voucher coin.
               type: object
               properties:
                 denom:
                   type: string
                 amount:
                   type: string
-              description: >-
-                Coin defines a token with a denomination and an amount.
-
-
-                NOTE: The amount field is an Int which implements the custom
-                method
-
-                signatures required by gogoproto.
-          title: AddressVoucher is used to represent a voucher for a specific address
+          description: >-
+            AddressVoucher pairs a bech32 address with its outstanding voucher
+            coin.
         title: vouchers defines the vouchers of the module
     description: GenesisState defines the permissions module's genesis state.
   injective.permissions.v1beta1.Namespace:
@@ -119757,26 +119269,18 @@ definitions:
               properties:
                 address:
                   type: string
-                  title: The Injective address that the voucher is for
+                  description: The bech32 address of the voucher holder.
                 voucher:
-                  title: The voucher amount
+                  description: The outstanding voucher coin.
                   type: object
                   properties:
                     denom:
                       type: string
                     amount:
                       type: string
-                  description: >-
-                    Coin defines a token with a denomination and an amount.
-
-
-                    NOTE: The amount field is an Int which implements the custom
-                    method
-
-                    signatures required by gogoproto.
-              title: >-
-                AddressVoucher is used to represent a voucher for a specific
-                address
+              description: >-
+                AddressVoucher pairs a bech32 address with its outstanding
+                voucher coin.
             title: vouchers defines the vouchers of the module
         description: GenesisState defines the permissions module's genesis state.
     description: |-
@@ -120335,25 +119839,19 @@ definitions:
           properties:
             address:
               type: string
-              title: The Injective address that the voucher is for
+              description: The bech32 address of the voucher holder.
             voucher:
-              title: The voucher amount
+              description: The outstanding voucher coin.
               type: object
               properties:
                 denom:
                   type: string
                 amount:
                   type: string
-              description: >-
-                Coin defines a token with a denomination and an amount.
-
-
-                NOTE: The amount field is an Int which implements the custom
-                method
-
-                signatures required by gogoproto.
-          title: AddressVoucher is used to represent a voucher for a specific address
-        title: List of vouchers
+          description: >-
+            AddressVoucher pairs a bech32 address with its outstanding voucher
+            coin.
+        description: List of outstanding vouchers matching the request filter.
   injective.permissions.v1beta1.Role:
     type: object
     properties:

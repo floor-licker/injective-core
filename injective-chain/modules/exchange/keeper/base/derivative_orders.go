@@ -5,7 +5,6 @@ import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -25,6 +24,8 @@ func (k *BaseKeeper) DerivativeLimitOrdersIterator(
 	marketID common.Hash,
 	isBuy bool,
 ) storetypes.Iterator {
+	defer k.Meter(ctx).FuncTiming(&ctx, "DerivativeLimitOrdersIterator")()
+
 	store := k.getStore(ctx)
 	prefixKey := types.DerivativeLimitOrdersPrefix
 	prefixKey = append(prefixKey, types.MarketDirectionPrefix(marketID, isBuy)...)
@@ -52,8 +53,7 @@ func (k *BaseKeeper) IterateRestingDerivativeLimitOrderHashesBySubaccount(
 	subaccountID common.Hash,
 	process func(orderHash common.Hash) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateRestingDerivativeLimitOrderHashesBySubaccount")()
 
 	store := k.getStore(ctx)
 	orderIndexStore := prefix.NewStore(store, types.GetDerivativeLimitOrderIndexPrefix(marketID, isBuy, subaccountID))
@@ -75,8 +75,7 @@ func (k *BaseKeeper) BasicSetNewDerivativeLimitOrder(
 	order *v2.DerivativeLimitOrder,
 	marketID common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "BasicSetNewDerivativeLimitOrder")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeLimitOrdersPrefix)
@@ -92,8 +91,7 @@ func (k *BaseKeeper) SetNewDerivativeLimitOrder(
 	order *v2.DerivativeLimitOrder,
 	marketID common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetNewDerivativeLimitOrder")()
 
 	store := k.getStore(ctx)
 	ordersIndexStore := prefix.NewStore(store, types.DerivativeLimitOrdersIndexPrefix)
@@ -114,8 +112,7 @@ func (k *BaseKeeper) DeleteDerivativeLimitOrderByFields(
 	isBuy bool,
 	hash common.Hash,
 ) *v2.DerivativeLimitOrder {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteDerivativeLimitOrderByFields")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeLimitOrdersPrefix)
@@ -138,8 +135,7 @@ func (k *BaseKeeper) DeleteSubaccountOrder(
 	marketID common.Hash,
 	order *v2.DerivativeLimitOrder,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteSubaccountOrder")()
 
 	store := k.getStore(ctx)
 	subaccountOrderKey := types.GetSubaccountOrderKey(marketID, order.SubaccountID(), order.IsBuy(), order.Price(), order.Hash())
@@ -154,8 +150,7 @@ func (k *BaseKeeper) BasicDeleteDerivativeLimitOrder(
 	marketID common.Hash,
 	order *v2.DerivativeLimitOrder,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "BasicDeleteDerivativeLimitOrder")()
 
 	store := k.getStore(ctx)
 
@@ -176,8 +171,7 @@ func (k *BaseKeeper) DeleteDerivativeLimitOrder(
 	marketID common.Hash,
 	order *v2.DerivativeLimitOrder,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteDerivativeLimitOrder")()
 
 	k.BasicDeleteDerivativeLimitOrder(ctx, marketID, order)
 	k.DeleteSubaccountOrder(ctx, marketID, order)
@@ -196,10 +190,7 @@ func (k *BaseKeeper) IterateDerivativeLimitOrdersByMarketDirection(
 	isBuy bool,
 	process func(order *v2.DerivativeLimitOrder) (stop bool),
 ) {
-
-	//nolint:gocritic // ok
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateDerivativeLimitOrdersByMarketDirection")()
 
 	store := k.getStore(ctx)
 
@@ -229,8 +220,7 @@ func (k *BaseKeeper) GetDerivativeLimitOrderBySubaccountIDAndHash(
 	subaccountID common.Hash,
 	orderHash common.Hash,
 ) *v2.DerivativeLimitOrder {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeLimitOrderBySubaccountIDAndHash")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeLimitOrdersPrefix)
@@ -263,8 +253,7 @@ func (k *BaseKeeper) IterateDerivativeLimitOrdersBySubaccount(
 	subaccountID common.Hash,
 	process func(order v2.DerivativeLimitOrder) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateDerivativeLimitOrdersBySubaccount")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeLimitOrdersPrefix)
@@ -296,8 +285,7 @@ func (k *BaseKeeper) IterateDerivativeLimitOrdersByAddress(
 	accountAddress sdk.AccAddress,
 	process func(order v2.DerivativeLimitOrder) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateDerivativeLimitOrdersByAddress")()
 
 	store := k.getStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeLimitOrdersPrefix)
@@ -355,8 +343,7 @@ func (k *BaseKeeper) SetNewTransientDerivativeLimitOrder(
 	isBuy bool,
 	orderHash common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetNewTransientDerivativeLimitOrder")()
 
 	subaccountID := order.SubaccountID()
 
@@ -380,6 +367,7 @@ func (k *BaseKeeper) SetTransientDerivativeLimitOrderIndicator(
 	marketID common.Hash,
 	isBuy bool,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTransientDerivativeLimitOrderIndicator")()
 	// use transient store key
 	tStore := k.getTransientStore(ctx)
 
@@ -396,8 +384,7 @@ func (k *BaseKeeper) IterateTransientDerivativeLimitOrdersByMarketDirectionBySub
 	isBuy bool,
 	process func(o *v2.DerivativeLimitOrder) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateTransientDerivativeLimitOrdersByMarketDirectionBySubaccountID")()
 
 	store := k.getTransientStore(ctx)
 	prefixKey := types.DerivativeLimitOrdersPrefix
@@ -437,8 +424,7 @@ func (k *BaseKeeper) SetTransientDerivativeMarketOrder(
 	order *v2.DerivativeOrder,
 	orderHash common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTransientDerivativeMarketOrder")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)
@@ -464,8 +450,7 @@ func (k *BaseKeeper) DeleteDerivativeMarketOrder(
 	order *v2.DerivativeMarketOrder,
 	marketID common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteDerivativeMarketOrder")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)
@@ -489,8 +474,7 @@ func (k *BaseKeeper) IterateTransientDerivativeLimitOrdersBySubaccount(
 	subaccountID common.Hash,
 	process func(order *v2.DerivativeLimitOrder) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateTransientDerivativeLimitOrdersBySubaccount")()
 
 	store := k.getTransientStore(ctx)
 	ordersStore := prefix.NewStore(store, types.DerivativeLimitOrdersPrefix)
@@ -530,8 +514,7 @@ func (k *BaseKeeper) GetTransientDerivativeLimitOrderBySubaccountIDAndHash(
 	subaccountID common.Hash,
 	orderHash common.Hash,
 ) *v2.DerivativeLimitOrder {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTransientDerivativeLimitOrderBySubaccountIDAndHash")()
 
 	store := k.getTransientStore(ctx)
 	ordersIndexStore := prefix.NewStore(store, types.DerivativeLimitOrdersIndexPrefix)
@@ -577,8 +560,7 @@ func (k *BaseKeeper) DeleteTransientDerivativeLimitOrderByFields(
 	isBuy bool,
 	hash common.Hash,
 ) *v2.DerivativeLimitOrder {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTransientDerivativeLimitOrderByFields")()
 
 	tStore := k.getTransientStore(ctx)
 	// set main derivative order transient store
@@ -604,8 +586,7 @@ func (k *BaseKeeper) DeleteTransientDerivativeLimitOrder(
 	marketID common.Hash,
 	order *v2.DerivativeLimitOrder,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTransientDerivativeLimitOrder")()
 
 	tStore := k.getTransientStore(ctx)
 	// set main derivative order transient store
@@ -637,8 +618,7 @@ func (k *BaseKeeper) IterateDerivativeMarketOrders(
 	isBuy bool,
 	process func(order *v2.DerivativeMarketOrder) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateDerivativeMarketOrders")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)
@@ -681,8 +661,7 @@ func (k *BaseKeeper) GetAllTransientDerivativeMarketDirections(
 	ctx sdk.Context,
 	isLimit bool,
 ) []*types.MatchedMarketDirection {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTransientDerivativeMarketDirections")()
 
 	store := k.getTransientStore(ctx)
 

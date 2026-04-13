@@ -4,7 +4,6 @@ import (
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/events"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -14,8 +13,7 @@ import (
 
 // SetSpotMarket sets SpotMarket in keeper.
 func (k SpotKeeper) SaveSpotMarket(ctx sdk.Context, market *v2.SpotMarket) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SaveSpotMarket")()
 
 	k.SetSpotMarket(ctx, market)
 
@@ -36,8 +34,7 @@ func (k SpotKeeper) SpotMarketLaunch(
 	baseDecimals,
 	quoteDecimals uint32,
 ) (*v2.SpotMarket, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SpotMarketLaunch")()
 
 	exchangeParams := k.GetParams(ctx)
 	makerFeeRate := exchangeParams.DefaultSpotMakerFeeRate
@@ -69,10 +66,9 @@ func (k SpotKeeper) SpotMarketLaunchWithCustomFees(
 	adminInfo v2.AdminInfo,
 	baseDecimals, quoteDecimals uint32,
 ) (*v2.SpotMarket, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SpotMarketLaunchWithCustomFees")()
 
-	minimalProtocolFeeRate := k.GetParams(ctx).MinimalProtocolFeeRate
+	minimalProtocolFeeRate := k.GetCachedParams(ctx).MinimalProtocolFeeRate
 	discountSchedule := k.GetFeeDiscountSchedule(ctx)
 
 	if err := v2.ValidateMakerWithTakerFeeAndDiscounts(
@@ -82,28 +78,23 @@ func (k SpotKeeper) SpotMarketLaunchWithCustomFees(
 	}
 
 	if !k.subaccount.IsDenomValid(ctx, baseDenom) {
-		metrics.ReportFuncCall(k.svcTags)
 		return nil, errors.Wrapf(types.ErrInvalidBaseDenom, "denom %s does not exist in supply", baseDenom)
 	}
 
 	if !k.subaccount.IsDenomValid(ctx, quoteDenom) {
-		metrics.ReportFuncCall(k.svcTags)
 		return nil, errors.Wrapf(types.ErrInvalidQuoteDenom, "denom %s does not exist in supply", quoteDenom)
 	}
 
 	if !k.IsDenomDecimalsValid(ctx, baseDenom, baseDecimals) {
-		metrics.ReportFuncCall(k.svcTags)
 		return nil, errors.Wrapf(types.ErrDenomDecimalsDoNotMatch, "denom %s does not have %d decimals", baseDenom, baseDecimals)
 	}
 
 	if !k.IsDenomDecimalsValid(ctx, quoteDenom, quoteDecimals) {
-		metrics.ReportFuncCall(k.svcTags)
 		return nil, errors.Wrapf(types.ErrDenomDecimalsDoNotMatch, "denom %s does not have %d decimals", quoteDenom, quoteDecimals)
 	}
 
 	marketID := types.NewSpotMarketID(baseDenom, quoteDenom)
 	if k.HasSpotMarket(ctx, marketID, true) || k.HasSpotMarket(ctx, marketID, false) {
-		metrics.ReportFuncCall(k.svcTags)
 		return nil, errors.Wrapf(types.ErrSpotMarketExists, "ticker %s baseDenom %s quoteDenom %s", ticker, baseDenom, quoteDenom)
 	}
 
@@ -134,8 +125,7 @@ func (k SpotKeeper) SpotMarketLaunchWithCustomFees(
 
 // SetSpotMarketStatus sets SpotMarket's status.
 func (k SpotKeeper) SetSpotMarketStatus(ctx sdk.Context, marketID common.Hash, status v2.MarketStatus) (*v2.SpotMarket, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSpotMarketStatus")()
 
 	isEnabled := false
 
@@ -163,8 +153,7 @@ func (k SpotKeeper) SetSpotMarketStatus(ctx sdk.Context, marketID common.Hash, s
 
 // GetAllForceClosedSpotMarketIDStrings returns all spot markets to force close.
 func (k SpotKeeper) GetAllForceClosedSpotMarketIDStrings(ctx sdk.Context) []string {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllForceClosedSpotMarketIDStrings")()
 
 	marketForceCloseInfos := make([]string, 0)
 	appendMarketSettlementInfo := func(i common.Hash) (stop bool) {
@@ -178,8 +167,7 @@ func (k SpotKeeper) GetAllForceClosedSpotMarketIDStrings(ctx sdk.Context) []stri
 
 // GetAllForceClosedSpotMarketIDs returns all spot markets to force close.
 func (k SpotKeeper) GetAllForceClosedSpotMarketIDs(ctx sdk.Context) []common.Hash {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllForceClosedSpotMarketIDs")()
 
 	marketForceCloseInfos := make([]common.Hash, 0)
 	appendMarketSettlementInfo := func(i common.Hash) (stop bool) {
@@ -192,8 +180,7 @@ func (k SpotKeeper) GetAllForceClosedSpotMarketIDs(ctx sdk.Context) []common.Has
 }
 
 func (k SpotKeeper) ProcessForceClosedSpotMarkets(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessForceClosedSpotMarkets")()
 
 	spotMarketIDsToForceClose := k.GetAllForceClosedSpotMarketIDs(ctx)
 

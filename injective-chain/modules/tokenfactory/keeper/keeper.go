@@ -1,12 +1,14 @@
 package keeper
 
 import (
+	"context"
 	"fmt"
 
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
 
 	"cosmossdk.io/store/prefix"
+	"github.com/InjectiveLabs/metrics/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	permissionstypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/types"
@@ -25,6 +27,8 @@ type Keeper struct {
 	communityPoolKeeper types.CommunityPoolKeeper
 
 	authority string
+
+	meter metrics.Meter
 }
 
 // PermissionsKeeper is defined here and not inside types/expected_keeper.go
@@ -60,6 +64,14 @@ func (k *Keeper) SetPermissionsKeeper(permissionsKeeper PermissionsKeeper) {
 // Logger returns a logger for the x/tokenfactory module
 func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))
+}
+
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
 }
 
 // GetDenomPrefixStore returns the substore for a specific denom

@@ -6,24 +6,21 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/pkg/errors"
 
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/wasmx/types"
 )
 
-func (k Keeper) InjectiveExec(
+func (k *Keeper) InjectiveExec(
 	ctx sdk.Context,
 	contractAddress sdk.AccAddress,
 	funds sdk.Coins,
 	msg *types.InjectiveExecMsg,
 ) ([]byte, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "InjectiveExec")()
 
 	execBz, err := json.Marshal(msg)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, err
 	}
 
@@ -36,7 +33,6 @@ func (k Keeper) InjectiveExec(
 	)
 	if err != nil {
 		k.Logger(ctx).Debug("result", res, "err", err)
-		metrics.ReportFuncError(k.svcTags)
 		return res, err
 	}
 
@@ -48,10 +44,16 @@ func (k *Keeper) PinContract(
 	ctx sdk.Context,
 	contractAddress sdk.AccAddress,
 ) (err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PinContract")()
 
 	contractInfo := k.wasmViewKeeper.GetContractInfo(ctx, contractAddress)
+	if contractInfo == nil {
+		return errors.Wrapf(
+			sdkerrors.ErrNotFound,
+			"Contract with address %v not found",
+			contractAddress.String(),
+		)
+	}
 	err = k.wasmContractOpsKeeper.PinCode(ctx, contractInfo.CodeID)
 	if err != nil {
 		// Wasmer runtime error
@@ -69,8 +71,7 @@ func (k *Keeper) UnpinContract(
 	ctx sdk.Context,
 	contractAddress sdk.AccAddress,
 ) (err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "UnpinContract")()
 
 	contractInfo := k.wasmViewKeeper.GetContractInfo(ctx, contractAddress)
 	if contractInfo == nil {

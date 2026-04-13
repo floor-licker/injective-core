@@ -67,18 +67,32 @@ func ParseCoinbaseMessage(message []byte) (*CoinbasePriceState, error) {
 // returns an error if the signature isn't valid
 // TODO: refactor to shared common dir, copy pasted below code from Peggy
 func ValidateEthereumSignature(hash common.Hash, signature []byte, ethAddress common.Address) error {
+	var trimmedSig []byte
 
-	// convert malformed coinbase sig in oracle response to 65-byte signature
-	trimmedSig := signature[:65]
-	trimmedSig[64] = signature[95]
-
-	if len(trimmedSig) < 65 {
-		return errors.Wrap(ErrInvalidEthereumSignature, "signature too short")
+	// Coinbase responses may contain a malformed 96-byte signature where
+	// the recovery id is stored at byte 95. Normalize to canonical 65-byte format.
+	switch len(signature) {
+	case 65:
+		trimmedSig = make([]byte, 65)
+		copy(trimmedSig, signature)
+	case 96:
+		trimmedSig = make([]byte, 65)
+		copy(trimmedSig, signature[:65])
+		trimmedSig[64] = signature[95]
+	default:
+		if len(signature) < 65 {
+			return errors.Wrap(ErrInvalidEthereumSignature, "signature too short")
+		}
+		return errors.Wrapf(ErrInvalidEthereumSignature, "unexpected signature length: %d", len(signature))
 	}
 
 	// calculate recover id
-	if trimmedSig[64] == 27 || signature[64] == 28 {
+	if trimmedSig[64] == 27 || trimmedSig[64] == 28 {
 		trimmedSig[64] -= 27
+	}
+
+	if trimmedSig[64] != 0 && trimmedSig[64] != 1 {
+		return errors.Wrapf(ErrInvalidEthereumSignature, "invalid recovery id: %d", trimmedSig[64])
 	}
 
 	// manually build the hash with ethereum prefix

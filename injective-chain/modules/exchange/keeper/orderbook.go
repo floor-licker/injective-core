@@ -5,7 +5,6 @@ import (
 	"sort"
 
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -15,8 +14,7 @@ import (
 // IncrementSequenceAndEmitAllTransientOrderbookUpdates increments each orderbook sequence and emits an
 // EventOrderbookUpdate event for all the modified orderbooks in all markets.
 func (k *Keeper) IncrementSequenceAndEmitAllTransientOrderbookUpdates(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementSequenceAndEmitAllTransientOrderbookUpdates")()
 
 	spotOrderbooks := k.GetAllTransientOrderbookUpdates(ctx, true)
 	derivativeOrderbooks := k.GetAllTransientOrderbookUpdates(ctx, false)
@@ -52,8 +50,7 @@ func (k *Keeper) IncrementSequenceAndEmitAllTransientOrderbookUpdates(ctx sdk.Co
 
 // GetAllTransientOrderbookUpdates gets all the transient orderbook updates
 func (k *Keeper) GetAllTransientOrderbookUpdates(ctx sdk.Context, isSpot bool) []*v2.Orderbook {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTransientOrderbookUpdates")()
 
 	orderbookMap := make(map[common.Hash]*v2.Orderbook)
 
@@ -81,7 +78,7 @@ func (k *Keeper) GetAllTransientOrderbookUpdates(ctx sdk.Context, isSpot bool) [
 }
 
 func (k *Keeper) GetAllBalancesWithBalanceHolds(ctx sdk.Context) []*v2.BalanceWithMarginHold {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBalancesWithBalanceHolds")()
 
 	var (
 		balanceHolds            = make(map[string]map[string]math.LegacyDec)

@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/InjectiveLabs/coretracer"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
@@ -17,8 +16,9 @@ func (s *peggyContract) SendTransactionBatch(
 	currentValset *peggytypes.Valset,
 	batch *peggytypes.OutgoingTxBatch,
 	confirms []*peggytypes.MsgConfirmBatch,
-) (*common.Hash, error) {
-	defer coretracer.Trace(&ctx, s.svcTags)
+) (txHash *common.Hash, err error) {
+	ctx, done := s.meter.FuncTimingCtx(ctx, "SendTransactionBatch")
+	defer done(&err)
 
 	log.WithFields(log.Fields{
 		"token_contract": batch.TokenContract,
@@ -29,7 +29,6 @@ func (s *peggyContract) SendTransactionBatch(
 
 	validators, powers, sigV, sigR, sigS, err := checkBatchSigsAndRepack(currentValset, confirms)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return nil, errors.Wrap(err, "confirmations check failed")
 	}
 
@@ -77,7 +76,6 @@ func (s *peggyContract) SendTransactionBatch(
 		batchTimeout,
 	)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		log.WithError(err).Errorln("ABI Pack (Peggy submitBatch) method")
 		return nil, err
 	}
@@ -87,9 +85,8 @@ func (s *peggyContract) SendTransactionBatch(
 		return nil, errors.New("Transaction with same batch input data is already present in mempool")
 	}
 
-	txHash, err := s.SendTx(ctx, s.peggyAddress, txData)
+	hash, err := s.SendTx(ctx, s.peggyAddress, txData)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return nil, err
 	}
 
@@ -144,7 +141,7 @@ func (s *peggyContract) SendTransactionBatch(
 	//     }
 	//     Ok(())
 
-	return &txHash, nil
+	return &hash, nil
 }
 
 func getBatchCheckpointValues(batch *peggytypes.OutgoingTxBatch) (amounts []*big.Int, destinations []common.Address, fees []*big.Int) {
@@ -177,27 +174,25 @@ func checkBatchSigsAndRepack(
 		return
 	}
 
-	signerToSig := make(map[string]*peggytypes.MsgConfirmBatch, len(confirms))
+	signerToSig := make(map[common.Address]*peggytypes.MsgConfirmBatch, len(confirms))
 	for _, sig := range confirms {
-		signerToSig[sig.EthSigner] = sig
+		signerToSig[common.HexToAddress(sig.EthSigner)] = sig
 	}
 
 	powerOfGoodSigs := new(big.Int)
-
-	for _, m := range valset.Members {
-		mPower := big.NewInt(0).SetUint64(m.Power)
-		if sig, ok := signerToSig[m.EthereumAddress]; ok && sig.EthSigner == m.EthereumAddress {
+	for _, member := range valset.Members {
+		mPower := big.NewInt(0).SetUint64(member.Power)
+		mAddr := common.HexToAddress(member.EthereumAddress)
+		if sig, ok := signerToSig[mAddr]; ok {
 			powerOfGoodSigs.Add(powerOfGoodSigs, mPower)
-
-			validators = append(validators, common.HexToAddress(m.EthereumAddress))
+			validators = append(validators, mAddr)
 			powers = append(powers, mPower)
-
 			sigV, sigR, sigS := sigToVRS(sig.Signature)
 			v = append(v, sigV)
 			r = append(r, sigR)
 			s = append(s, sigS)
 		} else {
-			validators = append(validators, common.HexToAddress(m.EthereumAddress))
+			validators = append(validators, mAddr)
 			powers = append(powers, mPower)
 			v = append(v, 0)
 			r = append(r, [32]byte{})

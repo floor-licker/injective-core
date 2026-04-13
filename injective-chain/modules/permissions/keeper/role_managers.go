@@ -11,6 +11,8 @@ import (
 
 // setRoleManager sets the role manager for the given role
 func (k Keeper) setRoleManager(ctx sdk.Context, denom string, manager sdk.AccAddress, roleID uint32) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setRoleManager")()
+
 	store := k.getRoleManagerStore(ctx, denom)
 
 	roleIDBz := types.Uint32ToLittleEndian(roleID)
@@ -21,6 +23,8 @@ func (k Keeper) setRoleManager(ctx sdk.Context, denom string, manager sdk.AccAdd
 }
 
 func (k Keeper) isRoleManager(ctx sdk.Context, denom string, manager sdk.AccAddress, roleID uint32) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "isRoleManager")()
+
 	store := k.getRoleManagerStore(ctx, denom)
 
 	roleIDBz := types.Uint32ToLittleEndian(roleID)
@@ -30,6 +34,7 @@ func (k Keeper) isRoleManager(ctx sdk.Context, denom string, manager sdk.AccAddr
 }
 
 func (k Keeper) updateManagerRoles(ctx sdk.Context, denom string, manager sdk.AccAddress, roles []string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateManagerRoles")()
 	// remove manager from all roles if roles is empty
 	if len(roles) == 0 {
 		k.deleteManagerFromAllRoles(ctx, denom, manager)
@@ -48,6 +53,8 @@ func (k Keeper) updateManagerRoles(ctx sdk.Context, denom string, manager sdk.Ac
 
 // deleteManagerFromAllRoles deletes all roles for the given role manager
 func (k Keeper) deleteManagerFromAllRoles(ctx sdk.Context, denom string, manager sdk.AccAddress) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "deleteManagerFromAllRoles")()
+
 	roleIDs := k.getAllRolesIDsForManager(ctx, denom, manager)
 
 	for _, roleID := range roleIDs {
@@ -56,12 +63,16 @@ func (k Keeper) deleteManagerFromAllRoles(ctx sdk.Context, denom string, manager
 }
 
 func (k Keeper) deleteManagerRole(ctx sdk.Context, denom string, manager sdk.AccAddress, roleID uint32) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "deleteManagerRole")()
+
 	store := k.getRoleManagerStore(ctx, denom)
 	key := append(manager.Bytes(), types.Uint32ToLittleEndian(roleID)...)
 	store.Delete(key)
 }
 
 func (k Keeper) getAllRolesIDsForManager(ctx sdk.Context, denom string, manager sdk.AccAddress) []uint32 {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getAllRolesIDsForManager")()
+
 	store := k.getRoleManagerStoreForManager(ctx, denom, manager)
 	iter := store.Iterator(nil, nil)
 	defer iter.Close()
@@ -75,6 +86,8 @@ func (k Keeper) getAllRolesIDsForManager(ctx sdk.Context, denom string, manager 
 }
 
 func (k Keeper) GetAllRoleManagers(ctx sdk.Context, denom string) ([]*types.RoleManager, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllRoleManagers")()
+
 	store := k.getRoleManagerStore(ctx, denom)
 	iter := store.Iterator(nil, nil)
 	defer iter.Close()
@@ -127,8 +140,10 @@ func (k Keeper) verifySenderIsRoleManagerForAffectedRoles(
 	denom string,
 	sender sdk.AccAddress,
 	affectedRoles []string,
-) (map[string]uint32, error) {
-	roleIDs := make(map[string]uint32)
+) (roleIDs map[string]uint32, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "verifySenderIsRoleManagerForAffectedRoles")(&err)
+
+	roleIDs = make(map[string]uint32)
 
 	for _, roleName := range affectedRoles {
 		roleID, ok := k.GetRoleID(ctx, denom, roleName)

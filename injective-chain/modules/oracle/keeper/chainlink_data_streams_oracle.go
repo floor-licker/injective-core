@@ -5,8 +5,6 @@ import (
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
@@ -20,7 +18,7 @@ type ChainlinkDataStreamsKeeper interface {
 
 // GetChainlinkDataStreamsPrice gets price for a given base/quote pair.
 func (k *Keeper) GetChainlinkDataStreamsPrice(ctx sdk.Context, base, quote string) *math.LegacyDec {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetChainlinkDataStreamsPrice")()
 
 	basePriceState := k.GetChainlinkDataStreamsPriceState(ctx, base)
 	if basePriceState == nil {
@@ -49,7 +47,7 @@ func (k *Keeper) GetChainlinkDataStreamsPrice(ctx sdk.Context, base, quote strin
 
 // SetChainlinkDataStreamsPriceState stores a given Chainlink Data Streams price state.
 func (k *Keeper) SetChainlinkDataStreamsPriceState(ctx sdk.Context, priceState *types.ChainlinkDataStreamsPriceState) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetChainlinkDataStreamsPriceState")()
 
 	priceKey := types.GetChainlinkDataStreamsPriceStoreKey(priceState.FeedId)
 	bz := k.cdc.MustMarshal(priceState)
@@ -64,7 +62,7 @@ func (k *Keeper) SetChainlinkDataStreamsPriceState(ctx sdk.Context, priceState *
 
 // GetChainlinkDataStreamsPriceState retrieves the Chainlink Data Streams price state for a given feed ID.
 func (k *Keeper) GetChainlinkDataStreamsPriceState(ctx sdk.Context, feedID string) *types.ChainlinkDataStreamsPriceState {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetChainlinkDataStreamsPriceState")()
 
 	var priceState types.ChainlinkDataStreamsPriceState
 	bz := k.getStore(ctx).Get(types.GetChainlinkDataStreamsPriceStoreKey(feedID))
@@ -78,7 +76,7 @@ func (k *Keeper) GetChainlinkDataStreamsPriceState(ctx sdk.Context, feedID strin
 
 // GetAllChainlinkDataStreamsPriceStates fetches all Chainlink Data Streams price states.
 func (k *Keeper) GetAllChainlinkDataStreamsPriceStates(ctx sdk.Context) []*types.ChainlinkDataStreamsPriceState {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllChainlinkDataStreamsPriceStates")()
 
 	priceStates := make([]*types.ChainlinkDataStreamsPriceState, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -98,15 +96,17 @@ func (k *Keeper) GetAllChainlinkDataStreamsPriceStates(ctx sdk.Context) []*types
 }
 
 // ProcessChainlinkDataStreamsReport processes a Chainlink Data Streams report and updates the price state.
+// The caller must ensure price is non-nil and positive; otherwise the report is invalid and should be rejected.
 func (k *Keeper) ProcessChainlinkDataStreamsReport(
 	ctx sdk.Context,
 	feedID string,
 	reportPrice math.Int,
 	validFromTimestamp uint64,
 	observationsTimestamp uint64,
+	expiresAt uint64,
 	price math.LegacyDec,
 ) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessChainlinkDataStreamsReport")()
 
 	priceState := k.GetChainlinkDataStreamsPriceState(ctx, feedID)
 	blockTime := ctx.BlockTime().Unix()
@@ -117,6 +117,7 @@ func (k *Keeper) ProcessChainlinkDataStreamsReport(
 			reportPrice,
 			validFromTimestamp,
 			observationsTimestamp,
+			expiresAt,
 			price,
 			blockTime,
 		)
@@ -130,7 +131,7 @@ func (k *Keeper) ProcessChainlinkDataStreamsReport(
 		if types.CheckPriceFeedThreshold(priceState.PriceState.Price, price) {
 			return
 		}
-		priceState.Update(reportPrice, validFromTimestamp, observationsTimestamp, price, blockTime)
+		priceState.Update(reportPrice, validFromTimestamp, observationsTimestamp, expiresAt, price, blockTime)
 	}
 
 	k.SetChainlinkDataStreamsPriceState(ctx, priceState)

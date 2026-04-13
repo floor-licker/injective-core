@@ -6,7 +6,6 @@ import (
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/events"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -25,8 +24,7 @@ func (k BinaryOptionsKeeper) BinaryOptionsMarketLaunch(
 	minPriceTickSize, minQuantityTickSize, minNotional math.LegacyDec,
 	openNotionalCap v2.OpenNotionalCap,
 ) (*v2.BinaryOptionsMarket, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "BinaryOptionsMarketLaunch")()
 
 	params := k.GetParams(ctx)
 	relayerFeeShareRate := params.RelayerFeeShareRate
@@ -41,29 +39,24 @@ func (k BinaryOptionsKeeper) BinaryOptionsMarketLaunch(
 	marketID := types.NewBinaryOptionsMarketID(ticker, quoteDenom, oracleSymbol, oracleProvider, oracleType)
 
 	if !k.subaccount.IsDenomValid(ctx, quoteDenom) {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrapf(types.ErrInvalidQuoteDenom, "denom %s does not exist in supply", quoteDenom)
 	}
 	quoteDecimals, err := k.derivative.TokenDenomDecimals(ctx, quoteDenom)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, err
 	}
 
 	if market := k.GetBinaryOptionsMarketByID(ctx, marketID); market != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrapf(types.ErrBinaryOptionsMarketExists, "ticker %s quoteDenom %s", ticker, quoteDenom)
 	}
 
 	// Enforce that the provider exists, but not necessarily that the oracle price for the symbol exists
 	if k.oracle.GetProviderInfo(ctx, oracleProvider) == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrapf(types.ErrInvalidOracle, "oracle provider %s does not exist", oracleProvider)
 	}
 
 	// Enforce that expiration is in the future
 	if settlementTimestamp <= ctx.BlockTime().Unix() {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrapf(types.ErrInvalidSettlement, "settlement timestamp %d is in the past", settlementTimestamp)
 	}
 
@@ -111,6 +104,8 @@ func (k BinaryOptionsKeeper) BinaryOptionsMarketLaunch(
 }
 
 func (k BinaryOptionsKeeper) GetAllBinaryOptionsMarketsToExpire(ctx sdk.Context) []*v2.BinaryOptionsMarket {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBinaryOptionsMarketsToExpire")()
+
 	blockTime := ctx.BlockTime().Unix()
 	expiredMarkets := make([]*v2.BinaryOptionsMarket, 0)
 	k.IterateBinaryOptionsMarketExpiryTimestamps(ctx, uint64(blockTime), func(marketID common.Hash) (stop bool) {
@@ -138,6 +133,8 @@ func (k BinaryOptionsKeeper) GetAllBinaryOptionsMarketsToExpire(ctx sdk.Context)
 //
 //nolint:revive // ok
 func (k BinaryOptionsKeeper) GetAllScheduledBinaryOptionsMarketsToForciblySettle(ctx sdk.Context) []*v2.BinaryOptionsMarket {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllScheduledBinaryOptionsMarketsToForciblySettle")()
+
 	markets := make([]*v2.BinaryOptionsMarket, 0)
 	k.IterateScheduledBinaryOptionsMarketSettlements(ctx, func(marketID common.Hash) bool {
 		market := k.GetBinaryOptionsMarketByID(ctx, marketID)
@@ -161,6 +158,8 @@ func (k BinaryOptionsKeeper) GetAllScheduledBinaryOptionsMarketsToForciblySettle
 
 // GetAllBinaryOptionsMarketsToNaturallySettle gets all binary options markets scheduled for natural settlement
 func (k BinaryOptionsKeeper) GetAllBinaryOptionsMarketsToNaturallySettle(ctx sdk.Context) []*v2.BinaryOptionsMarket {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBinaryOptionsMarketsToNaturallySettle")()
+
 	markets := make([]*v2.BinaryOptionsMarket, 0)
 	blockTime := ctx.BlockTime().Unix()
 
@@ -194,6 +193,8 @@ func (k BinaryOptionsKeeper) GetAllBinaryOptionsMarketsToNaturallySettle(ctx sdk
 }
 
 func (k BinaryOptionsKeeper) trySetSettlementPrice(ctx sdk.Context, market *v2.BinaryOptionsMarket, marketID common.Hash) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "trySetSettlementPrice")()
+
 	oraclePrice := k.oracle.GetProviderPrice(ctx, market.OracleProvider, market.OracleSymbol)
 	if oraclePrice == nil {
 		ctx.Logger().Info(
@@ -218,8 +219,7 @@ func (k BinaryOptionsKeeper) trySetSettlementPrice(ctx sdk.Context, market *v2.B
 }
 
 func (k BinaryOptionsKeeper) ProcessBinaryOptionsMarketsToExpireAndSettle(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessBinaryOptionsMarketsToExpireAndSettle")()
 
 	// 1. Find all markets whose expiration time has just passed and cancel all orders
 	marketsToExpire := k.GetAllBinaryOptionsMarketsToExpire(ctx)
@@ -265,8 +265,7 @@ func (k BinaryOptionsKeeper) ProcessBinaryOptionsMarketsToExpireAndSettle(ctx sd
 }
 
 func (k BinaryOptionsKeeper) GetBinaryOptionsMarketAndStatus(ctx sdk.Context, marketID common.Hash) (*v2.BinaryOptionsMarket, bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBinaryOptionsMarketAndStatus")()
 
 	isEnabled := true
 	market := k.GetBinaryOptionsMarket(ctx, marketID, isEnabled)
@@ -279,8 +278,7 @@ func (k BinaryOptionsKeeper) GetBinaryOptionsMarketAndStatus(ctx sdk.Context, ma
 }
 
 func (k BinaryOptionsKeeper) GetAllBinaryOptionsMarketIDsScheduledForSettlement(ctx sdk.Context) []string {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBinaryOptionsMarketIDsScheduledForSettlement")()
 
 	marketIDs := make([]string, 0)
 	appendMarketID := func(m common.Hash) (stop bool) {
@@ -297,18 +295,15 @@ func (k BinaryOptionsKeeper) ExecuteBinaryOptionsMarketParamUpdateProposal(
 	ctx sdk.Context,
 	p *v2.BinaryOptionsMarketParamUpdateProposal,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExecuteBinaryOptionsMarketParamUpdateProposal")()
 
 	marketID := common.HexToHash(p.MarketId)
 	market := k.GetBinaryOptionsMarketByID(ctx, marketID)
 
 	if market == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return fmt.Errorf("market is not available, market_id %s", p.MarketId)
 	}
 	if market.Status == v2.MarketStatus_Demolished {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrInvalidMarketStatus, "can't update market that was demolished already")
 	}
 
@@ -329,6 +324,8 @@ func (k BinaryOptionsKeeper) ExecuteBinaryOptionsMarketParamUpdateProposal(
 }
 
 func (k BinaryOptionsKeeper) updateFeeRates(ctx sdk.Context, market *v2.BinaryOptionsMarket, p *v2.BinaryOptionsMarketParamUpdateProposal) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateFeeRates")()
+
 	if p.MakerFeeRate != nil {
 		k.updateMakerFeeRate(ctx, market, p)
 	}
@@ -345,6 +342,8 @@ func (k BinaryOptionsKeeper) updateMakerFeeRate(
 	market *v2.BinaryOptionsMarket,
 	p *v2.BinaryOptionsMarketParamUpdateProposal,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateMakerFeeRate")()
+
 	if p.MakerFeeRate.LT(market.MakerFeeRate) {
 		orders := k.derivative.GetAllDerivativeLimitOrdersByMarketID(ctx, common.HexToHash(market.MarketId))
 		k.derivative.HandleDerivativeFeeDecrease(ctx, orders, market.MakerFeeRate, *p.MakerFeeRate, market)
@@ -360,6 +359,8 @@ func (k BinaryOptionsKeeper) updateTimestamps(
 	market *v2.BinaryOptionsMarket,
 	p *v2.BinaryOptionsMarketParamUpdateProposal,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateTimestamps")()
+
 	marketID := common.HexToHash(market.MarketId)
 	if p.ExpirationTimestamp > 0 {
 		k.DeleteBinaryOptionsMarketExpiryTimestampIndex(ctx, marketID, market.ExpirationTimestamp)
@@ -418,6 +419,8 @@ func (k BinaryOptionsKeeper) CreateBinaryOptionsMarketOrder(
 	market v2.DerivativeMarketI,
 	markPrice math.LegacyDec,
 ) (orderHash common.Hash, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateBinaryOptionsMarketOrder")()
+
 	orderHash, _, err = k.CreateBinaryOptionsMarketOrderWithResultsForAtomicExecution(ctx, sender, derivativeOrder, market, markPrice)
 	return orderHash, err
 }
@@ -429,6 +432,8 @@ func (k BinaryOptionsKeeper) CreateBinaryOptionsMarketOrderWithResultsForAtomicE
 	market v2.DerivativeMarketI,
 	_ math.LegacyDec,
 ) (orderHash common.Hash, results *v2.DerivativeMarketOrderResults, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateBinaryOptionsMarketOrderWithResultsForAtomicExecution")()
+
 	requiredMargin := derivativeOrder.GetRequiredBinaryOptionsMargin(market.GetOracleScaleFactor())
 	if derivativeOrder.Margin.GT(requiredMargin) {
 		// decrease order margin to the required amount if greater, since there's no need to overpay

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/utils"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/marketfinder"
@@ -18,22 +17,17 @@ var _ v1.QueryServer = legacyQueryServer{}
 
 type legacyQueryServer struct {
 	v2QueryServer queryServer
-	svcTags       metrics.Tags
 }
 
 func NewV1QueryServer(k *Keeper) v1.QueryServer {
 	return legacyQueryServer{
 		v2QueryServer: createQueryServer(k),
-		svcTags:       metrics.Tags{"svc": "exchange_query_v1"},
 	}
 }
 
 func (q legacyQueryServer) L3DerivativeOrderBook(
 	ctx context.Context, req *v1.QueryFullDerivativeOrderbookRequest,
 ) (*v1.QueryFullDerivativeOrderbookResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(ctx, q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
@@ -46,7 +40,7 @@ func (q legacyQueryServer) L3DerivativeOrderBook(
 	reqV2 := &v2.QueryFullDerivativeOrderbookRequest{
 		MarketId: req.MarketId,
 	}
-	respV2, err := q.v2QueryServer.L3DerivativeOrderBook(c, reqV2)
+	respV2, err := q.v2QueryServer.L3DerivativeOrderBook(unwrappedContext, reqV2)
 	if err != nil {
 		return nil, err
 	}
@@ -80,9 +74,6 @@ func (q legacyQueryServer) L3DerivativeOrderBook(
 func (q legacyQueryServer) L3SpotOrderBook(
 	ctx context.Context, req *v1.QueryFullSpotOrderbookRequest,
 ) (*v1.QueryFullSpotOrderbookResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(ctx, q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
@@ -95,7 +86,7 @@ func (q legacyQueryServer) L3SpotOrderBook(
 	reqV2 := &v2.QueryFullSpotOrderbookRequest{
 		MarketId: req.MarketId,
 	}
-	respV2, err := q.v2QueryServer.L3SpotOrderBook(c, reqV2)
+	respV2, err := q.v2QueryServer.L3SpotOrderBook(unwrappedContext, reqV2)
 	if err != nil {
 		return nil, err
 	}
@@ -129,9 +120,6 @@ func (q legacyQueryServer) L3SpotOrderBook(
 func (q legacyQueryServer) QueryExchangeParams(
 	ctx context.Context, _ *v1.QueryExchangeParamsRequest,
 ) (*v1.QueryExchangeParamsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryExchangeParamsRequest{}
 	respV2, err := q.v2QueryServer.QueryExchangeParams(ctx, reqV2)
 	if err != nil {
@@ -148,9 +136,6 @@ func (q legacyQueryServer) QueryExchangeParams(
 func (q legacyQueryServer) SubaccountDeposits(
 	ctx context.Context, query *v1.QuerySubaccountDepositsRequest,
 ) (*v1.QuerySubaccountDepositsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QuerySubaccountDepositsRequest{
 		SubaccountId: query.SubaccountId,
 	}
@@ -183,9 +168,6 @@ func (q legacyQueryServer) SubaccountDeposits(
 func (q legacyQueryServer) SubaccountDeposit(
 	ctx context.Context, req *v1.QuerySubaccountDepositRequest,
 ) (*v1.QuerySubaccountDepositResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QuerySubaccountDepositRequest{
 		SubaccountId: req.SubaccountId,
 		Denom:        req.Denom,
@@ -212,9 +194,6 @@ func (q legacyQueryServer) SubaccountDeposit(
 func (q legacyQueryServer) ExchangeBalances(
 	ctx context.Context, _ *v1.QueryExchangeBalancesRequest,
 ) (*v1.QueryExchangeBalancesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryExchangeBalancesRequest{}
 	respV2, err := q.v2QueryServer.ExchangeBalances(ctx, reqV2)
 	if err != nil {
@@ -244,8 +223,6 @@ func (q legacyQueryServer) AggregateVolume(
 	ctx context.Context, request *v1.QueryAggregateVolumeRequest,
 ) (*v1.QueryAggregateVolumeResponse, error) {
 	var market v2.MarketI
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
 
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
@@ -275,9 +252,6 @@ func (q legacyQueryServer) AggregateVolume(
 func (q legacyQueryServer) AggregateVolumes(
 	ctx context.Context, request *v1.QueryAggregateVolumesRequest,
 ) (*v1.QueryAggregateVolumesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -365,9 +339,6 @@ func (legacyQueryServer) convertAggregateMarketVolumeRecords(
 func (q legacyQueryServer) AggregateMarketVolume(
 	ctx context.Context, request *v1.QueryAggregateMarketVolumeRequest,
 ) (*v1.QueryAggregateMarketVolumeResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 	market, err := marketFinder.FindMarket(unwrappedContext, request.MarketId)
@@ -392,8 +363,6 @@ func (q legacyQueryServer) AggregateMarketVolume(
 func (q legacyQueryServer) AggregateMarketVolumes(
 	ctx context.Context, request *v1.QueryAggregateMarketVolumesRequest,
 ) (*v1.QueryAggregateMarketVolumesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -424,9 +393,6 @@ func (q legacyQueryServer) AggregateMarketVolumes(
 func (q legacyQueryServer) DenomDecimal(
 	ctx context.Context, request *v1.QueryDenomDecimalRequest,
 ) (*v1.QueryDenomDecimalResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryAuctionExchangeTransferDenomDecimalRequest{Denom: request.Denom}
 	respV2, err := q.v2QueryServer.AuctionExchangeTransferDenomDecimal(ctx, reqV2)
 	if err != nil {
@@ -439,9 +405,6 @@ func (q legacyQueryServer) DenomDecimal(
 func (q legacyQueryServer) DenomDecimals(
 	ctx context.Context, request *v1.QueryDenomDecimalsRequest,
 ) (*v1.QueryDenomDecimalsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryAuctionExchangeTransferDenomDecimalsRequest{Denoms: request.Denoms}
 	respV2, err := q.v2QueryServer.AuctionExchangeTransferDenomDecimals(ctx, reqV2)
 	if err != nil {
@@ -465,9 +428,6 @@ func (q legacyQueryServer) DenomDecimals(
 func (q legacyQueryServer) SpotMarkets(
 	ctx context.Context, request *v1.QuerySpotMarketsRequest,
 ) (*v1.QuerySpotMarketsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QuerySpotMarketsRequest{
@@ -495,9 +455,6 @@ func (q legacyQueryServer) SpotMarkets(
 }
 
 func (q legacyQueryServer) SpotMarket(ctx context.Context, request *v1.QuerySpotMarketRequest) (*v1.QuerySpotMarketResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QuerySpotMarketRequest{MarketId: request.MarketId}
@@ -521,9 +478,6 @@ func (q legacyQueryServer) SpotMarket(ctx context.Context, request *v1.QuerySpot
 func (q legacyQueryServer) FullSpotMarkets(
 	ctx context.Context, request *v1.QueryFullSpotMarketsRequest,
 ) (*v1.QueryFullSpotMarketsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryFullSpotMarketsRequest{
@@ -554,9 +508,6 @@ func (q legacyQueryServer) FullSpotMarkets(
 func (q legacyQueryServer) FullSpotMarket(
 	ctx context.Context, request *v1.QueryFullSpotMarketRequest,
 ) (*v1.QueryFullSpotMarketResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryFullSpotMarketRequest{
@@ -584,9 +535,6 @@ func (q legacyQueryServer) FullSpotMarket(
 func (q legacyQueryServer) SpotOrderbook(
 	ctx context.Context, request *v1.QuerySpotOrderbookRequest,
 ) (*v1.QuerySpotOrderbookResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -646,9 +594,6 @@ func (q legacyQueryServer) SpotOrderbook(
 func (q legacyQueryServer) TraderSpotOrders(
 	ctx context.Context, request *v1.QueryTraderSpotOrdersRequest,
 ) (*v1.QueryTraderSpotOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -684,9 +629,6 @@ func (q legacyQueryServer) TraderSpotOrders(
 func (q legacyQueryServer) AccountAddressSpotOrders(
 	ctx context.Context, request *v1.QueryAccountAddressSpotOrdersRequest,
 ) (*v1.QueryAccountAddressSpotOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -722,9 +664,6 @@ func (q legacyQueryServer) AccountAddressSpotOrders(
 func (q legacyQueryServer) SpotOrdersByHashes(
 	ctx context.Context, request *v1.QuerySpotOrdersByHashesRequest,
 ) (*v1.QuerySpotOrdersByHashesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -761,9 +700,6 @@ func (q legacyQueryServer) SpotOrdersByHashes(
 func (q legacyQueryServer) SubaccountOrders(
 	ctx context.Context, request *v1.QuerySubaccountOrdersRequest,
 ) (*v1.QuerySubaccountOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -823,9 +759,6 @@ func (q legacyQueryServer) SubaccountOrders(
 func (q legacyQueryServer) TraderSpotTransientOrders(
 	ctx context.Context, request *v1.QueryTraderSpotOrdersRequest,
 ) (*v1.QueryTraderSpotOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -861,9 +794,6 @@ func (q legacyQueryServer) TraderSpotTransientOrders(
 func (q legacyQueryServer) SpotMidPriceAndTOB(
 	ctx context.Context, request *v1.QuerySpotMidPriceAndTOBRequest,
 ) (*v1.QuerySpotMidPriceAndTOBResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -901,9 +831,6 @@ func (q legacyQueryServer) SpotMidPriceAndTOB(
 func (q legacyQueryServer) DerivativeMidPriceAndTOB(
 	ctx context.Context, request *v1.QueryDerivativeMidPriceAndTOBRequest,
 ) (*v1.QueryDerivativeMidPriceAndTOBResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -941,9 +868,6 @@ func (q legacyQueryServer) DerivativeMidPriceAndTOB(
 func (q legacyQueryServer) DerivativeOrderbook(
 	ctx context.Context, request *v1.QueryDerivativeOrderbookRequest,
 ) (*v1.QueryDerivativeOrderbookResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -997,9 +921,6 @@ func (q legacyQueryServer) DerivativeOrderbook(
 func (q legacyQueryServer) TraderDerivativeOrders(
 	ctx context.Context, request *v1.QueryTraderDerivativeOrdersRequest,
 ) (*v1.QueryTraderDerivativeOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1034,9 +955,6 @@ func (q legacyQueryServer) TraderDerivativeOrders(
 func (q legacyQueryServer) AccountAddressDerivativeOrders(
 	ctx context.Context, request *v1.QueryAccountAddressDerivativeOrdersRequest,
 ) (*v1.QueryAccountAddressDerivativeOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1071,9 +989,6 @@ func (q legacyQueryServer) AccountAddressDerivativeOrders(
 func (q legacyQueryServer) DerivativeOrdersByHashes(
 	ctx context.Context, request *v1.QueryDerivativeOrdersByHashesRequest,
 ) (*v1.QueryDerivativeOrdersByHashesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1109,9 +1024,6 @@ func (q legacyQueryServer) DerivativeOrdersByHashes(
 func (q legacyQueryServer) TraderDerivativeTransientOrders(
 	ctx context.Context, request *v1.QueryTraderDerivativeOrdersRequest,
 ) (*v1.QueryTraderDerivativeOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1147,9 +1059,6 @@ func (q legacyQueryServer) TraderDerivativeTransientOrders(
 func (q legacyQueryServer) DerivativeMarkets(
 	ctx context.Context, request *v1.QueryDerivativeMarketsRequest,
 ) (*v1.QueryDerivativeMarketsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryDerivativeMarketsRequest{
@@ -1179,9 +1088,6 @@ func (q legacyQueryServer) DerivativeMarkets(
 func (q legacyQueryServer) DerivativeMarket(
 	ctx context.Context, request *v1.QueryDerivativeMarketRequest,
 ) (*v1.QueryDerivativeMarketResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryDerivativeMarketRequest{MarketId: request.MarketId}
@@ -1201,9 +1107,6 @@ func (q legacyQueryServer) DerivativeMarket(
 func (q legacyQueryServer) DerivativeMarketAddress(
 	ctx context.Context, request *v1.QueryDerivativeMarketAddressRequest,
 ) (*v1.QueryDerivativeMarketAddressResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryDerivativeMarketAddressRequest{MarketId: request.MarketId}
 	respV2, err := q.v2QueryServer.DerivativeMarketAddress(ctx, reqV2)
 	if err != nil {
@@ -1221,9 +1124,6 @@ func (q legacyQueryServer) DerivativeMarketAddress(
 func (q legacyQueryServer) SubaccountTradeNonce(
 	ctx context.Context, request *v1.QuerySubaccountTradeNonceRequest,
 ) (*v1.QuerySubaccountTradeNonceResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QuerySubaccountTradeNonceRequest{SubaccountId: request.SubaccountId}
 	respV2, err := q.v2QueryServer.SubaccountTradeNonce(ctx, reqV2)
 	if err != nil {
@@ -1236,9 +1136,6 @@ func (q legacyQueryServer) SubaccountTradeNonce(
 func (q legacyQueryServer) ExchangeModuleState(
 	ctx context.Context, _ *v1.QueryModuleStateRequest,
 ) (*v1.QueryModuleStateResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1907,9 +1804,6 @@ func convertActiveGrants(respV2 *v2.QueryModuleStateResponse, resp *v1.QueryModu
 }
 
 func (q legacyQueryServer) Positions(ctx context.Context, _ *v1.QueryPositionsRequest) (*v1.QueryPositionsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1941,9 +1835,6 @@ func (q legacyQueryServer) Positions(ctx context.Context, _ *v1.QueryPositionsRe
 func (q legacyQueryServer) SubaccountPositions(
 	ctx context.Context, request *v1.QuerySubaccountPositionsRequest,
 ) (*v1.QuerySubaccountPositionsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -1975,9 +1866,6 @@ func (q legacyQueryServer) SubaccountPositions(
 func (q legacyQueryServer) SubaccountPositionInMarket(
 	ctx context.Context, request *v1.QuerySubaccountPositionInMarketRequest,
 ) (*v1.QuerySubaccountPositionInMarketResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -2011,9 +1899,6 @@ func (q legacyQueryServer) SubaccountPositionInMarket(
 func (q legacyQueryServer) SubaccountEffectivePositionInMarket(
 	ctx context.Context, request *v1.QuerySubaccountEffectivePositionInMarketRequest,
 ) (*v1.QuerySubaccountEffectivePositionInMarketResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -2050,9 +1935,6 @@ func (q legacyQueryServer) SubaccountEffectivePositionInMarket(
 func (q legacyQueryServer) PerpetualMarketInfo(
 	ctx context.Context, request *v1.QueryPerpetualMarketInfoRequest,
 ) (*v1.QueryPerpetualMarketInfoResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryPerpetualMarketInfoRequest{MarketId: request.MarketId}
 	respV2, err := q.v2QueryServer.PerpetualMarketInfo(ctx, reqV2)
 	if err != nil {
@@ -2068,9 +1950,6 @@ func (q legacyQueryServer) PerpetualMarketInfo(
 func (q legacyQueryServer) ExpiryFuturesMarketInfo(
 	ctx context.Context, request *v1.QueryExpiryFuturesMarketInfoRequest,
 ) (*v1.QueryExpiryFuturesMarketInfoResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -2096,9 +1975,6 @@ func (q legacyQueryServer) ExpiryFuturesMarketInfo(
 func (q legacyQueryServer) PerpetualMarketFunding(
 	ctx context.Context, request *v1.QueryPerpetualMarketFundingRequest,
 ) (*v1.QueryPerpetualMarketFundingResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 	market, err := marketFinder.FindDerivativeOrBinaryOptionsMarket(unwrappedContext, request.MarketId)
@@ -2122,9 +1998,6 @@ func (q legacyQueryServer) PerpetualMarketFunding(
 func (q legacyQueryServer) SubaccountOrderMetadata(
 	ctx context.Context, request *v1.QuerySubaccountOrderMetadataRequest,
 ) (*v1.QuerySubaccountOrderMetadataResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 
@@ -2170,9 +2043,6 @@ func (q legacyQueryServer) SubaccountOrderMetadata(
 func (q legacyQueryServer) TradeRewardPoints(
 	ctx context.Context, request *v1.QueryTradeRewardPointsRequest,
 ) (*v1.QueryTradeRewardPointsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryTradeRewardPointsRequest{
@@ -2199,9 +2069,6 @@ func (q legacyQueryServer) TradeRewardPoints(
 func (q legacyQueryServer) PendingTradeRewardPoints(
 	ctx context.Context, request *v1.QueryTradeRewardPointsRequest,
 ) (*v1.QueryTradeRewardPointsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryTradeRewardPointsRequest{
@@ -2229,9 +2096,6 @@ func (q legacyQueryServer) PendingTradeRewardPoints(
 func (q legacyQueryServer) TradeRewardCampaign(
 	ctx context.Context, _ *v1.QueryTradeRewardCampaignRequest,
 ) (*v1.QueryTradeRewardCampaignResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryTradeRewardCampaignRequest{}
@@ -2280,9 +2144,6 @@ func (q legacyQueryServer) TradeRewardCampaign(
 func (q legacyQueryServer) FeeDiscountAccountInfo(
 	ctx context.Context, request *v1.QueryFeeDiscountAccountInfoRequest,
 ) (*v1.QueryFeeDiscountAccountInfoResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryFeeDiscountAccountInfoRequest{Account: request.Account}
@@ -2318,9 +2179,6 @@ func (q legacyQueryServer) FeeDiscountAccountInfo(
 func (q legacyQueryServer) FeeDiscountSchedule(
 	ctx context.Context, _ *v1.QueryFeeDiscountScheduleRequest,
 ) (*v1.QueryFeeDiscountScheduleResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryFeeDiscountScheduleRequest{}
@@ -2353,9 +2211,6 @@ func (q legacyQueryServer) FeeDiscountSchedule(
 func (q legacyQueryServer) BalanceMismatches(
 	ctx context.Context, request *v1.QueryBalanceMismatchesRequest,
 ) (*v1.QueryBalanceMismatchesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryBalanceMismatchesRequest{DustFactor: request.DustFactor}
 	respV2, err := q.v2QueryServer.BalanceMismatches(ctx, reqV2)
 	if err != nil {
@@ -2384,9 +2239,6 @@ func (q legacyQueryServer) BalanceMismatches(
 func (q legacyQueryServer) BalanceWithBalanceHolds(
 	ctx context.Context, _ *v1.QueryBalanceWithBalanceHoldsRequest,
 ) (*v1.QueryBalanceWithBalanceHoldsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryBalanceWithBalanceHoldsRequest{}
 	respV2, err := q.v2QueryServer.BalanceWithBalanceHolds(ctx, reqV2)
 	if err != nil {
@@ -2413,9 +2265,6 @@ func (q legacyQueryServer) BalanceWithBalanceHolds(
 func (q legacyQueryServer) FeeDiscountTierStatistics(
 	ctx context.Context, _ *v1.QueryFeeDiscountTierStatisticsRequest,
 ) (*v1.QueryFeeDiscountTierStatisticsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryFeeDiscountTierStatisticsRequest{}
 	respV2, err := q.v2QueryServer.FeeDiscountTierStatistics(ctx, reqV2)
 	if err != nil {
@@ -2440,9 +2289,6 @@ func (q legacyQueryServer) MitoVaultInfos(
 	ctx context.Context,
 	_ *v1.MitoVaultInfosRequest,
 ) (*v1.MitoVaultInfosResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.MitoVaultInfosRequest{}
 	respV2, err := q.v2QueryServer.MitoVaultInfos(ctx, reqV2)
 	if err != nil {
@@ -2462,9 +2308,6 @@ func (q legacyQueryServer) MitoVaultInfos(
 func (q legacyQueryServer) QueryMarketIDFromVault(
 	ctx context.Context, request *v1.QueryMarketIDFromVaultRequest,
 ) (*v1.QueryMarketIDFromVaultResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryMarketIDFromVaultRequest{VaultAddress: request.VaultAddress}
 	respV2, err := q.v2QueryServer.QueryMarketIDFromVault(ctx, reqV2)
 	if err != nil {
@@ -2477,9 +2320,6 @@ func (q legacyQueryServer) QueryMarketIDFromVault(
 func (q legacyQueryServer) HistoricalTradeRecords(
 	ctx context.Context, request *v1.QueryHistoricalTradeRecordsRequest,
 ) (*v1.QueryHistoricalTradeRecordsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 	market, err := marketFinder.FindMarket(unwrappedContext, request.MarketId)
@@ -2510,9 +2350,6 @@ func (q legacyQueryServer) HistoricalTradeRecords(
 func (q legacyQueryServer) IsOptedOutOfRewards(
 	ctx context.Context, request *v1.QueryIsOptedOutOfRewardsRequest,
 ) (*v1.QueryIsOptedOutOfRewardsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryIsOptedOutOfRewardsRequest{Account: request.Account}
 	respV2, err := q.v2QueryServer.IsOptedOutOfRewards(ctx, reqV2)
 	if err != nil {
@@ -2525,9 +2362,6 @@ func (q legacyQueryServer) IsOptedOutOfRewards(
 func (q legacyQueryServer) OptedOutOfRewardsAccounts(
 	ctx context.Context, _ *v1.QueryOptedOutOfRewardsAccountsRequest,
 ) (*v1.QueryOptedOutOfRewardsAccountsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryOptedOutOfRewardsAccountsRequest{}
 	respV2, err := q.v2QueryServer.OptedOutOfRewardsAccounts(ctx, reqV2)
 	if err != nil {
@@ -2540,9 +2374,6 @@ func (q legacyQueryServer) OptedOutOfRewardsAccounts(
 func (q legacyQueryServer) MarketVolatility(
 	ctx context.Context, request *v1.QueryMarketVolatilityRequest,
 ) (*v1.QueryMarketVolatilityResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 	market, err := marketFinder.FindMarket(unwrappedContext, request.MarketId)
@@ -2606,9 +2437,6 @@ func (q legacyQueryServer) MarketVolatility(
 func (q legacyQueryServer) BinaryOptionsMarkets(
 	ctx context.Context, request *v1.QueryBinaryMarketsRequest,
 ) (*v1.QueryBinaryMarketsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryBinaryMarketsRequest{Status: request.Status}
@@ -2634,9 +2462,6 @@ func (q legacyQueryServer) BinaryOptionsMarkets(
 func (q legacyQueryServer) TraderDerivativeConditionalOrders(
 	ctx context.Context, request *v1.QueryTraderDerivativeConditionalOrdersRequest,
 ) (*v1.QueryTraderDerivativeConditionalOrdersResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 	marketFinder := marketfinder.New(q.v2QueryServer.Keeper.BaseKeeper)
 	market, err := marketFinder.FindDerivativeOrBinaryOptionsMarket(unwrappedContext, request.MarketId)
@@ -2679,9 +2504,6 @@ func (q legacyQueryServer) TraderDerivativeConditionalOrders(
 func (q legacyQueryServer) MarketAtomicExecutionFeeMultiplier(
 	ctx context.Context, request *v1.QueryMarketAtomicExecutionFeeMultiplierRequest,
 ) (*v1.QueryMarketAtomicExecutionFeeMultiplierResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryMarketAtomicExecutionFeeMultiplierRequest{MarketId: request.MarketId}
 	respV2, err := q.v2QueryServer.MarketAtomicExecutionFeeMultiplier(ctx, reqV2)
 	if err != nil {
@@ -2694,9 +2516,6 @@ func (q legacyQueryServer) MarketAtomicExecutionFeeMultiplier(
 func (q legacyQueryServer) ActiveStakeGrant(
 	ctx context.Context, request *v1.QueryActiveStakeGrantRequest,
 ) (*v1.QueryActiveStakeGrantResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryActiveStakeGrantRequest{Grantee: request.Grantee}
 	respV2, err := q.v2QueryServer.ActiveStakeGrant(ctx, reqV2)
 	if err != nil {
@@ -2726,9 +2545,6 @@ func (q legacyQueryServer) ActiveStakeGrant(
 func (q legacyQueryServer) GrantAuthorization(
 	ctx context.Context, request *v1.QueryGrantAuthorizationRequest,
 ) (*v1.QueryGrantAuthorizationResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryGrantAuthorizationRequest{
 		Granter: request.Granter,
 		Grantee: request.Grantee,
@@ -2745,9 +2561,6 @@ func (q legacyQueryServer) GrantAuthorization(
 func (q legacyQueryServer) GrantAuthorizations(
 	ctx context.Context, request *v1.QueryGrantAuthorizationsRequest,
 ) (*v1.QueryGrantAuthorizationsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryGrantAuthorizationsRequest{Granter: request.Granter}
 	respV2, err := q.v2QueryServer.GrantAuthorizations(ctx, reqV2)
 	if err != nil {
@@ -2770,9 +2583,6 @@ func (q legacyQueryServer) GrantAuthorizations(
 }
 
 func (q legacyQueryServer) MarketBalance(c context.Context, req *v1.QueryMarketBalanceRequest) (*v1.QueryMarketBalanceResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryMarketBalanceRequest{
 		MarketId: req.MarketId,
 	}
@@ -2789,9 +2599,6 @@ func (q legacyQueryServer) MarketBalance(c context.Context, req *v1.QueryMarketB
 }
 
 func (q legacyQueryServer) MarketBalances(c context.Context, _ *v1.QueryMarketBalancesRequest) (*v1.QueryMarketBalancesResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	reqV2 := &v2.QueryMarketBalancesRequest{}
 	respV2, err := q.v2QueryServer.MarketBalances(c, reqV2)
 	if err != nil {
@@ -2816,9 +2623,6 @@ func (q legacyQueryServer) MarketBalances(c context.Context, _ *v1.QueryMarketBa
 func (q legacyQueryServer) DenomMinNotional(
 	c context.Context, req *v1.QueryDenomMinNotionalRequest,
 ) (*v1.QueryDenomMinNotionalResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
 
 	reqV2 := &v2.QueryDenomMinNotionalRequest{
@@ -2845,9 +2649,6 @@ func (q legacyQueryServer) DenomMinNotional(
 func (q legacyQueryServer) DenomMinNotionals(
 	ctx context.Context, _ *types.QueryDenomMinNotionalsRequest,
 ) (*types.QueryDenomMinNotionalsResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(q.svcTags)
-	defer doneFn()
-
 	unwrappedContext := sdk.UnwrapSDKContext(ctx)
 
 	reqV2 := &v2.QueryDenomMinNotionalsRequest{}

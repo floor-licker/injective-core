@@ -38,6 +38,8 @@ func init() {
 // verifyChainlinkReport verifies a Chainlink report via the configured verifier proxy
 // contract and returns the verified report bytes.
 func (k *Keeper) verifyChainlinkReport(ctx sdk.Context, fullReport []byte) ([]byte, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "verifyChainlinkReport")()
+
 	params := k.GetParams(ctx)
 
 	// Verification required - check if verifier is configured

@@ -3,7 +3,6 @@ package keeper
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
@@ -11,8 +10,7 @@ import (
 
 // GetBandIBCLatestRequestID returns the latest requestID of Band oracle request types.
 func (k Keeper) GetBandIBCLatestRequestID(ctx sdk.Context) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCLatestRequestID")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.LatestRequestIDKey)
@@ -25,8 +23,7 @@ func (k Keeper) GetBandIBCLatestRequestID(ctx sdk.Context) uint64 {
 
 // SetBandIBCLatestRequestID sets the latest requestID of Band oracle request types.
 func (k Keeper) SetBandIBCLatestRequestID(ctx sdk.Context, requestID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBandIBCLatestRequestID")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Set(types.LatestRequestIDKey, sdk.Uint64ToBigEndian(requestID))
@@ -34,8 +31,7 @@ func (k Keeper) SetBandIBCLatestRequestID(ctx sdk.Context, requestID uint64) {
 
 // SetBandIBCOracleRequest sets the Band IBC oracle request data
 func (k Keeper) SetBandIBCOracleRequest(ctx sdk.Context, req types.BandOracleRequest) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBandIBCOracleRequest")()
 
 	bz := k.cdc.MustMarshal(&req)
 	k.getStore(ctx).Set(types.GetBandIBCOracleRequestIDKey(req.RequestId), bz)
@@ -43,8 +39,7 @@ func (k Keeper) SetBandIBCOracleRequest(ctx sdk.Context, req types.BandOracleReq
 
 // GetBandIBCOracleRequest gets the Band IBC oracle request data
 func (k Keeper) GetBandIBCOracleRequest(ctx sdk.Context, requestID uint64) *types.BandOracleRequest {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCOracleRequest")()
 
 	var bandOracleRequest types.BandOracleRequest
 	bz := k.getStore(ctx).Get(types.GetBandIBCOracleRequestIDKey(requestID))
@@ -58,16 +53,14 @@ func (k Keeper) GetBandIBCOracleRequest(ctx sdk.Context, requestID uint64) *type
 
 // DeleteBandIBCOracleRequest deletes the Band IBC oracle request call data
 func (k Keeper) DeleteBandIBCOracleRequest(ctx sdk.Context, requestID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteBandIBCOracleRequest")()
 
 	k.getStore(ctx).Delete(types.GetBandIBCOracleRequestIDKey(requestID))
 }
 
 // GetAllBandIBCOracleRequests gets all Band IBC oracle requests for each requestID
 func (k Keeper) GetAllBandIBCOracleRequests(ctx sdk.Context) []*types.BandOracleRequest {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBandIBCOracleRequests")()
 
 	bandIBCOracleRequests := make([]*types.BandOracleRequest, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -87,8 +80,7 @@ func (k Keeper) GetAllBandIBCOracleRequests(ctx sdk.Context) []*types.BandOracle
 
 // SetBandIBCParams sets the Band IBC params in the state
 func (k Keeper) SetBandIBCParams(ctx sdk.Context, bandIBCParams types.BandIBCParams) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBandIBCParams")()
 
 	bz := k.cdc.MustMarshal(&bandIBCParams)
 	k.getStore(ctx).Set(types.BandIBCParamsKey, bz)
@@ -96,8 +88,7 @@ func (k Keeper) SetBandIBCParams(ctx sdk.Context, bandIBCParams types.BandIBCPar
 
 // GetBandIBCParams gets the Band IBC params stored in the state
 func (k Keeper) GetBandIBCParams(ctx sdk.Context) types.BandIBCParams {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCParams")()
 
 	bz := k.getStore(ctx).Get(types.BandIBCParamsKey)
 	if bz == nil {
@@ -111,8 +102,7 @@ func (k Keeper) GetBandIBCParams(ctx sdk.Context) types.BandIBCParams {
 
 // SetBandIBCCallData sets the Band IBC oracle request call data
 func (k Keeper) SetBandIBCCallDataRecord(ctx sdk.Context, record *types.CalldataRecord) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBandIBCCallDataRecord")()
 
 	bz := k.cdc.MustMarshal(record)
 	k.getStore(ctx).Set(types.GetBandIBCCallDataRecordKey(record.ClientId), bz)
@@ -120,16 +110,14 @@ func (k Keeper) SetBandIBCCallDataRecord(ctx sdk.Context, record *types.Calldata
 
 // DeleteBandIBCCallDataRecord deletes the Band IBC oracle request call data
 func (k Keeper) DeleteBandIBCCallDataRecord(ctx sdk.Context, clientID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteBandIBCCallDataRecord")()
 
 	k.getStore(ctx).Delete(types.GetBandIBCCallDataRecordKey(clientID))
 }
 
 // GetAllBandCalldataRecords gets all Band IBC oracle request CallData for each clientID
 func (k Keeper) GetAllBandCalldataRecords(ctx sdk.Context) []*types.CalldataRecord {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBandCalldataRecords")()
 
 	calldataRecords := make([]*types.CalldataRecord, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -149,8 +137,7 @@ func (k Keeper) GetAllBandCalldataRecords(ctx sdk.Context) []*types.CalldataReco
 
 // GetBandIBCCallDataRecord gets the Band IBC oracle request CallDataRecord for a given clientID
 func (k Keeper) GetBandIBCCallDataRecord(ctx sdk.Context, clientID uint64) *types.CalldataRecord {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCCallDataRecord")()
 
 	var callDataRecord types.CalldataRecord
 	bz := k.getStore(ctx).Get(types.GetBandIBCCallDataRecordKey(clientID))
@@ -163,8 +150,7 @@ func (k Keeper) GetBandIBCCallDataRecord(ctx sdk.Context, clientID uint64) *type
 
 // GetBandIBCLatestClientID returns the latest clientID of Band oracle request packet data.
 func (k Keeper) GetBandIBCLatestClientID(ctx sdk.Context) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCLatestClientID")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.LatestClientIDKey)
@@ -177,8 +163,7 @@ func (k Keeper) GetBandIBCLatestClientID(ctx sdk.Context) uint64 {
 
 // SetBandIBCLatestClientID sets the latest clientID of Band oracle request packet data.
 func (k Keeper) SetBandIBCLatestClientID(ctx sdk.Context, clientID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBandIBCLatestClientID")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Set(types.LatestClientIDKey, sdk.Uint64ToBigEndian(clientID))
@@ -186,8 +171,7 @@ func (k Keeper) SetBandIBCLatestClientID(ctx sdk.Context, clientID uint64) {
 
 // GetBandIBCPriceState reads the stored band ibc price state.
 func (k *Keeper) GetBandIBCPriceState(ctx sdk.Context, symbol string) *types.BandPriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCPriceState")()
 
 	var priceState types.BandPriceState
 	bz := k.getStore(ctx).Get(types.GetBandIBCPriceStoreKey(symbol))
@@ -201,8 +185,7 @@ func (k *Keeper) GetBandIBCPriceState(ctx sdk.Context, symbol string) *types.Ban
 
 // SetBandIBCPriceState sets the band ibc price state.
 func (k *Keeper) SetBandIBCPriceState(ctx sdk.Context, symbol string, priceState *types.BandPriceState) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBandIBCPriceState")()
 
 	bz := k.cdc.MustMarshal(priceState)
 	k.getStore(ctx).Set(types.GetBandIBCPriceStoreKey(symbol), bz)
@@ -215,8 +198,7 @@ func (k *Keeper) SetBandIBCPriceState(ctx sdk.Context, symbol string, priceState
 
 // GetBandIBCReferencePrice fetches band ibc prices for a given pair in math.LegacyDec
 func (k *Keeper) GetBandIBCReferencePrice(ctx sdk.Context, base, quote string) *math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandIBCReferencePrice")()
 	// query ref by using GetBandIBCPriceState
 	basePriceState := k.GetBandIBCPriceState(ctx, base)
 	if basePriceState == nil {
@@ -245,8 +227,7 @@ func (k *Keeper) GetBandIBCReferencePrice(ctx sdk.Context, base, quote string) *
 
 // GetAllBandIBCPriceStates reads all stored band IBC price states.
 func (k *Keeper) GetAllBandIBCPriceStates(ctx sdk.Context) []*types.BandPriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBandIBCPriceStates")()
 
 	bandIBCPriceStates := make([]*types.BandPriceState, 0)
 	store := ctx.KVStore(k.storeKey)

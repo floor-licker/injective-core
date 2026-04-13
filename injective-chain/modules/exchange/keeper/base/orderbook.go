@@ -4,7 +4,6 @@ import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -22,8 +21,7 @@ func (k *BaseKeeper) GetOrderbookPriceLevelQuantity(
 	isSpot bool,
 	price math.LegacyDec,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOrderbookPriceLevelQuantity")()
 
 	var key []byte
 	if isSpot {
@@ -61,8 +59,7 @@ func (k *BaseKeeper) SetOrderbookPriceLevelQuantity(
 	price,
 	quantity math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetOrderbookPriceLevelQuantity")()
 
 	var key []byte
 	if isSpot {
@@ -92,8 +89,7 @@ func (k *BaseKeeper) IterateTransientOrderbookPriceLevels(
 	isSpot bool,
 	process func(marketID common.Hash, isBuy bool, priceLevel *v2.Level) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateTransientOrderbookPriceLevels")()
 
 	store := k.getTransientStore(ctx)
 	var priceLevelStore prefix.Store
@@ -136,8 +132,7 @@ func (k *BaseKeeper) GetOrderbookPriceLevels(
 	limitCumulativeNotional, // optionally retrieve only top positions up to this cumulative notional value (useful when calc. worst price for BUY)
 	limitCumulativeQuantity *math.LegacyDec, // optionally retrieve only top positions up to this cumulative quantity value (useful when calc. worst price for SELL)
 ) []*v2.Level {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOrderbookPriceLevels")()
 
 	var storeKey []byte
 	if isSpot {
@@ -188,8 +183,7 @@ func (k *BaseKeeper) GetOrderbookPriceLevels(
 
 // GetOrderbookSequence gets the orderbook sequence for a given marketID.
 func (k *BaseKeeper) GetOrderbookSequence(ctx sdk.Context, marketID common.Hash) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOrderbookSequence")()
 
 	store := k.getStore(ctx)
 	sequenceStore := prefix.NewStore(store, types.OrderbookSequencePrefix)
@@ -203,8 +197,7 @@ func (k *BaseKeeper) GetOrderbookSequence(ctx sdk.Context, marketID common.Hash)
 
 // GetAllOrderbookSequences gets all the orderbook sequences.
 func (k *BaseKeeper) GetAllOrderbookSequences(ctx sdk.Context) []*v2.OrderbookSequence {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllOrderbookSequences")()
 
 	store := k.getStore(ctx)
 	sequenceStore := prefix.NewStore(store, types.OrderbookSequencePrefix)
@@ -226,8 +219,7 @@ func (k *BaseKeeper) GetAllOrderbookSequences(ctx sdk.Context) []*v2.OrderbookSe
 
 // SetOrderbookSequence sets the orderbook sequence for a given marketID.
 func (k *BaseKeeper) SetOrderbookSequence(ctx sdk.Context, marketID common.Hash, sequence uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetOrderbookSequence")()
 
 	store := k.getStore(ctx)
 	sequenceStore := prefix.NewStore(store, types.OrderbookSequencePrefix)
@@ -242,8 +234,7 @@ func (k *BaseKeeper) IncrementOrderbookPriceLevelQuantity(
 	price,
 	quantity math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementOrderbookPriceLevelQuantity")()
 
 	if quantity.IsZero() {
 		return
@@ -264,8 +255,7 @@ func (k *BaseKeeper) DecrementOrderbookPriceLevelQuantity(
 	price,
 	quantity math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DecrementOrderbookPriceLevelQuantity")()
 
 	if quantity.IsZero() {
 		return
@@ -282,8 +272,7 @@ func (k *BaseKeeper) IncrementOrderbookSequence(
 	ctx sdk.Context,
 	marketID common.Hash,
 ) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementOrderbookSequence")()
 
 	sequence := k.GetOrderbookSequence(ctx, marketID)
 	sequence++

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -12,16 +11,11 @@ import (
 // Wrapper struct
 type Hooks struct {
 	k *Keeper
-
-	svcTags metrics.Tags
 }
 
 func NewHooks(keeper *Keeper) Hooks {
 	return Hooks{
 		k: keeper,
-		svcTags: metrics.Tags{
-			"svc": "peggy_hooks",
-		},
 	}
 }
 
@@ -30,28 +24,23 @@ var _ stakingtypes.StakingHooks = Hooks{}
 // Create new peggy hooks
 func (k *Keeper) Hooks() Hooks { return NewHooks(k) }
 
-func (h Hooks) AfterValidatorBeginUnbonding(ctx context.Context, _ sdk.ConsAddress, _ sdk.ValAddress) error {
-	metrics.ReportFuncCall(h.svcTags)
-	doneFn := metrics.ReportFuncTiming(h.svcTags)
-	defer doneFn()
+func (h Hooks) AfterValidatorBeginUnbonding(c context.Context, _ sdk.ConsAddress, _ sdk.ValAddress) error {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "Hooks.AfterValidatorBeginUnbonding")()
 
 	// When Validator starts Unbonding, Persist the block height in the store
 	// Later in endblocker, check if there is atleast one validator who started unbonding and create a valset request.
 	// The reason for creating valset requests in endblock is to create only one valset request per block if multiple validators starts unbonding at same block.
-
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	h.k.SetLastUnbondingBlockHeight(sdkCtx, uint64(sdkCtx.BlockHeight()))
+	h.k.SetLastUnbondingBlockHeight(ctx, uint64(ctx.BlockHeight()))
 
 	return nil
 }
 
-func (h Hooks) AfterValidatorBonded(ctx context.Context, _ sdk.ConsAddress, validator sdk.ValAddress) error {
-	metrics.ReportFuncCall(h.svcTags)
-	defer metrics.ReportFuncTiming(h.svcTags)()
+func (h Hooks) AfterValidatorBonded(c context.Context, _ sdk.ConsAddress, validator sdk.ValAddress) error {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "Hooks.AfterValidatorBonded")()
 
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
-
-	ev := h.k.GetLastEventByValidator(sdkCtx, validator)
+	ev := h.k.GetLastEventByValidator(ctx, validator)
 
 	isFirstTimeValidator := ev.EthereumEventHeight == 0 && ev.EthereumEventNonce == 0
 	if !isFirstTimeValidator {
@@ -59,7 +48,7 @@ func (h Hooks) AfterValidatorBonded(ctx context.Context, _ sdk.ConsAddress, vali
 		return nil
 	}
 
-	lowestObservedNonce := h.k.GetLastObservedEventNonce(sdkCtx)
+	lowestObservedNonce := h.k.GetLastObservedEventNonce(ctx)
 
 	// when the chain starts from genesis state, as there are no events broadcasted, lowest_observed_nonce will be zero.
 	// Bridge relayer has to scan the events from the height at which bridge contract is deployed on ethereum.
@@ -71,10 +60,10 @@ func (h Hooks) AfterValidatorBonded(ctx context.Context, _ sdk.ConsAddress, vali
 	// otherwise, set the last event to the current last observed event nonce and ethereum block height so the validator
 	// can begin attesting starting from the next event after the last observed event nonce.
 	h.k.setLastEventByValidator(
-		sdkCtx,
+		ctx,
 		validator,
 		lowestObservedNonce,
-		h.k.GetLastObservedEthereumBlockHeight(sdkCtx).EthereumBlockHeight,
+		h.k.GetLastObservedEthereumBlockHeight(ctx).EthereumBlockHeight,
 	)
 
 	return nil

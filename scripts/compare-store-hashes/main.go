@@ -54,7 +54,7 @@ import (
 
 // stores is the list of all Cosmos SDK and Injective module stores to query.
 var stores = []string{
-	"acc", "auction", "authz", "bank", "capability", "chainlink", "consensus",
+	"acc", "auction", "authz", "bank", "capability", "consensus",
 	"crisis", "distribution", "downtimedetector", "erc20", "evidence", "evm",
 	"exchange", "feegrant", "feeibc", "gov", "hooks-for-ibc", "hyperlane",
 	"ibc", "icahost", "insurance", "mint", "oracle", "packetfowardmiddleware",

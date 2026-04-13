@@ -1,6 +1,7 @@
 package keeper
 
 import (
+	"context"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/params"
@@ -9,6 +10,7 @@ import (
 
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
@@ -59,6 +61,8 @@ type Keeper struct {
 
 	// TraceTx/TraceBlock/TraceCall gRPC enabled
 	grpcTracingEnabled bool
+
+	meter metrics.Meter
 }
 
 // NewKeeper generates new evm module keeper
@@ -104,12 +108,24 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return sdkCtx.Logger().With("module", "x/"+types.ModuleName)
 }
 
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
+}
+
 // EIP155ChainID returns the EIP155 chain ID for the EVM context
 func (k Keeper) EIP155ChainID(ctx sdk.Context) *big.Int {
+	defer k.Meter(ctx).FuncTiming(&ctx, "EIP155ChainID")()
+
 	return k.GetParams(ctx).ChainConfig.EIP155ChainID.BigInt()
 }
 
 func (k *Keeper) InitChainer(ctx sdk.Context) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitChainer")()
+
 	if tracer := cosmostracing.GetTracingHooks(ctx); tracer != nil && tracer.OnBlockchainInit != nil {
 		tracer.OnBlockchainInit(types.DefaultChainConfig().EthereumConfig())
 	}
@@ -122,6 +138,8 @@ func (k *Keeper) InitChainer(ctx sdk.Context) {
 
 // EmitBlockBloomEvent emit block bloom events
 func (k Keeper) EmitBlockBloomEvent(ctx sdk.Context, bloom []byte) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "EmitBlockBloomEvent")()
+
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			types.EventTypeBlockBloom,
@@ -141,6 +159,8 @@ func (k Keeper) GetAuthority() sdk.AccAddress {
 
 // GetAccountStorage return state storage associated with an account
 func (k Keeper) GetAccountStorage(ctx sdk.Context, address common.Address) types.Storage {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAccountStorage")()
+
 	storage := types.Storage{}
 
 	k.ForEachStorage(ctx, address, func(key, value common.Hash) bool {
@@ -168,6 +188,8 @@ func (k *Keeper) SetHook(eh types.EvmHook) *Keeper {
 
 // PostTxProcessing delegate the call to the hooks. If no hook has been registered, this function returns with a `nil` error
 func (k *Keeper) PostTxProcessing(ctx sdk.Context, msg *core.Message, receipt *ethtypes.Receipt) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "PostTxProcessing")()
+
 	if k.hook == nil {
 		return nil
 	}
@@ -182,6 +204,8 @@ func (k *Keeper) SetTracer(tracer *cosmostracing.Hooks) {
 // GetAccount load nonce and codehash without balance,
 // more efficient in cases where balance is not needed.
 func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Account {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAccount")()
+
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
@@ -202,6 +226,8 @@ func (k *Keeper) GetAccount(ctx sdk.Context, addr common.Address) *statedb.Accou
 
 // GetAccountOrEmpty returns empty account if not exist, returns error if it's not `EthAccount`
 func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb.Account {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAccountOrEmpty")()
+
 	acct := k.GetAccount(ctx, addr)
 	if acct != nil {
 		return *acct
@@ -213,6 +239,8 @@ func (k *Keeper) GetAccountOrEmpty(ctx sdk.Context, addr common.Address) statedb
 
 // GetNonce returns the sequence number of an account, returns 0 if not exists.
 func (k *Keeper) GetNonce(ctx sdk.Context, addr common.Address) uint64 {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetNonce")()
+
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	acct := k.accountKeeper.GetAccount(ctx, cosmosAddr)
 	if acct == nil {
@@ -224,6 +252,8 @@ func (k *Keeper) GetNonce(ctx sdk.Context, addr common.Address) uint64 {
 
 // GetEVMDenomBalance returns the balance of evm denom
 func (k *Keeper) GetEVMDenomBalance(ctx sdk.Context, addr common.Address) *big.Int {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetEVMDenomBalance")()
+
 	cosmosAddr := sdk.AccAddress(addr.Bytes())
 	evmParams := k.GetParams(ctx)
 	evmDenom := evmParams.GetEvmDenom()
@@ -238,5 +268,7 @@ func (k *Keeper) GetEVMDenomBalance(ctx sdk.Context, addr common.Address) *big.I
 // It uses SpendableCoin instead of GetBalance to exclude locked funds (e.g., vesting tokens)
 // ensuring accurate gas payment capability assessment.
 func (k *Keeper) GetBalance(ctx sdk.Context, addr sdk.AccAddress, denom string) *big.Int {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBalance")()
+
 	return k.bankKeeper.SpendableCoin(ctx, addr, denom).Amount.BigInt()
 }

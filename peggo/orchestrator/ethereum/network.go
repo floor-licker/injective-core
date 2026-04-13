@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	gethcommon "github.com/ethereum/go-ethereum/common"
@@ -71,7 +71,7 @@ type Network interface {
 
 type network struct {
 	peggy.PeggyContract
-	svcTags coretracer.Tags
+	meter metrics.Meter
 
 	FromAddr gethcommon.Address
 }
@@ -81,7 +81,14 @@ func NewNetwork(
 	fromAddr gethcommon.Address,
 	signerFn bind.SignerFn,
 	cfg NetworkConfig,
+	meter metrics.Meter,
 ) (Network, error) {
+	if meter == nil {
+		meter = metrics.NewNilMeter()
+	}
+
+	meter = meter.SubMeter("eth", metrics.Tag("svc", "eth"))
+
 	evmRPC, err := rpc.Dial(cfg.EthNodeRPC)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to connect to ethereum RPC: %s", cfg.EthNodeRPC)
@@ -92,7 +99,8 @@ func NewNetwork(
 		cfg.GasPriceAdjustment,
 		cfg.MaxGasPrice,
 		signerFn,
-		provider.NewEVMProvider(evmRPC),
+		provider.NewEVMProvider(evmRPC, meter),
+		meter,
 	)
 	if err != nil {
 		return nil, err
@@ -103,7 +111,7 @@ func NewNetwork(
 		return nil, err
 	}
 
-	peggyContract, err := peggy.NewPeggyContract(ethCommitter, peggyContractAddr, peggy.PendingTxInputList{}, pendingTxDuration)
+	peggyContract, err := peggy.NewPeggyContract(ethCommitter, peggyContractAddr, peggy.PendingTxInputList{}, pendingTxDuration, meter)
 	if err != nil {
 		return nil, err
 	}
@@ -119,14 +127,15 @@ func NewNetwork(
 	n := &network{
 		PeggyContract: peggyContract,
 		FromAddr:      fromAddr,
-		svcTags:       coretracer.NewTag("svc", "peggy_eth"),
+		meter:         meter,
 	}
 
 	return n, nil
 }
 
-func (n *network) TokenDecimals(ctx context.Context, tokenContract gethcommon.Address) (uint8, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+func (n *network) TokenDecimals(ctx context.Context, tokenContract gethcommon.Address) (decimals uint8, err error) {
+	ctx, done := n.meter.FuncTimingCtx(ctx, "TokenDecimals")
+	defer done(&err)
 
 	msg := ethereum.CallMsg{
 		To:   &tokenContract,
@@ -145,26 +154,30 @@ func (n *network) TokenDecimals(ctx context.Context, tokenContract gethcommon.Ad
 	return uint8(big.NewInt(0).SetBytes(res).Uint64()), nil
 }
 
-func (n *network) GetHeaderByNumber(ctx context.Context, number *big.Int) (*gethtypes.Header, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+func (n *network) GetHeaderByNumber(ctx context.Context, number *big.Int) (header *gethtypes.Header, err error) {
+	ctx, done := n.meter.FuncTimingCtx(ctx, "GetHeaderByNumber")
+	defer done(&err)
 
 	return n.Provider().HeaderByNumber(ctx, number)
 }
 
-func (n *network) GetPeggyID(ctx context.Context) (gethcommon.Hash, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+func (n *network) GetPeggyID(ctx context.Context) (peggyID gethcommon.Hash, err error) {
+	ctx, done := n.meter.FuncTimingCtx(ctx, "GetPeggyID")
+	defer done(&err)
 
 	return n.PeggyContract.GetPeggyID(ctx, n.FromAddr)
 }
 
-func (n *network) GetValsetNonce(ctx context.Context) (*big.Int, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+func (n *network) GetValsetNonce(ctx context.Context) (nonce *big.Int, err error) {
+	ctx, done := n.meter.FuncTimingCtx(ctx, "GetValsetNonce")
+	defer done(&err)
 
 	return n.PeggyContract.GetValsetNonce(ctx, n.FromAddr)
 }
 
-func (n *network) GetTxBatchNonce(ctx context.Context, erc20ContractAddress gethcommon.Address) (*big.Int, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+func (n *network) GetTxBatchNonce(ctx context.Context, erc20ContractAddress gethcommon.Address) (nonce *big.Int, err error) {
+	ctx, done := n.meter.FuncTimingCtx(ctx, "GetTxBatchNonce")
+	defer done(&err)
 
 	return n.PeggyContract.GetTxBatchNonce(ctx, erc20ContractAddress, n.FromAddr)
 }
@@ -173,8 +186,9 @@ func (n *network) GetSendToInjectiveEvents(
 	ctx context.Context,
 	startBlock,
 	endBlock uint64,
-) ([]*peggyevents.PeggySendToInjectiveEvent, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+) (events []*peggyevents.PeggySendToInjectiveEvent, err error) {
+	_, done := n.meter.FuncTimingCtx(ctx, "GetSendToInjectiveEvents")
+	defer done(&err)
 
 	peggyFilterer, err := peggyevents.NewPeggyFilterer(n.Address(), n.Provider())
 	if err != nil {
@@ -195,20 +209,20 @@ func (n *network) GetSendToInjectiveEvents(
 
 	defer iter.Close()
 
-	var sendToInjectiveEvents []*peggyevents.PeggySendToInjectiveEvent
 	for iter.Next() {
-		sendToInjectiveEvents = append(sendToInjectiveEvents, iter.Event)
+		events = append(events, iter.Event)
 	}
 
-	return sendToInjectiveEvents, nil
+	return events, nil
 }
 
 func (n *network) GetPeggyERC20DeployedEvents(
 	ctx context.Context,
 	startBlock,
 	endBlock uint64,
-) ([]*peggyevents.PeggyERC20DeployedEvent, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+) (events []*peggyevents.PeggyERC20DeployedEvent, err error) {
+	_, done := n.meter.FuncTimingCtx(ctx, "GetPeggyERC20DeployedEvents")
+	defer done(&err)
 
 	peggyFilterer, err := peggyevents.NewPeggyFilterer(n.Address(), n.Provider())
 	if err != nil {
@@ -229,16 +243,16 @@ func (n *network) GetPeggyERC20DeployedEvents(
 
 	defer iter.Close()
 
-	var transactionBatchExecutedEvents []*peggyevents.PeggyERC20DeployedEvent
 	for iter.Next() {
-		transactionBatchExecutedEvents = append(transactionBatchExecutedEvents, iter.Event)
+		events = append(events, iter.Event)
 	}
 
-	return transactionBatchExecutedEvents, nil
+	return events, nil
 }
 
-func (n *network) GetValsetUpdatedEvents(ctx context.Context, startBlock, endBlock uint64) ([]*peggyevents.PeggyValsetUpdatedEvent, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+func (n *network) GetValsetUpdatedEvents(ctx context.Context, startBlock, endBlock uint64) (events []*peggyevents.PeggyValsetUpdatedEvent, err error) {
+	_, done := n.meter.FuncTimingCtx(ctx, "GetValsetUpdatedEvents")
+	defer done(&err)
 
 	peggyFilterer, err := peggyevents.NewPeggyFilterer(n.Address(), n.Provider())
 	if err != nil {
@@ -259,20 +273,20 @@ func (n *network) GetValsetUpdatedEvents(ctx context.Context, startBlock, endBlo
 
 	defer iter.Close()
 
-	var valsetUpdatedEvents []*peggyevents.PeggyValsetUpdatedEvent
 	for iter.Next() {
-		valsetUpdatedEvents = append(valsetUpdatedEvents, iter.Event)
+		events = append(events, iter.Event)
 	}
 
-	return valsetUpdatedEvents, nil
+	return events, nil
 }
 
 func (n *network) GetTransactionBatchExecutedEvents(
 	ctx context.Context,
 	startBlock,
 	endBlock uint64,
-) ([]*peggyevents.PeggyTransactionBatchExecutedEvent, error) {
-	defer coretracer.Trace(&ctx, n.svcTags)()
+) (events []*peggyevents.PeggyTransactionBatchExecutedEvent, err error) {
+	_, done := n.meter.FuncTimingCtx(ctx, "GetTransactionBatchExecutedEvents")
+	defer done(&err)
 
 	peggyFilterer, err := peggyevents.NewPeggyFilterer(n.Address(), n.Provider())
 	if err != nil {
@@ -293,12 +307,11 @@ func (n *network) GetTransactionBatchExecutedEvents(
 
 	defer iter.Close()
 
-	var transactionBatchExecutedEvents []*peggyevents.PeggyTransactionBatchExecutedEvent
 	for iter.Next() {
-		transactionBatchExecutedEvents = append(transactionBatchExecutedEvents, iter.Event)
+		events = append(events, iter.Event)
 	}
 
-	return transactionBatchExecutedEvents, nil
+	return events, nil
 }
 
 func isUnknownBlockErr(err error) bool {

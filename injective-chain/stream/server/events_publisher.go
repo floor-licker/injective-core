@@ -39,10 +39,10 @@ var supportedEventTypes = map[string]struct{}{
 	proto.MessageName(&exchangev2types.EventTriggerConditionalLimitOrderFailed{}):  {},
 	proto.MessageName(&oracletypes.SetCoinbasePriceEvent{}):                        {},
 	proto.MessageName(&oracletypes.EventSetPythPrices{}):                           {},
-	proto.MessageName(&oracletypes.SetBandIBCPriceEvent{}):                         {},
 	proto.MessageName(&oracletypes.SetProviderPriceEvent{}):                        {},
 	proto.MessageName(&oracletypes.SetPriceFeedPriceEvent{}):                       {},
 	proto.MessageName(&oracletypes.EventSetStorkPrices{}):                          {},
+	proto.MessageName(&oracletypes.EventSetChainlinkDataStreamsPrices{}):           {},
 }
 
 type Publisher struct {
@@ -257,14 +257,14 @@ func handleParsedEvent(inBuffer *v2.StreamResponseMap, parsedEvent proto.Message
 		handleSetCoinbasePriceEvent(inBuffer, chainEvent)
 	case *oracletypes.EventSetPythPrices:
 		handleSetPythPricesEvent(inBuffer, chainEvent)
-	case *oracletypes.SetBandIBCPriceEvent:
-		handleSetBandIBCPricesEvent(inBuffer, chainEvent)
 	case *oracletypes.SetProviderPriceEvent:
 		handleSetProviderPriceEvent(inBuffer, chainEvent)
 	case *oracletypes.SetPriceFeedPriceEvent:
 		handleSetPriceFeedPriceEvent(inBuffer, chainEvent)
 	case *oracletypes.EventSetStorkPrices:
 		handleSetStorkPricesEvent(inBuffer, chainEvent)
+	case *oracletypes.EventSetChainlinkDataStreamsPrices:
+		handleSetChainlinkDataStreamsPricesEvent(inBuffer, chainEvent)
 	case *exchangev2types.EventOrderFail:
 		handleOrderFailEvent(inBuffer, chainEvent)
 	case *exchangev2types.EventTriggerConditionalMarketOrderFailed:

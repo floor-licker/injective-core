@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/utils"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/marketfinder"
@@ -14,9 +13,8 @@ import (
 )
 
 type AccountsV1MsgServer struct {
-	keeper  Keeper
-	server  v2.MsgServer
-	svcTags metrics.Tags
+	keeper Keeper
+	server v2.MsgServer
 }
 
 // AccountsV1MsgServerImpl returns an implementation of the bank MsgServer interface for the provided Keeper for account functions.
@@ -24,9 +22,6 @@ func AccountsV1MsgServerImpl(keeper Keeper, server v2.MsgServer) AccountsV1MsgSe
 	return AccountsV1MsgServer{
 		keeper: keeper,
 		server: server,
-		svcTags: metrics.Tags{
-			"svc": "acc_v1_msg_h",
-		},
 	}
 }
 
@@ -35,7 +30,6 @@ func (k AccountsV1MsgServer) BatchUpdateOrders(
 	goCtx context.Context,
 	msg *types.MsgBatchUpdateOrders,
 ) (*types.MsgBatchUpdateOrdersResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 
@@ -146,8 +140,6 @@ func (k AccountsV1MsgServer) Deposit(
 	goCtx context.Context,
 	msg *types.MsgDeposit,
 ) (*types.MsgDepositResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgDeposit{
 		Sender:       msg.Sender,
 		SubaccountId: msg.SubaccountId,
@@ -170,8 +162,6 @@ func (k AccountsV1MsgServer) Withdraw(
 	goCtx context.Context,
 	msg *types.MsgWithdraw,
 ) (*types.MsgWithdrawResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgWithdraw{
 		Sender:       msg.Sender,
 		SubaccountId: msg.SubaccountId,
@@ -194,8 +184,6 @@ func (k AccountsV1MsgServer) SubaccountTransfer(
 	goCtx context.Context,
 	msg *types.MsgSubaccountTransfer,
 ) (*types.MsgSubaccountTransferResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgSubaccountTransfer{
 		Sender:                  msg.Sender,
 		SourceSubaccountId:      msg.SourceSubaccountId,
@@ -219,8 +207,6 @@ func (k AccountsV1MsgServer) ExternalTransfer(
 	goCtx context.Context,
 	msg *types.MsgExternalTransfer,
 ) (*types.MsgExternalTransferResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgExternalTransfer{
 		Sender:                  msg.Sender,
 		SourceSubaccountId:      msg.SourceSubaccountId,
@@ -244,8 +230,6 @@ func (k AccountsV1MsgServer) RewardsOptOut(
 	goCtx context.Context,
 	msg *types.MsgRewardsOptOut,
 ) (*types.MsgRewardsOptOutResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgRewardsOptOut{
 		Sender: msg.Sender,
 	}
@@ -266,8 +250,6 @@ func (k AccountsV1MsgServer) AuthorizeStakeGrants(
 	goCtx context.Context,
 	msg *types.MsgAuthorizeStakeGrants,
 ) (*types.MsgAuthorizeStakeGrantsResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Grants := make([]*v2.GrantAuthorization, 0, len(msg.Grants))
 	for _, grant := range msg.Grants {
 		v2Grant := &v2.GrantAuthorization{
@@ -298,8 +280,6 @@ func (k AccountsV1MsgServer) ActivateStakeGrant(
 	goCtx context.Context,
 	msg *types.MsgActivateStakeGrant,
 ) (*types.MsgActivateStakeGrantResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgActivateStakeGrant{
 		Sender:  msg.Sender,
 		Granter: msg.Granter,
@@ -321,8 +301,6 @@ func (k AccountsV1MsgServer) BatchExchangeModification(
 	goCtx context.Context,
 	msg *types.MsgBatchExchangeModification,
 ) (*types.MsgBatchExchangeModificationResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 	v2Proposal, err := proposals.ConvertBatchExchangeModificationProposalToV2(
 		sdk.UnwrapSDKContext(goCtx),

@@ -20,8 +20,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/client/cli"
 	auctionkeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/keeper"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/auction/types"
@@ -92,8 +90,7 @@ const ConsensusVersion = 2
 type AppModule struct {
 	AppModuleBasic
 
-	svcTags        metrics.Tags
-	keeper         auctionkeeper.Keeper
+	keeper         *auctionkeeper.Keeper
 	accountKeeper  authkeeper.AccountKeeper
 	bankKeeper     bankkeeper.Keeper
 	exchangeKeeper exchangekeeper.Keeper
@@ -108,7 +105,7 @@ func (am AppModule) ConsensusVersion() uint64 { return ConsensusVersion }
 
 // NewAppModule creates a new AppModule Object
 func NewAppModule(
-	keeper auctionkeeper.Keeper,
+	keeper *auctionkeeper.Keeper,
 	accountKeeper authkeeper.AccountKeeper,
 	bankKeeper bankkeeper.Keeper,
 	exchangeKeeper exchangekeeper.Keeper,
@@ -121,10 +118,6 @@ func NewAppModule(
 		bankKeeper:     bankKeeper,
 		exchangeKeeper: exchangeKeeper,
 		legacySubspace: legacySubspace,
-
-		svcTags: metrics.Tags{
-			"svc": "auction_m",
-		},
 	}
 }
 
@@ -141,7 +134,7 @@ func (am AppModule) QuerierRoute() string {
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), auctionkeeper.NewMsgServerImpl(am.keeper))
-	types.RegisterQueryServer(cfg.QueryServer(), &am.keeper)
+	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 
 	migrator := auctionkeeper.NewMigrator(am.keeper, am.legacySubspace)
 	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {

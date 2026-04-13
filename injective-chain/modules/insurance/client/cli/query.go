@@ -25,6 +25,7 @@ func GetQueryCmd() *cobra.Command {
 		GetInsuranceParamsCmd(),
 		GetEstimatedRedemptionsCmd(),
 		GetPendingRedemptionsCmd(),
+		GetFailedRedemptionsCmd(),
 	)
 	return cmd
 }
@@ -105,6 +106,33 @@ func GetPendingRedemptionsCmd() *cobra.Command {
 				Address:  args[1],
 			}
 			res, err := queryClient.PendingRedemptions(context.Background(), req)
+			if err != nil {
+				return err
+			}
+			return clientCtx.PrintProto(res)
+		},
+	}
+
+	cliflags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetFailedRedemptionsCmd queries all failed redemption schedules
+func GetFailedRedemptionsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "failed-redemptions",
+		Short: "Get all failed redemption schedules.",
+		Long:  "Get all failed redemption schedules. If the height is not provided, it will use the latest height from context.",
+		Args:  cobra.MaximumNArgs(0),
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+			queryClient := types.NewQueryClient(clientCtx)
+
+			req := &types.QueryFailedRedemptionsRequest{}
+			res, err := queryClient.FailedRedemptions(context.Background(), req)
 			if err != nil {
 				return err
 			}

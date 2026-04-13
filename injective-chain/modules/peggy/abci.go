@@ -4,11 +4,8 @@ import (
 	"sort"
 
 	sdkmath "cosmossdk.io/math"
-	"github.com/ethereum/go-ethereum/common"
-
 	sdk "github.com/cosmos/cosmos-sdk/types"
-
-	"github.com/InjectiveLabs/metrics"
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/keeper"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/types"
@@ -19,25 +16,25 @@ var (
 )
 
 type BlockHandler struct {
-	k keeper.Keeper
-
-	svcTags metrics.Tags
+	k *keeper.Keeper
 }
 
 func NewBlockHandler(k keeper.Keeper) *BlockHandler {
 	return &BlockHandler{
-		k: k,
-
-		svcTags: metrics.Tags{
-			"svc": "peggy_b",
-		},
+		k: &k,
 	}
+}
+
+// BeginBlocker is called at the beginning of every block.
+func (h *BlockHandler) BeginBlocker(ctx sdk.Context) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BeginBlocker")()
+
+	h.excludeRateLimitTransfers(ctx)
 }
 
 // EndBlocker is called at the end of every block
 func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "EndBlocker")()
 
 	params := h.k.GetParams(ctx)
 
@@ -47,12 +44,11 @@ func (h *BlockHandler) EndBlocker(ctx sdk.Context) {
 	h.createValsets(ctx)
 	h.pruneValsets(ctx, params)
 	h.pruneAttestations(ctx)
-	h.refreshRateLimits(ctx)
+	h.includeRateLimitTransfers(ctx)
 }
 
 func (h *BlockHandler) createValsets(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.createValsets")()
 
 	// Auto ValsetRequest Creation.
 	// WARNING: do not use k.GetLastObservedValset in this function, it *will* result in losing control of the bridge
@@ -79,8 +75,7 @@ func (h *BlockHandler) createValsets(ctx sdk.Context) {
 // but (A) pruning keeps the iteration small in the first place and (B) there is
 // already enough nuance in the other handler that it's best not to complicate it further
 func (h *BlockHandler) pruneAttestations(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.pruneAttestations")()
 
 	attmap := h.k.GetAttestationMapping(ctx)
 
@@ -110,8 +105,7 @@ func (h *BlockHandler) pruneAttestations(ctx sdk.Context) {
 }
 
 func (h *BlockHandler) slashing(ctx sdk.Context, params *types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.slashing")()
 
 	h.valsetSlashing(ctx, params)
 	h.batchSlashing(ctx, params)
@@ -126,8 +120,7 @@ func (h *BlockHandler) slashing(ctx sdk.Context, params *types.Params) {
 // "Observe" those who have passed the threshold. Break the loop once we see
 // an attestation that has not passed the threshold
 func (h *BlockHandler) attestationTally(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.attestationTally")()
 
 	attmap := h.k.GetAttestationMapping(ctx)
 	// We make a slice with all the event nonces that are in the attestation mapping
@@ -182,8 +175,7 @@ func (h *BlockHandler) attestationTally(ctx sdk.Context) {
 //	project, if we do a slowdown on ethereum could cause a double spend. Instead timeouts will *only* occur after the timeout period
 //	AND any deposit or withdraw has occurred to update the Ethereum block height.
 func (h *BlockHandler) cleanupTimedOutBatches(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.cleanupTimedOutBatches")()
 
 	ethereumHeight := h.k.GetLastObservedEthereumBlockHeight(ctx).EthereumBlockHeight
 	batches := h.k.GetOutgoingTxBatches(ctx)
@@ -199,8 +191,7 @@ func (h *BlockHandler) cleanupTimedOutBatches(ctx sdk.Context) {
 }
 
 func (h *BlockHandler) valsetSlashing(ctx sdk.Context, params *types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.valsetSlashing")()
 
 	maxHeight := uint64(0)
 
@@ -283,7 +274,6 @@ func (h *BlockHandler) valsetSlashing(ctx sdk.Context, params *types.Params) {
 			for _, valAddr := range unbondingValidators.Addresses {
 				addr, err := sdk.ValAddressFromBech32(valAddr)
 				if err != nil {
-					metrics.ReportFuncError(h.svcTags)
 					panic(err)
 				}
 
@@ -329,8 +319,7 @@ func (h *BlockHandler) valsetSlashing(ctx sdk.Context, params *types.Params) {
 }
 
 func (h *BlockHandler) batchSlashing(ctx sdk.Context, params *types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.batchSlashing")()
 
 	// #2 condition
 	// We look through the full bonded set (not just the active set, include unbonding validators)
@@ -395,8 +384,7 @@ func (h *BlockHandler) batchSlashing(ctx sdk.Context, params *types.Params) {
 }
 
 func (h *BlockHandler) pruneValsets(ctx sdk.Context, params *types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.pruneValsets")()
 
 	// Validator set pruning
 	// prune all validator sets with a nonce less than the
@@ -419,22 +407,52 @@ func (h *BlockHandler) pruneValsets(ctx sdk.Context, params *types.Params) {
 	}
 }
 
-func (h *BlockHandler) refreshRateLimits(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, h.svcTags)
-	defer doneFn()
+func (h *BlockHandler) excludeRateLimitTransfers(ctx sdk.Context) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.excludeRateLimitTransfers")()
 
-	// prune outdated records for each rate limit
 	currentBlock := uint64(ctx.BlockHeight())
 	for _, rateLimit := range h.k.GetRateLimits(ctx) {
-		transfersWithinSlidingWindow := make([]*types.BridgeTransfer, 0, len(rateLimit.Transfers))
-		for _, transfer := range rateLimit.Transfers {
-			if notExpired := transfer.BlockNumber+rateLimit.RateLimitWindow > currentBlock; notExpired {
-				transfersWithinSlidingWindow = append(transfersWithinSlidingWindow, transfer)
-			}
+		if currentBlock <= rateLimit.RateLimitWindow {
+			continue
 		}
 
-		rateLimit.Transfers = transfersWithinSlidingWindow
+		var (
+			endBlock           = currentBlock - rateLimit.RateLimitWindow + 1
+			tokenAddress       = common.HexToAddress(rateLimit.TokenAddress)
+			outdatedOutflow    = h.k.GetOutdatedOutflow(ctx, tokenAddress, endBlock)
+			outdatedInflow     = h.k.GetOutdatedInflow(ctx, tokenAddress, endBlock)
+			netOutflowToRemove = outdatedOutflow.Sub(outdatedInflow)
+			totalNetOutflow    = h.k.GetNetOutflow(ctx, tokenAddress)
+			newNetOutflow      = totalNetOutflow.Sub(netOutflowToRemove)
+		)
 
-		h.k.SetRateLimit(ctx, rateLimit)
+		h.k.SetNetOutflow(ctx, tokenAddress, newNetOutflow)
+		h.k.PruneOldInflows(ctx, tokenAddress, endBlock)
+		h.k.PruneOldOutflows(ctx, tokenAddress, endBlock)
+	}
+
+	// In case of a removed rate limit there might still be records of inflow/outflow.
+	// This pruning is passive by design to avoid excessive computation during RemoveRateLimit.
+	for _, token := range h.k.GetNonExistentRateLimitTokenAddresses(ctx) {
+		h.k.PruneInflowForNonExistentRateLimitToken(ctx, token)
+		h.k.PruneOutflowForNonExistingRateLimitToken(ctx, token)
+	}
+}
+
+func (h *BlockHandler) includeRateLimitTransfers(ctx sdk.Context) {
+	defer h.k.Meter(ctx).FuncTiming(&ctx, "BlockHandler.includeRateLimitTransfers")()
+
+	for _, rateLimit := range h.k.GetRateLimits(ctx) {
+		var (
+			tokenAddress    = common.HexToAddress(rateLimit.TokenAddress)
+			height          = uint64(ctx.BlockHeight())
+			inflow          = h.k.GetInflowByBlock(ctx, tokenAddress, height)
+			outflow         = h.k.GetOutflowByBlock(ctx, tokenAddress, height)
+			netOutflowToAdd = outflow.Sub(inflow)
+			totalNetOutflow = h.k.GetNetOutflow(ctx, tokenAddress)
+			newNetOutflow   = totalNetOutflow.Add(netOutflowToAdd)
+		)
+
+		h.k.SetNetOutflow(ctx, tokenAddress, newNetOutflow)
 	}
 }

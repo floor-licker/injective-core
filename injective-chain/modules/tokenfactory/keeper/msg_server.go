@@ -13,18 +13,21 @@ import (
 )
 
 type msgServer struct {
-	Keeper
+	*Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the MsgServer interface
 // for the provided Keeper.
 func NewMsgServerImpl(keeper Keeper) types.MsgServer {
-	return &msgServer{Keeper: keeper}
+	return &msgServer{Keeper: &keeper}
 }
 
 var _ types.MsgServer = msgServer{}
 
 func (k msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
+
 	if msg.Authority != k.authority {
 		return nil, errors.Wrapf(govtypes.ErrInvalidSigner, "invalid authority: expected %s, got %s", k.authority, msg.Authority)
 	}
@@ -33,14 +36,15 @@ func (k msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (
 		return nil, err
 	}
 
-	k.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 
 }
 
-func (k msgServer) CreateDenom(goCtx context.Context, msg *types.MsgCreateDenom) (*types.MsgCreateDenomResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k msgServer) CreateDenom(c context.Context, msg *types.MsgCreateDenom) (*types.MsgCreateDenomResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateDenom")()
 
 	denom, err := k.createDenom(ctx, msg.Sender, msg.Subdenom, msg.GetName(), msg.GetSymbol(), msg.GetDecimals(), msg.GetAllowAdminBurn())
 	if err != nil {
@@ -57,8 +61,9 @@ func (k msgServer) CreateDenom(goCtx context.Context, msg *types.MsgCreateDenom)
 	}, nil
 }
 
-func (k msgServer) Mint(goCtx context.Context, msg *types.MsgMint) (*types.MsgMintResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k msgServer) Mint(c context.Context, msg *types.MsgMint) (*types.MsgMintResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Mint")()
 
 	denom := msg.Amount.Denom
 	sender := sdk.MustAccAddressFromBech32(msg.Sender)
@@ -102,8 +107,9 @@ func (k msgServer) Mint(goCtx context.Context, msg *types.MsgMint) (*types.MsgMi
 	return &types.MsgMintResponse{}, nil
 }
 
-func (k msgServer) Burn(goCtx context.Context, msg *types.MsgBurn) (*types.MsgBurnResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k msgServer) Burn(c context.Context, msg *types.MsgBurn) (*types.MsgBurnResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "Burn")()
 
 	sender := sdk.MustAccAddressFromBech32(msg.Sender)
 	denom := msg.Amount.Denom
@@ -135,8 +141,9 @@ func (k msgServer) Burn(goCtx context.Context, msg *types.MsgBurn) (*types.MsgBu
 	return &types.MsgBurnResponse{}, nil
 }
 
-func (k msgServer) ChangeAdmin(goCtx context.Context, msg *types.MsgChangeAdmin) (*types.MsgChangeAdminResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k msgServer) ChangeAdmin(c context.Context, msg *types.MsgChangeAdmin) (*types.MsgChangeAdminResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ChangeAdmin")()
 
 	authorityMetadata, err := k.GetAuthorityMetadata(ctx, msg.Denom)
 	if err != nil {
@@ -160,8 +167,10 @@ func (k msgServer) ChangeAdmin(goCtx context.Context, msg *types.MsgChangeAdmin)
 	return &types.MsgChangeAdminResponse{}, nil
 }
 
-func (k msgServer) SetDenomMetadata(goCtx context.Context, msg *types.MsgSetDenomMetadata) (*types.MsgSetDenomMetadataResponse, error) {
-	ctx := sdk.UnwrapSDKContext(goCtx)
+//nolint:revive // cyclo complexity is high but it's okey since fn is short
+func (k msgServer) SetDenomMetadata(c context.Context, msg *types.MsgSetDenomMetadata) (*types.MsgSetDenomMetadataResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetDenomMetadata")()
 
 	// Defense in depth validation of metadata
 	err := msg.Metadata.Validate()

@@ -411,22 +411,6 @@ func handleSetPythPricesEvent(inBuffer *v2.StreamResponseMap, ev *oracletypes.Ev
 	}
 }
 
-func handleSetBandIBCPricesEvent(inBuffer *v2.StreamResponseMap, ev *oracletypes.SetBandIBCPriceEvent) {
-	for i, symbol := range ev.Symbols {
-		if len(ev.Prices) <= i {
-			continue
-		}
-
-		price := &v2.OraclePrice{
-			Symbol: symbol,
-			Price:  ev.Prices[i],
-			Type:   "bandibc",
-		}
-
-		addOraclePriceToResponse(inBuffer, price)
-	}
-}
-
 func handleSetProviderPriceEvent(inBuffer *v2.StreamResponseMap, ev *oracletypes.SetProviderPriceEvent) {
 	price := &v2.OraclePrice{
 		Symbol: ev.Symbol,
@@ -453,6 +437,22 @@ func handleSetStorkPricesEvent(inBuffer *v2.StreamResponseMap, ev *oracletypes.E
 			Symbol: priceState.Symbol,
 			Price:  priceState.PriceState.Price,
 			Type:   "stork",
+		}
+
+		addOraclePriceToResponse(inBuffer, price)
+	}
+}
+
+func handleSetChainlinkDataStreamsPricesEvent(inBuffer *v2.StreamResponseMap, ev *oracletypes.EventSetChainlinkDataStreamsPrices) {
+	for _, priceState := range ev.Prices {
+		if priceState == nil {
+			continue
+		}
+
+		price := &v2.OraclePrice{
+			Symbol: priceState.FeedId,
+			Price:  priceState.PriceState.Price,
+			Type:   "chainlinkdatastreams",
 		}
 
 		addOraclePriceToResponse(inBuffer, price)

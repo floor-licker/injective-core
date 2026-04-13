@@ -4,7 +4,7 @@ import (
 	"context"
 	"sort"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/pkg/errors"
 	log "github.com/xlab/suplog"
 
@@ -32,7 +32,7 @@ func (s *Orchestrator) runOracle(ctx context.Context, lastObservedBlock uint64) 
 		Orchestrator:               s,
 		lastRecordedEthEventHeight: lastObservedBlock,
 		queryRange:                 defaultBlocksToSearch,
-		svcTags:                    coretracer.NewTag("svc", "oracle"),
+		meter:                      s.meter.SubMeter("oracle", metrics.Tag("svc", "oracle")),
 	}
 
 	s.logger.WithField("loop_duration", s.cfg.LoopDuration.String()).Debugln("starting Oracle...")
@@ -46,20 +46,20 @@ type oracle struct {
 	*Orchestrator
 	lastRecordedEthEventHeight uint64
 	queryRange                 uint64
-	svcTags                    coretracer.Tags
+	meter                      metrics.Meter
 }
 
 func (l *oracle) Log() log.Logger {
 	return l.logger.WithField("loop", "Oracle")
 }
 
-func (l *oracle) observeEthEvents(ctx context.Context) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *oracle) observeEthEvents(c context.Context) (err error) { //nolint:revive // func length is fine
+	ctx, done := l.meter.FuncTimingCtx(c, "observeEthEvents")
+	defer done(&err)
 
 	// check if validator is in the active set since claims will fail otherwise
 	vs, err := l.injective.CurrentValset(ctx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		l.logger.WithError(err).Warningln("failed to get active validator set on Injective")
 		return err
 	}
@@ -78,7 +78,6 @@ func (l *oracle) observeEthEvents(ctx context.Context) error {
 
 	latestHeight, err := l.getLatestEthHeight(ctx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return err
 	}
 
@@ -106,13 +105,11 @@ func (l *oracle) observeEthEvents(ctx context.Context) error {
 
 	events, err := l.getEthEvents(ctx, l.lastRecordedEthEventHeight, latestHeight)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return err
 	}
 
 	lastClaim, err := l.getLastClaimEvent(ctx)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return err
 	}
 
@@ -152,7 +149,6 @@ func (l *oracle) observeEthEvents(ctx context.Context) error {
 	}
 
 	if err := l.sendNewEventClaims(ctx, newEvents); err != nil {
-		coretracer.TraceError(ctx, err)
 		return err
 	}
 
@@ -179,10 +175,10 @@ func (l *oracle) resetQueryRange() {
 	}
 }
 
-func (l *oracle) getEthEvents(ctx context.Context, startBlock, endBlock uint64) ([]event, error) {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *oracle) getEthEvents(ctx context.Context, startBlock, endBlock uint64) (events []event, err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "getEthEvents")
+	defer done(&err)
 
-	var events []event
 	scanEthEventsFn := func() error {
 		events = nil // clear previous result in case a retry occurred
 
@@ -247,10 +243,10 @@ func (l *oracle) getEthEvents(ctx context.Context, startBlock, endBlock uint64) 
 	return events, nil
 }
 
-func (l *oracle) getLatestEthHeight(ctx context.Context) (uint64, error) {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *oracle) getLatestEthHeight(ctx context.Context) (latestHeight uint64, err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "getLatestEthHeight")
+	defer done(&err)
 
-	latestHeight := uint64(0)
 	fn := func() error {
 		h, err := l.ethereum.GetHeaderByNumber(ctx, nil)
 		if err != nil {
@@ -282,8 +278,9 @@ func (l *oracle) getLastClaimEvent(ctx context.Context) (*peggytypes.LastClaimEv
 	return claim, nil
 }
 
-func (l *oracle) sendNewEventClaims(ctx context.Context, events []event) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *oracle) sendNewEventClaims(ctx context.Context, events []event) (err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "sendNewEventClaims")
+	defer done(&err)
 
 	sendEventsFn := func() error {
 		// in case sending one of more claims fails, we reload the latest claimed nonce to filter processed events
@@ -313,8 +310,9 @@ func (l *oracle) sendNewEventClaims(ctx context.Context, events []event) error {
 	return nil
 }
 
-func (l *oracle) sendEthEventClaim(ctx context.Context, ev event) error {
-	defer coretracer.Trace(&ctx, l.svcTags)()
+func (l *oracle) sendEthEventClaim(ctx context.Context, ev event) (err error) {
+	ctx, done := l.meter.FuncTimingCtx(ctx, "sendEthEventClaim")
+	defer done(&err)
 
 	switch e := ev.(type) {
 	case *deposit:
@@ -330,7 +328,8 @@ func (l *oracle) sendEthEventClaim(ctx context.Context, ev event) error {
 		ev := peggyevents.PeggyERC20DeployedEvent(*e)
 		return l.injective.SendERC20DeployedClaim(ctx, &ev)
 	default:
-		panic(errors.Errorf("unknown ev type %T", e))
+		err = errors.Errorf("unknown ev type %T", e)
+		panic(err)
 	}
 }
 

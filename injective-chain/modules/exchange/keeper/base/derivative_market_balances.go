@@ -3,7 +3,6 @@ package base
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -12,8 +11,7 @@ import (
 )
 
 func (k *BaseKeeper) GetMarketBalance(ctx sdk.Context, marketID common.Hash) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMarketBalance")()
 
 	store := k.getStore(ctx)
 	key := types.GetDerivativeMarketBalanceKey(marketID)
@@ -26,8 +24,7 @@ func (k *BaseKeeper) GetMarketBalance(ctx sdk.Context, marketID common.Hash) mat
 }
 
 func (k *BaseKeeper) GetAllMarketBalances(ctx sdk.Context) []*v2.MarketBalance {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllMarketBalances")()
 
 	store := k.getStore(ctx)
 	balances := make([]*v2.MarketBalance, 0)
@@ -48,8 +45,7 @@ func (k *BaseKeeper) GetAllMarketBalances(ctx sdk.Context) []*v2.MarketBalance {
 }
 
 func (k *BaseKeeper) SetMarketBalance(ctx sdk.Context, marketID common.Hash, balance math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetMarketBalance")()
 
 	if balance.IsNil() || balance.IsZero() {
 		k.DeleteMarketBalance(ctx, marketID)
@@ -64,8 +60,7 @@ func (k *BaseKeeper) DeleteMarketBalance(
 	ctx sdk.Context,
 	marketID common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteMarketBalance")()
 
 	store := prefix.NewStore(ctx.KVStore(k.storeKey), types.MarketBalanceKey)
 	store.Delete(marketID.Bytes())

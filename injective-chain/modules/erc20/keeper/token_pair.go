@@ -11,6 +11,8 @@ import (
 
 // GetTokenPairForDenom return token pair associated with the bank denom.
 func (k Keeper) GetTokenPairForDenom(ctx sdk.Context, bankDenom string) (*types.TokenPair, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTokenPairForDenom")()
+
 	store := k.getTokenPairsStoreByBankDenom(ctx)
 	bz := store.Get([]byte(bankDenom))
 	if bz == nil {
@@ -27,6 +29,8 @@ func (k Keeper) GetTokenPairForDenom(ctx sdk.Context, bankDenom string) (*types.
 
 // GetTokenPairForERC20 return token pair associated with the erc20 token address.
 func (k Keeper) GetTokenPairForERC20(ctx sdk.Context, erc20Address common.Address) (*types.TokenPair, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTokenPairForERC20")()
+
 	store := k.getTokenPairsStoreByERC20(ctx)
 	bz := store.Get(erc20Address.Bytes())
 	if bz == nil {
@@ -42,6 +46,8 @@ func (k Keeper) GetTokenPairForERC20(ctx sdk.Context, erc20Address common.Addres
 }
 
 func (k Keeper) GetAllTokenPairs(ctx sdk.Context) ([]*types.TokenPair, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTokenPairs")()
+
 	pairs := make([]*types.TokenPair, 0)
 	store := k.getTokenPairsStoreByBankDenom(ctx)
 	iter := store.Iterator(nil, nil)
@@ -58,6 +64,8 @@ func (k Keeper) GetAllTokenPairs(ctx sdk.Context) ([]*types.TokenPair, error) {
 }
 
 func (k Keeper) storeTokenPair(ctx sdk.Context, pair types.TokenPair) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "storeTokenPair")()
+
 	store := k.getTokenPairsStoreByBankDenom(ctx)
 	store.Set([]byte(pair.BankDenom), common.HexToAddress(pair.Erc20Address).Bytes())
 	store = k.getTokenPairsStoreByERC20(ctx)
@@ -65,6 +73,8 @@ func (k Keeper) storeTokenPair(ctx sdk.Context, pair types.TokenPair) {
 }
 
 func (k Keeper) deleteTokenPair(ctx sdk.Context, pair types.TokenPair) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "deleteTokenPair")()
+
 	store := k.getTokenPairsStoreByBankDenom(ctx)
 	store.Delete([]byte(pair.BankDenom))
 	store = k.getTokenPairsStoreByERC20(ctx)
@@ -73,6 +83,8 @@ func (k Keeper) deleteTokenPair(ctx sdk.Context, pair types.TokenPair) {
 
 // HasBankDenomOrMetadata return true if the denom with supply exists or metadata associated with the denom exists
 func (k Keeper) HasBankDenomOrMetadata(ctx sdk.Context, denom string) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasBankDenomOrMetadata")()
+
 	if k.bankKeeper.HasSupply(ctx, denom) {
 		return true
 	}

@@ -1,7 +1,6 @@
 package keeper
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 
@@ -15,8 +14,9 @@ import (
 )
 
 // validateWasmHook checks that contract exists and satisfies the expected interface
-func (k Keeper) validateWasmHook(ctx context.Context, contract sdk.AccAddress) error {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
+func (k Keeper) validateWasmHook(ctx sdk.Context, contract sdk.AccAddress) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "validateWasmHook")()
+
 	if !k.wasmKeeper.HasContractInfo(ctx, contract) {
 		return types.ErrUnknownWasmHook
 	}
@@ -35,18 +35,20 @@ func (k Keeper) validateWasmHook(ctx context.Context, contract sdk.AccAddress) e
 		return err
 	}
 
-	sdkCtxMetered := sdkCtx.WithGasMeter(storetypes.NewGasMeter(k.GetParams(sdkCtx).ContractHookMaxGas))
+	sdkCtxMetered := ctx.WithGasMeter(storetypes.NewGasMeter(k.GetParams(ctx).ContractHookMaxGas))
 
 	if _, err := k.wasmKeeper.QuerySmart(sdkCtxMetered, contract, bz); errors.IsOf(err, wasmtypes.ErrQueryFailed) && strings.HasPrefix(err.Error(), "Error parsing into type") {
 		return types.ErrInvalidWasmHook
 	}
 
-	sdkCtx.GasMeter().ConsumeGas(sdkCtxMetered.GasMeter().GasConsumed(), "permissions wasm hook")
+	ctx.GasMeter().ConsumeGas(sdkCtxMetered.GasMeter().GasConsumed(), "permissions wasm hook")
 
 	return nil
 }
 
-func (k Keeper) executeWasmHook(sdkCtx sdk.Context, namespace *types.Namespace, fromAddr, toAddr sdk.AccAddress, action types.Action, amount sdk.Coin) error {
+func (k Keeper) executeWasmHook(ctx sdk.Context, namespace *types.Namespace, fromAddr, toAddr sdk.AccAddress, action types.Action, amount sdk.Coin) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "validateWasmHook")()
+
 	if namespace.WasmHook == "" {
 		return nil
 	}
@@ -63,8 +65,8 @@ func (k Keeper) executeWasmHook(sdkCtx sdk.Context, namespace *types.Namespace, 
 
 	// since transfer hook can be called in EndBlocker, which is not gas metered, we need to enforce MaxGas limits
 	// during QuerySmart call to prevent DoS
-	params := k.GetParams(sdkCtx)
-	sdkCtxMetered := sdkCtx.WithGasMeter(storetypes.NewGasMeter(params.ContractHookMaxGas))
+	params := k.GetParams(ctx)
+	sdkCtxMetered := ctx.WithGasMeter(storetypes.NewGasMeter(params.ContractHookMaxGas))
 
 	// call wasm hook contract inside a closure to catch out of gas panics, if any
 	func() {
@@ -83,7 +85,7 @@ func (k Keeper) executeWasmHook(sdkCtx sdk.Context, namespace *types.Namespace, 
 		_, err = k.wasmKeeper.QuerySmart(sdkCtxMetered, contractAddr, bz)
 	}()
 
-	sdkCtx.GasMeter().ConsumeGas(sdkCtxMetered.GasMeter().GasConsumed(), "permissions wasm hook: "+amount.Denom)
+	ctx.GasMeter().ConsumeGas(sdkCtxMetered.GasMeter().GasConsumed(), "permissions wasm hook: "+amount.Denom)
 
 	// if query returns error -> means permissions check failed
 	// in any other case (query technical error like out-of-gas, stack-too-deep) we "pretend" that the query returned false for permissions check

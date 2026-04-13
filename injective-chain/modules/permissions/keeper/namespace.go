@@ -4,47 +4,25 @@ import (
 	"cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/gogoproto/proto"
-	gethtypes "github.com/ethereum/go-ethereum/common"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/types"
 )
 
-func (k Keeper) HasNamespace(ctx sdk.Context, denom string) bool {
+func (k *Keeper) HasNamespace(ctx sdk.Context, denom string) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasNamespace")()
+
 	store := k.getNamespacesStore(ctx)
 	return store.Has([]byte(denom))
 }
 
-// CreateNamespaceForMigration creates a namespace directly in state.
-// It is intended for trusted migration code paths and bypasses msg-level checks,
-// such as EVM hook interface validation against deployed contracts.
-func (k Keeper) CreateNamespaceForMigration(ctx sdk.Context, ns types.Namespace) error {
-	if ns.Denom == "" {
-		return errors.Wrap(types.ErrUnknownDenom, "namespace denom cannot be empty")
-	}
-
-	if ns.EvmHook != "" && !gethtypes.IsHexAddress(ns.EvmHook) {
-		return errors.Wrapf(types.ErrInvalidEVMHook, "invalid EvmHook address for denom %s: %s", ns.Denom, ns.EvmHook)
-	}
-
-	if err := ns.ValidateRoles(false); err != nil {
-		return err
-	}
-
-	if err := ns.ValidatePolicies(); err != nil {
-		return err
-	}
-
-	if k.HasNamespace(ctx, ns.Denom) {
-		return nil
-	}
-
-	return k.createNamespace(ctx, ns)
-}
-
 // GetNamespace return namespace for the denom. If includeFull is true, then it also populates AddressRoles and RolePermissions fields inside namespace.
 // You can query those roles separately via corresponding methods.
-func (k Keeper) GetNamespace(ctx sdk.Context, denom string, includeFull bool) (*types.Namespace, error) {
-	namespace, err := k.getNamespace(ctx, denom)
+//
+//nolint:revive // includeFull is a flag-parameter and is ok design here
+func (k *Keeper) GetNamespace(ctx sdk.Context, denom string, includeFull bool) (*types.Namespace, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetNamespace")()
+
+	namespace, err := k.getStoredNamespace(ctx, denom)
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +68,9 @@ func (k Keeper) GetNamespace(ctx sdk.Context, denom string, includeFull bool) (*
 	return namespace, nil
 }
 
-func (k Keeper) getNamespace(ctx sdk.Context, denom string) (*types.Namespace, error) {
+func (k *Keeper) getStoredNamespace(ctx sdk.Context, denom string) (*types.Namespace, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getNamespace")()
+
 	store := k.getNamespacesStore(ctx)
 	bz := store.Get([]byte(denom))
 	if bz == nil {
@@ -103,7 +83,9 @@ func (k Keeper) getNamespace(ctx sdk.Context, denom string) (*types.Namespace, e
 	return &namespace, nil
 }
 
-func (k Keeper) createNamespace(ctx sdk.Context, ns types.Namespace) error {
+func (k Keeper) createNamespace(ctx sdk.Context, ns types.Namespace) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "createNamespace")(&err)
+
 	denom := ns.Denom
 	roleNameToRoleID := make(map[string]uint32)
 
@@ -117,7 +99,10 @@ func (k Keeper) createNamespace(ctx sdk.Context, ns types.Namespace) error {
 
 	// store new actor roles
 	for _, actorRole := range ns.ActorRoles {
-		actor := sdk.MustAccAddressFromBech32(actorRole.Actor)
+		actor, err := sdk.AccAddressFromBech32(actorRole.Actor)
+		if err != nil {
+			return err
+		}
 
 		// obtain roleIDs for the actor roles
 		roleIDs := make([]uint32, 0, len(actorRole.Roles))
@@ -136,7 +121,10 @@ func (k Keeper) createNamespace(ctx sdk.Context, ns types.Namespace) error {
 
 	// store manager roles
 	for _, managerRoles := range ns.RoleManagers {
-		manager := sdk.MustAccAddressFromBech32(managerRoles.Manager)
+		manager, err := sdk.AccAddressFromBech32(managerRoles.Manager)
+		if err != nil {
+			return err
+		}
 		for _, roleName := range managerRoles.Roles {
 			roleID, ok := roleNameToRoleID[roleName]
 			if !ok {
@@ -182,6 +170,8 @@ func (k Keeper) createNamespace(ctx sdk.Context, ns types.Namespace) error {
 // }
 
 func (k Keeper) setNamespace(ctx sdk.Context, ns types.Namespace) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setNamespace")()
+
 	store := k.getNamespacesStore(ctx)
 	bz, err := proto.Marshal(&ns)
 	if err != nil {
@@ -194,6 +184,8 @@ func (k Keeper) setNamespace(ctx sdk.Context, ns types.Namespace) error {
 
 // GetAllNamespaces returns all namespaces with roles and permissions
 func (k Keeper) GetAllNamespaces(ctx sdk.Context) ([]*types.Namespace, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllNamespaces")()
+
 	namespaces := make([]*types.Namespace, 0)
 	store := k.getNamespacesStore(ctx)
 	iter := store.Iterator(nil, nil)
@@ -212,6 +204,8 @@ func (k Keeper) GetAllNamespaces(ctx sdk.Context) ([]*types.Namespace, error) {
 
 // GetAllNamespaceDenoms returns all namespace denoms
 func (k Keeper) GetAllNamespaceDenoms(ctx sdk.Context) []string {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllNamespaceDenoms")()
+
 	denoms := make([]string, 0)
 	store := k.getNamespacesStore(ctx)
 	iter := store.Iterator(nil, nil)
@@ -224,7 +218,9 @@ func (k Keeper) GetAllNamespaceDenoms(ctx sdk.Context) []string {
 	return denoms
 }
 
-func (k Keeper) ValidateNamespaceUpdatePermissions(ctx sdk.Context, sender sdk.AccAddress, denom string, namespaceChanges types.NamespaceUpdates) error {
+func (k Keeper) ValidateNamespaceUpdatePermissions(ctx sdk.Context, sender sdk.AccAddress, denom string, namespaceChanges types.NamespaceUpdates) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ValidateNamespaceUpdatePermissions")(&err)
+
 	for _, action := range namespaceChanges.ChangeActions {
 		if !k.HasPermissionsForAction(ctx, denom, sender, action) {
 			return errors.Wrapf(types.ErrUnauthorized, "sender %s unauthorized for action %s", sender, action)

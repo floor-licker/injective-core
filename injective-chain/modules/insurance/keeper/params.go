@@ -4,13 +4,11 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/types"
-	"github.com/InjectiveLabs/metrics"
 )
 
 // DefaultRedemptionNoticePeriodDuration returns default redemption notice period
 func (k *Keeper) DefaultRedemptionNoticePeriodDuration(ctx sdk.Context) int64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DefaultRedemptionNoticePeriodDuration")()
 
 	store := k.GetStore(ctx)
 	bz := store.Get(types.ParamsKey)
@@ -26,8 +24,7 @@ func (k *Keeper) DefaultRedemptionNoticePeriodDuration(ctx sdk.Context) int64 {
 
 // GetParams returns the total set of insurance parameters.
 func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetParams")()
 
 	store := k.GetStore(ctx)
 	bz := store.Get(types.ParamsKey)
@@ -43,8 +40,7 @@ func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams set the params
 func (k *Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetParams")()
 
 	store := k.GetStore(ctx)
 	store.Set(types.ParamsKey, k.cdc.MustMarshal(&params))

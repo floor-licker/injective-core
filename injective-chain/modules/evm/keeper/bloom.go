@@ -9,11 +9,15 @@ import (
 )
 
 func (k Keeper) SetTxBloom(ctx sdk.Context, bloom *big.Int) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTxBloom")()
+
 	store := ctx.ObjectStore(k.objectKey)
 	store.Set(types.ObjectBloomKey(ctx.TxIndex(), ctx.MsgIndex()), bloom)
 }
 
 func (k Keeper) CollectTxBloom(ctx sdk.Context) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "CollectTxBloom")()
+
 	store := prefix.NewObjStore(ctx.ObjectStore(k.objectKey), types.KeyPrefixObjectBloom)
 	it := store.Iterator(nil, nil)
 	defer it.Close()

@@ -45,13 +45,13 @@ type ArgsMapping map[string]Arg
 
 // ModuleRootCommand generates module index root command
 func ModuleRootCommand(moduleName string, isQuery bool) *cobra.Command {
-	shortMsg := "Querying commands for the %s module"
+	shortMsg := fmt.Sprintf("Querying commands for the %s module", moduleName)
 	if !isQuery {
-		shortMsg = "%s module transaction commands"
+		shortMsg = fmt.Sprintf("%s module transaction commands", moduleName)
 	}
 	return &cobra.Command{
 		Use:                        moduleName,
-		Short:                      fmt.Sprintf(shortMsg, moduleName),
+		Short:                      shortMsg,
 		DisableFlagParsing:         true,
 		SuggestionsMinimumDistance: 2,
 		RunE: func(cmd *cobra.Command, args []string) error {

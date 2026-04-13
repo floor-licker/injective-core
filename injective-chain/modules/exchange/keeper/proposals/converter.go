@@ -15,6 +15,8 @@ func ConvertExchangeProposal(
 	k *ProposalKeeper,
 	content govtypes.Content,
 ) (govtypes.Content, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ConvertExchangeProposal")()
+
 	var contentV2 govtypes.Content
 	var err error
 

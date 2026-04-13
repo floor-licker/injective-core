@@ -11,6 +11,8 @@ import (
 )
 
 func (k *ProposalKeeper) HandleMarketForcedSettlementProposal(ctx sdk.Context, p *v2.MarketForcedSettlementProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleMarketForcedSettlementProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -39,6 +41,8 @@ func scheduleSpotMarketForceClosure(
 	k *ProposalKeeper,
 	spotMarket *v2.SpotMarket,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "scheduleSpotMarketForceClosure")()
+
 	settlementInfo := k.GetSpotMarketForceCloseInfo(ctx, common.HexToHash(spotMarket.MarketId))
 	if settlementInfo != nil {
 		return types.ErrMarketAlreadyScheduledToSettle
@@ -55,6 +59,8 @@ func scheduleDerivativeMarketSettlement(
 	derivativeMarket *v2.DerivativeMarket,
 	settlementPrice *math.LegacyDec,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "scheduleDerivativeMarketSettlement")()
+
 	if settlementPrice == nil {
 		// zero is a reserved value for fetching the latest price from oracle
 		zeroDec := math.LegacyZeroDec()

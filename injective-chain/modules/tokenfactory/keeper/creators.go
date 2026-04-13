@@ -11,6 +11,8 @@ func (k Keeper) addDenomFromCreator(ctx sdk.Context, creator, denom string) {
 }
 
 func (k Keeper) getDenomsFromCreator(ctx sdk.Context, creator string) []string {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getDenomsFromCreator")()
+
 	store := k.GetCreatorPrefixStore(ctx, creator)
 
 	iterator := store.Iterator(nil, nil)

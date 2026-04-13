@@ -18,10 +18,13 @@ import (
 // thus preventing all the tokens to be sent to the winner.
 //
 // Contract: SendCoins can fail and caller should handle the error and never panic in Begin/EndBlocker
-func (k Keeper) SendRestrictionFn(ctx context.Context, fromAddr, toAddr sdk.AccAddress, amount sdk.Coin) (newToAddr sdk.AccAddress, err error) {
-	sdkCtx := sdk.UnwrapSDKContext(ctx)
+//
+//nolint:revive // cyclo complexity is high but it's okey since fn is short
+func (k Keeper) SendRestrictionFn(c context.Context, fromAddr, toAddr sdk.AccAddress, amount sdk.Coin) (newToAddr sdk.AccAddress, err error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "SendRestrictionFn")()
 
-	isEnforcedRestrictionDenom := k.IsEnforcedRestrictionsDenom(sdkCtx, amount.Denom)
+	isEnforcedRestrictionDenom := k.IsEnforcedRestrictionsDenom(ctx, amount.Denom)
 
 	// this is a hot-patch to not break contracts defined in exchange and insurance / distribution / etc modules that
 	// do not expect bank transfer to fail. Only reroute in case of restricted error or contract hook query error (aka fail-closed approach)
@@ -42,7 +45,7 @@ func (k Keeper) SendRestrictionFn(ctx context.Context, fromAddr, toAddr sdk.AccA
 	}
 
 	// find namespace for denom
-	namespace, _ := k.GetNamespace(sdkCtx, amount.Denom, false)
+	namespace, _ := k.GetNamespace(ctx, amount.Denom, false)
 
 	// if namespace doesn't exist, then no restrictions are applied
 	if namespace == nil {
@@ -55,22 +58,22 @@ func (k Keeper) SendRestrictionFn(ctx context.Context, fromAddr, toAddr sdk.AccA
 	canSkipSendPermissionsCheck := isRecipientTfModule || k.IsModuleAcc(fromAddr)
 
 	if !canSkipSendPermissionsCheck {
-		if err := k.CheckPermissionsForAction(sdkCtx, namespace.Denom, fromAddr, types.Action_SEND); err != nil {
+		if err := k.CheckPermissionsForAction(ctx, namespace.Denom, fromAddr, types.Action_SEND); err != nil {
 			return toAddr, err
 		}
 	}
 
 	if !isRecipientTfModule {
-		if err := k.CheckPermissionsForAction(sdkCtx, namespace.Denom, toAddr, types.Action_RECEIVE); err != nil {
+		if err := k.CheckPermissionsForAction(ctx, namespace.Denom, toAddr, types.Action_RECEIVE); err != nil {
 			return toAddr, err
 		}
 	}
 
-	if err := k.executeWasmHook(sdkCtx, namespace, fromAddr, toAddr, types.Action_RECEIVE, amount); err != nil {
+	if err := k.executeWasmHook(ctx, namespace, fromAddr, toAddr, types.Action_RECEIVE, amount); err != nil {
 		return toAddr, err
 	}
 
-	if err := k.ExecuteEvmHook(sdkCtx, namespace, fromAddr, toAddr, amount); err != nil {
+	if err := k.ExecuteEvmHook(ctx, namespace, fromAddr, toAddr, amount); err != nil {
 		return toAddr, err
 	}
 

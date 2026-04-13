@@ -1,11 +1,12 @@
 package types
 
 import (
-	"fmt"
+	"cosmossdk.io/errors"
 
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 
 	gethtypes "github.com/ethereum/go-ethereum/common"
 )
@@ -317,8 +318,8 @@ func (msg MsgClaimVoucher) ValidateBasic() error {
 		return err
 	}
 
-	if msg.Denom == "" {
-		return fmt.Errorf("invalid denom")
+	if err := sdk.ValidateDenom(msg.Denom); err != nil {
+		return errors.Wrapf(sdkerrors.ErrInvalidCoins, "invalid denom: %s", msg.Denom)
 	}
 	return nil
 }

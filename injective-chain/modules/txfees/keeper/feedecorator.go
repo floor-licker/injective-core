@@ -18,13 +18,11 @@ import (
 // CONTRACT: Tx must implement FeeTx to use MempoolFeeDecorator.
 type MempoolFeeDecorator struct {
 	TxFeesKeeper *Keeper
-	VerifyFee    bool
 }
 
-func NewMempoolFeeDecorator(txFeesKeeper *Keeper, verifyFee bool) MempoolFeeDecorator {
+func NewMempoolFeeDecorator(txFeesKeeper *Keeper) MempoolFeeDecorator {
 	return MempoolFeeDecorator{
 		TxFeesKeeper: txFeesKeeper,
-		VerifyFee:    verifyFee,
 	}
 }
 
@@ -32,6 +30,8 @@ func NewMempoolFeeDecorator(txFeesKeeper *Keeper, verifyFee bool) MempoolFeeDeco
 //
 //nolint:revive // the simulate parameters is a flag parameter, but it is required by the sdk
 func (mfd MempoolFeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bool, next sdk.AnteHandler) (newCtx sdk.Context, err error) {
+	defer mfd.TxFeesKeeper.Meter(ctx).FuncTiming(&ctx, "MempoolFeeDecorator.AnteHandle")()
+
 	txfeesParams := mfd.TxFeesKeeper.GetParams(ctx)
 
 	if simulate || ctx.BlockHeight() == 0 {
@@ -60,11 +60,6 @@ func (mfd MempoolFeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 		mfd.TxFeesKeeper.CurFeeState.DeliverTxCode(ctx, feeTx)
 	}
 
-	if !mfd.VerifyFee {
-		// Skip dynamic fee enforcement on non-EVM routes, while still tracking gas usage.
-		return next(ctx, tx, simulate)
-	}
-
 	minBaseGasPrice := mfd.GetMinBaseGasPriceForTx(ctx, feeTx)
 	if minBaseGasPrice.IsZero() {
 		// If minBaseGasPrice is zero, then we don't need to check the fee. Continue
@@ -80,6 +75,8 @@ func (mfd MempoolFeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate b
 }
 
 func (mfd MempoolFeeDecorator) GetMinBaseGasPriceForTx(ctx sdk.Context, feeTx sdk.FeeTx) math.LegacyDec {
+	defer mfd.TxFeesKeeper.Meter(ctx).FuncTiming(&ctx, "MempoolFeeDecorator.GetMinBaseGasPriceForTx")()
+
 	txfeesParams := mfd.TxFeesKeeper.GetParams(ctx)
 	minBaseGasPrice := mfd.TxFeesKeeper.CurFeeState.MinBaseFee
 
@@ -98,11 +95,14 @@ func (mfd MempoolFeeDecorator) GetMinBaseGasPriceForTx(ctx sdk.Context, feeTx sd
 // getValidatedFeeTx returns a FeeTx if the tx is a FeeTx, otherwise it returns an error
 // if the tx is a FeeTx, it also checks that the fee is valid (only INJ)
 // if there is no fee, it returns nil
-func (MempoolFeeDecorator) getValidatedFeeTx(ctx sdk.Context, tx sdk.Tx, txfeesParams types.Params) (sdk.FeeTx, error) {
+func (mfd MempoolFeeDecorator) getValidatedFeeTx(ctx sdk.Context, tx sdk.Tx, txfeesParams types.Params) (feeTx sdk.FeeTx, err error) {
+	defer mfd.TxFeesKeeper.Meter(ctx).FuncTiming(&ctx, "MempoolFeeDecorator.getValidatedFeeTx")(&err)
+
 	// The SDK currently requires all txs to be FeeTx's in CheckTx, within its mempool fee decorator.
 	// See: https://github.com/cosmos/cosmos-sdk/blob/f726a2398a26bdaf71d78dbf56a82621e84fd098/x/auth/middleware/fee.go#L34-L37
 	// So this is not a real restriction at the moment.
-	feeTx, ok := tx.(sdk.FeeTx)
+	var ok bool
+	feeTx, ok = tx.(sdk.FeeTx)
 	if !ok {
 		return nil, errorsmod.Wrap(sdkerrors.ErrTxDecode, "Tx must be a FeeTx")
 	}
@@ -137,6 +137,8 @@ func (MempoolFeeDecorator) getValidatedFeeTx(ctx sdk.Context, tx sdk.Tx, txfeesP
 }
 
 func (mfd MempoolFeeDecorator) getMempool1559GasPrice(ctx sdk.Context, minBaseGasPrice math.LegacyDec) math.LegacyDec {
+	defer mfd.TxFeesKeeper.Meter(ctx).FuncTiming(&ctx, "MempoolFeeDecorator.getMempool1559GasPrice")()
+
 	if ctx.IsCheckTx() && !ctx.IsReCheckTx() {
 		return math.LegacyMaxDec(minBaseGasPrice, mfd.TxFeesKeeper.CurFeeState.GetCurBaseFee())
 	}
@@ -151,9 +153,9 @@ func (mfd MempoolFeeDecorator) getMempool1559GasPrice(ctx sdk.Context, minBaseGa
 func (MempoolFeeDecorator) isSufficientFee(minBaseGasPrice math.LegacyDec, gasRequested uint64, feeCoin sdk.Coin) error {
 	// Determine the required fees by multiplying the required minimum gas
 	// price by the gas limit, where fee = ceil(minGasPrice * gasLimit).
-	// note we mutate this one line below, to avoid extra heap allocations.
-	glDec := math.LegacyNewDec(int64(gasRequested))
-	baseFeeAmt := glDec.MulMut(minBaseGasPrice).Ceil().RoundInt()
+	// Use math.Int arithmetic to avoid int64 narrowing for very large gas limits.
+	gasInt := math.NewIntFromUint64(gasRequested)
+	baseFeeAmt := minBaseGasPrice.MulInt(gasInt).Ceil().RoundInt()
 	requiredBaseFee := chaintypes.NewInjectiveCoin(baseFeeAmt)
 
 	// check to ensure that the convertedFee should always be greater than or equal to the requireBaseFee

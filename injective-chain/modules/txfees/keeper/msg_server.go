@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"cosmossdk.io/errors"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 
@@ -14,8 +13,7 @@ import (
 var _ types.MsgServer = msgServer{}
 
 type msgServer struct {
-	keeper  *Keeper
-	svcTags metrics.Tags
+	keeper *Keeper
 }
 
 // NewMsgServerImpl returns an implementation of the bank MsgServer interface
@@ -23,15 +21,12 @@ type msgServer struct {
 func NewMsgServerImpl(keeper *Keeper) types.MsgServer {
 	return &msgServer{
 		keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "txfees_h",
-		},
 	}
 }
 
 func (m msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (*types.MsgUpdateParamsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, m.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer m.keeper.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
 
 	if msg.Authority != m.keeper.authority {
 		return nil, errors.Wrapf(govtypes.ErrInvalidSigner, "invalid authority: expected %s, got %s", m.keeper.authority, msg.Authority)
@@ -41,7 +36,7 @@ func (m msgServer) UpdateParams(c context.Context, msg *types.MsgUpdateParams) (
 		return nil, err
 	}
 
-	m.keeper.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	m.keeper.SetParams(ctx, msg.Params)
 
 	return &types.MsgUpdateParamsResponse{}, nil
 }

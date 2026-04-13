@@ -1,7 +1,6 @@
 package rewards
 
 import (
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -10,8 +9,7 @@ import (
 
 // SetTradingRewardsMarketPointsMultipliersFromCampaign sets the market's points multiplier for the specified spot and derivative markets
 func (k TradingKeeper) SetTradingRewardsMarketPointsMultipliersFromCampaign(ctx sdk.Context, campaignInfo *v2.TradingRewardCampaignInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTradingRewardsMarketPointsMultipliersFromCampaign")()
 
 	if campaignInfo.TradingRewardBoostInfo == nil {
 		return
@@ -30,8 +28,7 @@ func (k TradingKeeper) SetTradingRewardsMarketPointsMultipliersFromCampaign(ctx 
 
 // DeleteAllTradingRewardsMarketPointsMultipliers deletes the points multipliers for all markets
 func (k TradingKeeper) DeleteAllTradingRewardsMarketPointsMultipliers(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAllTradingRewardsMarketPointsMultipliers")()
 
 	_, marketIDs := k.GetAllTradingRewardsMarketPointsMultiplier(ctx)
 	for _, marketID := range marketIDs {
@@ -41,8 +38,7 @@ func (k TradingKeeper) DeleteAllTradingRewardsMarketPointsMultipliers(ctx sdk.Co
 
 // GetAllTradingRewardsMarketPointsMultiplier gets all points multipliers for all markets
 func (k TradingKeeper) GetAllTradingRewardsMarketPointsMultiplier(ctx sdk.Context) ([]*v2.PointsMultiplier, []common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTradingRewardsMarketPointsMultiplier")()
 
 	multipliers := make([]*v2.PointsMultiplier, 0)
 	marketIDs := make([]common.Hash, 0)

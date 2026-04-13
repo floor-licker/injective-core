@@ -455,6 +455,34 @@ func GetPeggyModuleState(
 	return resp.State
 }
 
+type PeggyRateLimitTransfersJSON struct {
+	Token    string            `json:"token"`
+	Inflows  []json.RawMessage `json:"inflows"`
+	Outflows []json.RawMessage `json:"outflows"`
+}
+
+func GetPeggyRateLimitTransfersJSON(
+	t *testing.T,
+	ctx context.Context,
+	chain *cosmos.CosmosChain,
+) []*PeggyRateLimitTransfersJSON {
+	t.Helper()
+
+	stdout, _, err := chain.GetFullNode().ExecQuery(ctx, "peggy", "module-state", "--chain-id", chain.Config().ChainID)
+	require.NoError(t, err, "error querying peggy module state via CLI")
+
+	var resp struct {
+		State struct {
+			RateLimitTransfers []*PeggyRateLimitTransfersJSON `json:"rate_limit_transfers"`
+		} `json:"state"`
+	}
+
+	err = json.Unmarshal(stdout, &resp)
+	require.NoError(t, err, "error decoding peggy module state JSON")
+
+	return resp.State.RateLimitTransfers
+}
+
 func SendToInjective(
 	t *testing.T,
 	ctx context.Context,

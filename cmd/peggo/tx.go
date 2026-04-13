@@ -127,13 +127,16 @@ func registerEthKeyCmd(cmd *cli.Cmd) {
 			return
 		}
 
+		peggoMeter, err := initMetrics(*cosmosChainID)
+		orShutdown(err)
+
 		net, err := cosmos.NewNetwork(keyring, personalSignFn, cosmos.NetworkConfig{
 			ChainID:          *cosmosChainID,
 			ValidatorAddress: keyring.Addr.String(),
 			CosmosGRPC:       *cosmosGRPC,
 			TendermintRPC:    *tendermintRPC,
 			GasPrice:         *cosmosGasPrices,
-		})
+		}, peggoMeter)
 
 		if err != nil {
 			log.Fatalln("failed to connect to Injective network")

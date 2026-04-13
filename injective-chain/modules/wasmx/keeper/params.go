@@ -3,15 +3,12 @@ package keeper
 import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/wasmx/types"
 )
 
 // GetParams returns the total set of wasmx parameters.
 func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetParams")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.ParamsKey)
@@ -27,8 +24,7 @@ func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams set the params
 func (k *Keeper) SetParams(ctx sdk.Context, params types.Params) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetParams")()
 
 	store := k.getStore(ctx)
 	store.Set(types.ParamsKey, k.cdc.MustMarshal(&params))

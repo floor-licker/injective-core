@@ -43,6 +43,8 @@ func (k *Keeper) NewEVM(
 	cfg *EVMConfig,
 	stateDB vm.StateDB,
 ) *vm.EVM {
+	defer k.Meter(ctx).FuncTiming(&ctx, "NewEVM")()
+
 	blockCtx := vm.BlockContext{
 		CanTransfer: core.CanTransfer,
 		Transfer:    statedb.Transfer,
@@ -157,6 +159,8 @@ func (k Keeper) GetHashFn(ctx sdk.Context) vm.GetHashFunc {
 //
 // For relevant discussion see: https://github.com/cosmos/cosmos-sdk/discussions/9072
 func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) (*types.MsgEthereumTxResponse, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ApplyTransaction")()
+
 	ethTx := msgEth.AsTransaction()
 	cfg, err := k.EVMConfig(ctx, ethTx.Hash())
 	if err != nil {
@@ -281,8 +285,20 @@ func (k *Keeper) ApplyTransaction(ctx sdk.Context, msgEth *types.MsgEthereumTx) 
 	return res, nil
 }
 
+func mulUint64(a, b uint64) (uint64, bool) {
+	if a == 0 || b == 0 {
+		return 0, false
+	}
+	if a > math.MaxUint64/b {
+		return 0, true // overflow
+	}
+	return a * b, false
+}
+
 // ApplyMessage calls ApplyMessageWithConfig with an empty TxConfig.
 func (k *Keeper) ApplyMessage(ctx sdk.Context, msg *core.Message, tracer *tracers.Tracer, commit bool) (*types.MsgEthereumTxResponse, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ApplyMessage")()
+
 	cfg, err := k.EVMConfig(ctx, common.Hash{})
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "failed to load evm config")
@@ -344,6 +360,8 @@ func (k *Keeper) ApplyMessageWithConfig(
 	cfg *EVMConfig,
 	commit bool,
 ) (resp *types.MsgEthereumTxResponse, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ApplyMessageWithConfig")()
+
 	var (
 		ret     []byte // return bytes from evm execution
 		gasUsed uint64
@@ -492,14 +510,4 @@ func (k *Keeper) ApplyMessageWithConfig(
 		BlockHash:        ctx.HeaderHash(),
 		ExecutionGasUsed: executionGasUsed,
 	}, nil
-}
-
-func mulUint64(a, b uint64) (uint64, bool) {
-	if a == 0 || b == 0 {
-		return 0, false
-	}
-	if a > math.MaxUint64/b {
-		return 0, true // overflow
-	}
-	return a * b, false
 }

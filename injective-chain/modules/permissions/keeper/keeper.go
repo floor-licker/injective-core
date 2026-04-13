@@ -1,9 +1,11 @@
 package keeper
 
 import (
+	"context"
 	"fmt"
 
 	"cosmossdk.io/log"
+	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
@@ -11,13 +13,16 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/InjectiveLabs/injective-core/injective-chain/modules/common/vouchers"
 	erc20types "github.com/InjectiveLabs/injective-core/injective-chain/modules/erc20/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/permissions/types"
+	"github.com/InjectiveLabs/metrics/v2"
 )
 
 type Keeper struct {
 	storeKey       storetypes.StoreKey
 	objectStoreKey storetypes.StoreKey
+	meter          metrics.Meter
 
 	bankKeeper types.BankKeeper
 	tfKeeper   types.TokenFactoryKeeper
@@ -32,13 +37,15 @@ type Keeper struct {
 	contractUnpauseListeners     []types.ContractUnpauseListener
 	contractBlacklistListeners   []types.ContractBlacklistListener
 	contractUnblacklistListeners []types.ContractUnblacklistListener
+
+	vouchersAssistant *vouchers.VouchersAssistant
 }
 
 var (
 	enforcedContractsKey = []byte("enforcedContracts")
 )
 
-// NewKeeper returns a new instance of the x/tokenfactory keeper
+// NewKeeper returns a new instance of the x/permissions keeper
 func NewKeeper(
 	storeKey storetypes.StoreKey,
 	bankKeeper types.BankKeeper,
@@ -49,8 +56,8 @@ func NewKeeper(
 	tfModuleAddress string,
 	moduleAccounts map[string]bool,
 	authority string,
-) Keeper {
-	return Keeper{
+) *Keeper {
+	k := &Keeper{
 		storeKey:        storeKey,
 		objectStoreKey:  oKey,
 		bankKeeper:      bankKeeper,
@@ -61,6 +68,37 @@ func NewKeeper(
 		moduleAccounts:  moduleAccounts,
 		authority:       authority,
 	}
+	k.vouchersAssistant = vouchers.NewVouchersAssistant(k, bankKeeper)
+	return k
+}
+
+// GetVouchersStore returns the KV store prefixed for voucher storage (satisfies vouchers.VoucherKeeper).
+func (k Keeper) GetVouchersStore(ctx sdk.Context) storetypes.KVStore {
+	return prefix.NewStore(ctx.KVStore(k.storeKey), vouchersKey)
+}
+
+// ModuleName returns the permissions module name (satisfies vouchers.VoucherKeeper).
+func (Keeper) ModuleName() string { return types.ModuleName }
+
+// EmitSetVoucherEvent emits the permissions-module EventSetVoucher (satisfies vouchers.VoucherKeeper).
+func (Keeper) EmitSetVoucherEvent(ctx sdk.Context, addr string, voucher sdk.Coin) {
+	if err := ctx.EventManager().EmitTypedEvent(&types.EventSetVoucher{
+		Addr:    addr,
+		Voucher: voucher,
+	}); err != nil {
+		ctx.Logger().Error("failed to emit EventSetVoucher", "addr", addr, "voucher", voucher, "err", err)
+	}
+}
+
+// EmitDeleteVoucherEvent emits the permissions-module EventSetVoucher with a zero coin to signal
+// deletion (satisfies vouchers.VoucherKeeper). This preserves the existing on-chain event shape.
+func (Keeper) EmitDeleteVoucherEvent(ctx sdk.Context, addr, denom string) {
+	if err := ctx.EventManager().EmitTypedEvent(&types.EventSetVoucher{
+		Addr:    addr,
+		Voucher: types.NewEmptyVoucher(denom),
+	}); err != nil {
+		ctx.Logger().Error("failed to emit EventSetVoucher (delete)", "addr", addr, "denom", denom, "err", err)
+	}
 }
 
 // Logger returns a logger for the x/permissions module
@@ -68,7 +106,16 @@ func (k Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", fmt.Sprintf("x/%s", types.ModuleName))
 }
 
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
+}
+
 func (k Keeper) getEnforcedRestrictionsEvmContracts(ctx sdk.Context) []*types.EnforcedContract {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getEnforcedRestrictionsEvmContracts")()
 	// try to get cached value
 	store := ctx.ObjectStore(k.objectStoreKey)
 	if val := store.Get(enforcedContractsKey); val != nil {
@@ -101,6 +148,8 @@ func (k Keeper) clearCachedEnforcedContracts(ctx sdk.Context) {
 }
 
 func (k Keeper) IsEnforcedRestrictionsDenom(ctx sdk.Context, denom string) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsEnforcedRestrictionsDenom")()
+
 	contracts := k.getEnforcedRestrictionsEvmContracts(ctx)
 	for i := range contracts {
 		if erc20types.DenomPrefix+contracts[i].ContractAddress.Hex() == denom {
@@ -111,6 +160,8 @@ func (k Keeper) IsEnforcedRestrictionsDenom(ctx sdk.Context, denom string) bool 
 }
 
 func (k Keeper) PostTxProcessing(ctx sdk.Context, _ *core.Message, receipt *ethtypes.Receipt) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "PostTxProcessing")()
+
 	for _, contract := range k.getEnforcedRestrictionsEvmContracts(ctx) {
 		for _, logEntry := range receipt.Logs {
 			if err := k.processEnforcedRestrictionsLog(ctx, contract, logEntry); err != nil {
@@ -122,6 +173,8 @@ func (k Keeper) PostTxProcessing(ctx sdk.Context, _ *core.Message, receipt *etht
 }
 
 func (k Keeper) processEnforcedRestrictionsLog(ctx sdk.Context, contract *types.EnforcedContract, logEntry *ethtypes.Log) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "processEnforcedRestrictionsLog")()
+
 	if len(logEntry.Topics) == 0 || logEntry.Address.Cmp(contract.ContractAddress) != 0 {
 		return nil
 	}
@@ -144,6 +197,8 @@ func (k Keeper) processEnforcedRestrictionsLog(ctx sdk.Context, contract *types.
 }
 
 func (k Keeper) handlePauseEvent(ctx sdk.Context, contract *types.EnforcedContract, contractAddr string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handlePauseEvent")()
+
 	k.Logger(ctx).Info("enforced restrictions token pause is detected", "contract_address", contractAddr)
 
 	for _, l := range k.contractPauseListeners {
@@ -155,6 +210,8 @@ func (k Keeper) handlePauseEvent(ctx sdk.Context, contract *types.EnforcedContra
 }
 
 func (k Keeper) handleUnpauseEvent(ctx sdk.Context, contract *types.EnforcedContract, contractAddr string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleUnpauseEvent")()
+
 	k.Logger(ctx).Info("enforced restrictions token unpause is detected", "contract_address", contractAddr)
 
 	for _, l := range k.contractUnpauseListeners {
@@ -166,6 +223,8 @@ func (k Keeper) handleUnpauseEvent(ctx sdk.Context, contract *types.EnforcedCont
 }
 
 func (k Keeper) handleBlacklistEvent(ctx sdk.Context, contract *types.EnforcedContract, logEntry *ethtypes.Log, contractAddr string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleBlacklistEvent")()
+
 	account, ok := k.extractAccountFromLog(ctx, logEntry, "blacklist", contractAddr)
 	if !ok {
 		return nil
@@ -182,6 +241,8 @@ func (k Keeper) handleBlacklistEvent(ctx sdk.Context, contract *types.EnforcedCo
 }
 
 func (k Keeper) handleUnblacklistEvent(ctx sdk.Context, contract *types.EnforcedContract, logEntry *ethtypes.Log, contractAddr string) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleUnblacklistEvent")()
+
 	account, ok := k.extractAccountFromLog(ctx, logEntry, "un-blacklist", contractAddr)
 	if !ok {
 		return nil
@@ -200,6 +261,8 @@ func (k Keeper) handleUnblacklistEvent(ctx sdk.Context, contract *types.Enforced
 // extractAccountFromLog reads the account address from the second topic of the log entry.
 // Returns false if the topic is missing.
 func (k Keeper) extractAccountFromLog(ctx sdk.Context, logEntry *ethtypes.Log, eventName, contractAddr string) (common.Address, bool) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "extractAccountFromLog")()
+
 	if len(logEntry.Topics) < 2 {
 		k.Logger(ctx).Warn("enforced restrictions token "+eventName+" is detected but can't derive the account", "contract_address", contractAddr)
 		return common.Address{}, false

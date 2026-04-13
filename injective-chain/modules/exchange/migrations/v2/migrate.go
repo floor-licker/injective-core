@@ -12,6 +12,7 @@ import (
 func Migrate(
 	ctx sdk.Context,
 	store storetypes.KVStore,
+	objectStore storetypes.ObjKVStore,
 	legacySubspace exported.Subspace,
 	cdc codec.BinaryCodec,
 ) error {
@@ -24,6 +25,7 @@ func Migrate(
 
 	bz := cdc.MustMarshal(&currParams)
 	store.Set(types.ParamsKey, bz)
+	objectStore.Delete(types.ObjectCachedParamsKey)
 
 	return nil
 }

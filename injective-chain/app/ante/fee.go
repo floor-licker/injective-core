@@ -102,13 +102,15 @@ func (dfd DeductFeeDecorator) AnteHandle(ctx sdk.Context, tx sdk.Tx, simulate bo
 	return next(newCtx, tx, simulate)
 }
 
-// DeductFees deducts fees from the given account.
+// DeductFees deducts fees from the given account and sends them to the auction module's fee collector subaccount.
+// Fees are sent to the subaccount (not the main auction module) so they do not affect the ongoing auction round;
+// they are swept into the auction module at round end by the auction module (SweepFeesSubaccountToModule).
 func DeductFees(bankKeeper authtypes.BankKeeper, ctx sdk.Context, acc sdk.AccountI, fees sdk.Coins) error {
 	if !fees.IsValid() {
 		return errors.Wrapf(sdkerrors.ErrInsufficientFee, "invalid fee amount: %s", fees)
 	}
 
-	err := bankKeeper.SendCoinsFromAccountToModule(ctx, acc.GetAddress(), auctiontypes.ModuleName, fees)
+	err := bankKeeper.SendCoins(ctx, acc.GetAddress(), auctiontypes.AuctionFeesSubaccountAddress, fees)
 	if err != nil {
 		return errors.Wrap(sdkerrors.ErrInsufficientFunds, err.Error())
 	}
@@ -219,19 +221,19 @@ func (afd AuctionFeeDecorator) checkDeductFee(ctx sdk.Context, tx sdk.FeeTx, fee
 		return sdkerrors.ErrUnknownAddress.Wrapf("fee payer address: %s does not exist", deductFeesFrom)
 	}
 
-	// deduct the fees
+	// deduct the fees (send to auction module's fee collector subaccount, not main module)
 	if !fee.IsZero() {
 		if !fee.IsValid() {
 			return errors.Wrapf(sdkerrors.ErrInsufficientFee, "invalid fee amount: %s", fee)
 		}
 
-		if err := afd.bankKeeper.SendCoinsFromAccountToModule(
+		if err := afd.bankKeeper.SendCoins(
 			ctx,
 			deductFeesFromAcc.GetAddress(),
-			auctiontypes.ModuleName,
+			auctiontypes.AuctionFeesSubaccountAddress,
 			fee,
 		); err != nil {
-			return errors.Wrapf(sdkerrors.ErrInsufficientFunds, err.Error())
+			return errors.Wrap(sdkerrors.ErrInsufficientFunds, err.Error())
 		}
 	}
 

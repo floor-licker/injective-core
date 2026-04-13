@@ -3,7 +3,6 @@ package base
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -16,8 +15,7 @@ func (k *BaseKeeper) GetMarketAtomicExecutionFeeMultiplier(
 	marketId common.Hash,
 	marketType types.MarketType,
 ) math.LegacyDec {
-	metrics.ReportFuncCall(k.svcTags)
-	defer metrics.ReportFuncTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMarketAtomicExecutionFeeMultiplier")()
 
 	store := k.getStore(ctx)
 	takerFeeStore := prefix.NewStore(store, types.AtomicMarketOrderTakerFeeMultiplierKey)
@@ -36,8 +34,7 @@ func (k *BaseKeeper) GetMarketAtomicExecutionFeeMultiplier(
 
 // GetDefaultAtomicMarketOrderFeeMultiplier returns the default atomic orders taker fee multiplier for a given market type
 func (k *BaseKeeper) GetDefaultAtomicMarketOrderFeeMultiplier(ctx sdk.Context, marketType types.MarketType) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDefaultAtomicMarketOrderFeeMultiplier")()
 
 	params := k.GetParams(ctx)
 
@@ -54,8 +51,7 @@ func (k *BaseKeeper) GetDefaultAtomicMarketOrderFeeMultiplier(ctx sdk.Context, m
 }
 
 func (k *BaseKeeper) GetAllMarketAtomicExecutionFeeMultipliers(ctx sdk.Context) []*v2.MarketFeeMultiplier {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllMarketAtomicExecutionFeeMultipliers")()
 
 	store := k.getStore(ctx)
 	takerFeeStore := prefix.NewStore(store, types.AtomicMarketOrderTakerFeeMultiplierKey)
@@ -73,8 +69,7 @@ func (k *BaseKeeper) GetAllMarketAtomicExecutionFeeMultipliers(ctx sdk.Context) 
 }
 
 func (k *BaseKeeper) SetAtomicMarketOrderFeeMultipliers(ctx sdk.Context, marketFeeMultipliers []*v2.MarketFeeMultiplier) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAtomicMarketOrderFeeMultipliers")()
 
 	store := k.getStore(ctx)
 	takerFeeStore := prefix.NewStore(store, types.AtomicMarketOrderTakerFeeMultiplierKey)
@@ -92,8 +87,7 @@ func (k *BaseKeeper) AppendOrderExpirations(
 	expirationBlock int64,
 	order *v2.OrderData,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AppendOrderExpirations")()
 
 	store := k.getStore(ctx)
 	expirationStore := prefix.NewStore(store, types.GetOrderExpirationPrefix(expirationBlock, marketID))
@@ -110,8 +104,7 @@ func (k *BaseKeeper) DeleteMarketWithOrderExpirations(
 	marketID common.Hash,
 	expirationBlock int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteMarketWithOrderExpirations")()
 
 	store := k.getStore(ctx)
 	expirationMarketsStore := prefix.NewStore(store, types.GetOrderExpirationMarketPrefix(expirationBlock))
@@ -124,12 +117,26 @@ func (k *BaseKeeper) DeleteOrderExpiration(
 	expirationBlock int64,
 	orderHash common.Hash,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteOrderExpiration")()
 
 	store := k.getStore(ctx)
 	expirationStore := prefix.NewStore(store, types.GetOrderExpirationPrefix(expirationBlock, marketID))
 	expirationStore.Delete(orderHash.Bytes())
+}
+
+// DeleteOrderExpirationByKey removes a scheduled order expiration using the raw
+// order-hash store key.
+func (k *BaseKeeper) DeleteOrderExpirationByKey(
+	ctx sdk.Context,
+	marketID common.Hash,
+	expirationBlock int64,
+	orderHashKey []byte,
+) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteOrderExpirationByKey")()
+
+	store := k.getStore(ctx)
+	expirationStore := prefix.NewStore(store, types.GetOrderExpirationPrefix(expirationBlock, marketID))
+	expirationStore.Delete(orderHashKey)
 }
 
 // GetMarketsWithOrderExpirations retrieves all markets with orders expiring at a given block
@@ -137,8 +144,7 @@ func (k *BaseKeeper) GetMarketsWithOrderExpirations(
 	ctx sdk.Context,
 	expirationBlock int64,
 ) []common.Hash {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMarketsWithOrderExpirations")()
 
 	store := k.getStore(ctx)
 	expirationMarketsStore := prefix.NewStore(store, types.GetOrderExpirationMarketPrefix(expirationBlock))
@@ -160,19 +166,16 @@ func (k *BaseKeeper) GetOrdersByExpiration(
 	marketID common.Hash,
 	expirationBlock int64,
 ) ([]*v2.OrderData, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOrdersByExpiration")()
 
 	orders := make([]*v2.OrderData, 0)
-	store := k.getStore(ctx)
-
-	expirationStore := prefix.NewStore(store, types.GetOrderExpirationPrefix(expirationBlock, marketID))
 
 	var err error
 
-	iterateSafe(expirationStore.Iterator(nil, nil), func(_, value []byte) bool {
-		var order v2.OrderData
-		if err = k.cdc.Unmarshal(value, &order); err != nil {
+	k.IterateOrderExpirationEntries(ctx, marketID, expirationBlock, func(_, value []byte) bool {
+		order, unmarshalErr := k.UnmarshalOrderData(value)
+		if unmarshalErr != nil {
+			err = unmarshalErr
 			return true
 		}
 		orders = append(orders, &order)
@@ -186,9 +189,33 @@ func (k *BaseKeeper) GetOrdersByExpiration(
 	return orders, nil
 }
 
+// UnmarshalOrderData decodes stored order metadata without panicking on malformed bytes.
+func (k *BaseKeeper) UnmarshalOrderData(bz []byte) (v2.OrderData, error) {
+	var order v2.OrderData
+	if err := k.cdc.Unmarshal(bz, &order); err != nil {
+		return v2.OrderData{}, err
+	}
+
+	return order, nil
+}
+
+// IterateOrderExpirationEntries streams raw scheduled order expiration entries
+// for a market and block height without materializing them into a slice first.
+func (k *BaseKeeper) IterateOrderExpirationEntries(
+	ctx sdk.Context,
+	marketID common.Hash,
+	expirationBlock int64,
+	process func(orderHashKey []byte, value []byte) (stop bool),
+) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateOrderExpirationEntries")()
+
+	store := k.getStore(ctx)
+	expirationStore := prefix.NewStore(store, types.GetOrderExpirationPrefix(expirationBlock, marketID))
+	iterateSafe(expirationStore.Iterator(nil, nil), process)
+}
+
 func (k *BaseKeeper) GetAllMarketIDsWithQuoteDenoms(ctx sdk.Context) []*v2.MarketIDQuoteDenomMakerFee {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllMarketIDsWithQuoteDenoms")()
 
 	derivativeMarkets := k.GetAllDerivativeMarkets(ctx)
 	spotMarkets := k.GetAllSpotMarkets(ctx)

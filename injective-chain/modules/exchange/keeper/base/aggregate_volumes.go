@@ -2,7 +2,6 @@ package base
 
 import (
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -15,8 +14,7 @@ func (k *BaseKeeper) GetSubaccountMarketAggregateVolume(
 	ctx sdk.Context,
 	subaccountID, marketID common.Hash,
 ) v2.VolumeRecord {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSubaccountMarketAggregateVolume")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetSubaccountMarketVolumeKey(subaccountID, marketID))
@@ -36,8 +34,7 @@ func (k *BaseKeeper) SetSubaccountMarketAggregateVolume(
 	subaccountID, marketID common.Hash,
 	volume v2.VolumeRecord,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSubaccountMarketAggregateVolume")()
 
 	store := k.getStore(ctx)
 
@@ -51,8 +48,7 @@ func (k *BaseKeeper) IterateSubaccountMarketAggregateVolumes(
 	ctx sdk.Context,
 	process func(subaccountID, marketID common.Hash, volume v2.VolumeRecord) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSubaccountMarketAggregateVolumes")()
 
 	store := k.getStore(ctx)
 	volumeStore := prefix.NewStore(store, types.SubaccountMarketVolumePrefix)
@@ -74,8 +70,7 @@ func (k *BaseKeeper) IterateSubaccountMarketAggregateVolumesBySubaccount(
 	subaccountID common.Hash,
 	process func(marketID common.Hash, volume v2.VolumeRecord) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSubaccountMarketAggregateVolumesBySubaccount")()
 
 	volumeStore := prefix.NewStore(k.getStore(ctx), append(types.SubaccountMarketVolumePrefix, subaccountID.Bytes()...))
 
@@ -95,8 +90,7 @@ func (k *BaseKeeper) IterateSubaccountMarketAggregateVolumesByAccAddress(
 	accAddress sdk.AccAddress,
 	process func(subaccountID, marketID common.Hash, volume v2.VolumeRecord) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSubaccountMarketAggregateVolumesByAccAddress")()
 
 	store := k.getStore(ctx)
 
@@ -116,8 +110,7 @@ func (k *BaseKeeper) GetMarketAggregateVolume(
 	ctx sdk.Context,
 	marketID common.Hash,
 ) v2.VolumeRecord {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMarketAggregateVolume")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetMarketVolumeKey(marketID))
@@ -137,8 +130,7 @@ func (k *BaseKeeper) SetMarketAggregateVolume(
 	marketID common.Hash,
 	volumes v2.VolumeRecord,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetMarketAggregateVolume")()
 
 	store := k.getStore(ctx)
 
@@ -153,8 +145,7 @@ func (k *BaseKeeper) IterateMarketAggregateVolumes(
 	ctx sdk.Context,
 	process func(marketID common.Hash, volume v2.VolumeRecord) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateMarketAggregateVolumes")()
 
 	store := k.getStore(ctx)
 	volumeStore := prefix.NewStore(store, types.MarketVolumePrefix)
@@ -168,8 +159,7 @@ func (k *BaseKeeper) IterateMarketAggregateVolumes(
 }
 
 func (k *BaseKeeper) GetAllMarketAggregateVolumes(ctx sdk.Context) []*v2.MarketVolume {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllMarketAggregateVolumes")()
 
 	volumes := make([]*v2.MarketVolume, 0)
 	k.IterateMarketAggregateVolumes(ctx, func(marketID common.Hash, totalVolume v2.VolumeRecord) (stop bool) {

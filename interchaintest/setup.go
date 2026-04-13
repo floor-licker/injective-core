@@ -6,7 +6,11 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -33,6 +37,7 @@ import (
 	authztypes "github.com/cosmos/cosmos-sdk/x/authz"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/strangelove-ventures/interchaintest/v8"
 	"github.com/strangelove-ventures/interchaintest/v8/chain/cosmos"
 	"github.com/strangelove-ventures/interchaintest/v8/chain/ethereum"
@@ -49,11 +54,12 @@ import (
 const (
 	InjectiveGovVotingPeriod     = 30 * time.Second
 	InjectiveGovMaxDepositPeriod = 20 * time.Second
+	dockerBuildLockFileName      = "injective-interchaintest-docker.lock"
 )
 
 var (
 	// InjectiveE2ERepo is the Docker image that is published as an official release
-	InjectiveE2ERepo = "public.ecr.aws/l9h3g6c6/injective-core"
+	InjectiveE2ERepo = "injectivelabs/injective-core"
 
 	IBCRelayerImage   = "ghcr.io/cosmos/relayer"
 	IBCRelayerVersion = "main"
@@ -65,10 +71,8 @@ var (
 		UIDGID:     "1025:1025",
 	}
 
-	BuildChainOpts = []retry.Option{
-		retry.Delay(500 * time.Millisecond),
-		retry.Attempts(42),
-	}
+	createChainBuildMu     sync.Mutex
+	activeCreateChainTests sync.Map
 
 	defaultGenesisOverridesKV = []cosmos.GenesisKV{
 		{
@@ -232,20 +236,54 @@ func GethChainConfig() ibc.ChainConfig {
 	}
 }
 
-//// todo: this mux is a best-attempt at preventing the following (flaky) error on CI:
-//// 		Error while waiting for container 646d78768fd803371e6778f78efc818d9c615a2e5dc24f8f81b3e620e3dbce01 during docker cleanup:
-////		failed to set up container networking: driver failed programming external connectivity on endpoint injtest-1-val-3-TestMempoolLanesSingleUser
-////		(503db836c024204536d0749f98509c42ab2217bfd5afe8992c7f82795664ae65): Bind for 0.0.0.0:33113 failed: port is already allocated
-//// Proper fix would be in our fork of interchaintest as that's when docker attempts to bind the ports (CI interchain is run in parallel)
-//
-//var dockerMux sync.Mutex
-//
-//func SetupDocker(t *testing.T) (*client.Client, string) {
-//	dockerMux.Lock()
-//	defer dockerMux.Unlock()
-//	return interchaintest.DockerSetup(t)
-//}
+// SetupDocker serializes the Docker port-allocation window across both
+// parallel tests in the current process and concurrent test processes on the
+// same host. The returned release function is idempotent and is also
+// registered with t.Cleanup.
+func SetupDocker(t *testing.T) (*dockerclient.Client, string, func()) {
+	t.Helper()
 
+	createChainBuildMu.Lock()
+
+	lockPath := filepath.Join(os.TempDir(), dockerBuildLockFileName)
+	lockFile, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		createChainBuildMu.Unlock()
+	}
+	require.NoError(t, err)
+
+	err = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX)
+	if err != nil {
+		_ = lockFile.Close()
+		createChainBuildMu.Unlock()
+	}
+	require.NoError(t, err)
+
+	var releaseOnce sync.Once
+	release := func() {
+		releaseOnce.Do(func() {
+			_ = syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN)
+			_ = lockFile.Close()
+			createChainBuildMu.Unlock()
+		})
+	}
+	t.Cleanup(release)
+
+	client, network := interchaintest.DockerSetup(t)
+	return client, network, release
+}
+
+func WithDockerSetupLock(t *testing.T, fn func(client *dockerclient.Client, network string)) {
+	t.Helper()
+
+	client, network, _ := SetupDocker(t)
+	fn(client, network)
+}
+
+// CreateChain boots an Injective interchaintest network with fixed extra host
+// ports. It must be called at most once per test name because the global port
+// binding lock is held until test cleanup runs, after the caller's ic.Close
+// cleanup has had a chance to release Docker resources.
 func CreateChain(
 	t *testing.T,
 	ctx context.Context,
@@ -253,44 +291,101 @@ func CreateChain(
 	chainPreStartNodes func(*cosmos.CosmosChain),
 	genesisOverrides ...cosmos.GenesisKV,
 ) (*interchaintest.Interchain, *cosmos.CosmosChain) {
+	t.Helper()
+
+	if _, loaded := activeCreateChainTests.LoadOrStore(t.Name(), struct{}{}); loaded {
+		t.Fatalf("CreateChain can only be called once per test name; use a subtest for an additional chain bootstrap")
+		return nil, nil
+	}
+	t.Cleanup(func() {
+		activeCreateChainTests.Delete(t.Name())
+	})
+
 	falseBool := false
-	cf := interchaintest.NewBuiltinChainFactory(
-		zaptest.NewLogger(t),
-		[]*interchaintest.ChainSpec{
-			{
-				Name:          "injective",
-				ChainName:     "injective",
-				Version:       InjectiveCoreImage.Version,
-				ChainConfig:   InjectiveChainConfig(genesisOverrides...),
-				NumValidators: &numVals,
-				NumFullNodes:  &numFull,
-				NoHostMount:   &falseBool,
+	var (
+		ic    *interchaintest.Interchain
+		chain *cosmos.CosmosChain
+	)
+
+	buildChainAttempt := func() error {
+		cf := interchaintest.NewBuiltinChainFactory(
+			zaptest.NewLogger(t),
+			[]*interchaintest.ChainSpec{
+				{
+					Name:          "injective",
+					ChainName:     "injective",
+					Version:       InjectiveCoreImage.Version,
+					ChainConfig:   InjectiveChainConfig(genesisOverrides...),
+					NumValidators: &numVals,
+					NumFullNodes:  &numFull,
+					NoHostMount:   &falseBool,
+				},
 			},
-		})
+		)
 
-	chains, err := cf.Chains(t.Name())
-	require.NoError(t, err)
+		chains, err := cf.Chains(t.Name())
+		if err != nil {
+			return retry.Unrecoverable(err)
+		}
 
-	chain := chains[0].(*cosmos.CosmosChain)
-	if chainPreStartNodes != nil {
-		chain.WithPreStartNodes(chainPreStartNodes)
+		attemptChain := chains[0].(*cosmos.CosmosChain)
+		if chainPreStartNodes != nil {
+			attemptChain.WithPreStartNodes(chainPreStartNodes)
+		}
+
+		attemptIC := interchaintest.NewInterchain().AddChain(attemptChain)
+
+		client, network, releaseDockerSetup := SetupDocker(t)
+		err = attemptIC.Build(
+			ctx,
+			testreporter.NewNopReporter().RelayerExecReporter(t),
+			interchaintest.InterchainBuildOptions{
+				TestName:         t.Name(),
+				Client:           client,
+				NetworkID:        network,
+				SkipPathCreation: true,
+			},
+		)
+		if err != nil {
+			_ = attemptIC.Close()
+			releaseDockerSetup()
+			if !isRetryableDockerPortBindError(err) {
+				return retry.Unrecoverable(err)
+			}
+
+			return err
+		}
+
+		ic = attemptIC
+		chain = attemptChain
+		return nil
 	}
 
-	ic := interchaintest.NewInterchain().AddChain(chain)
-	client, network := interchaintest.DockerSetup(t)
+	retryOpts := []retry.Option{
+		retry.Attempts(3),
+		retry.Delay(500 * time.Millisecond),
+		retry.DelayType(retry.BackOffDelay),
+		retry.MaxDelay(2 * time.Second),
+		retry.LastErrorOnly(true),
+		retry.OnRetry(func(n uint, err error) {
+			t.Logf("retrying injective chain bootstrap after docker port bind error (attempt %d): %v", n+2, err)
+		}),
+	}
 
-	require.NoError(t, ic.Build(
-		ctx,
-		testreporter.NewNopReporter().RelayerExecReporter(t),
-		interchaintest.InterchainBuildOptions{
-			TestName:         t.Name(),
-			Client:           client,
-			NetworkID:        network,
-			SkipPathCreation: true,
-		},
-	))
+	err := retry.Do(buildChainAttempt, retryOpts...)
+	require.NoError(t, err)
 
 	return ic, chain
+}
+
+func isRetryableDockerPortBindError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := err.Error()
+	return strings.Contains(msg, "port is already allocated") &&
+		strings.Contains(msg, "failed to set up container networking")
 }
 
 func WireUpPeggo(

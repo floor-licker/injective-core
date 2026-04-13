@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/avast/retry-go"
 	cosmostypes "github.com/cosmos/cosmos-sdk/types"
 	gethcommon "github.com/ethereum/go-ethereum/common"
@@ -36,7 +36,7 @@ type Config struct {
 
 type Orchestrator struct {
 	logger      log.Logger
-	svcTags     coretracer.Tags
+	meter       metrics.Meter
 	cfg         Config
 	maxAttempts uint
 
@@ -50,10 +50,15 @@ func NewOrchestrator(
 	eth ethereum.Network,
 	priceFeed PriceFeed,
 	cfg Config,
+	meter metrics.Meter,
 ) (*Orchestrator, error) {
+	if meter == nil {
+		meter = metrics.NewNilMeter()
+	}
+
 	o := &Orchestrator{
 		logger:      log.DefaultLogger,
-		svcTags:     coretracer.NewTag("svc", "peggy_orchestrator"),
+		meter:       meter.SubMeter("orch", metrics.Tag("svc", "orch")),
 		injective:   inj,
 		ethereum:    eth,
 		priceFeed:   priceFeed,

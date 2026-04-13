@@ -1,9 +1,11 @@
 package statedb
 
 import (
+	"context"
 	"math/big"
 
 	evmtypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/types"
+	"github.com/InjectiveLabs/metrics/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 )
@@ -27,7 +29,8 @@ type Keeper interface {
 
 	// Write methods, only called by `StateDB.Commit()`
 	SetAccount(ctx sdk.Context, addr common.Address, account Account) error
-	SetState(ctx sdk.Context, addr common.Address, key common.Hash, value []byte)
+	SetState(ctx sdk.Context, addr common.Address, key, value common.Hash)
 	SetCode(ctx sdk.Context, codeHash []byte, code []byte)
 	DeleteAccount(ctx sdk.Context, addr common.Address) error
+	Meter(ctx context.Context) metrics.Meter
 }

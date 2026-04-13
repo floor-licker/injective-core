@@ -7,23 +7,20 @@ import (
 
 	"cosmossdk.io/errors"
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/events"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper/marketfinder"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
-
-	v2 "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
+	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 	insurancetypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/types"
 	oracletypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 )
 
 func (k DerivativeKeeper) GetDerivativeMarketInfo(ctx sdk.Context, marketID common.Hash, isEnabled bool) *v2.DerivativeMarketInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketInfo")()
 
 	market, markPrice := k.GetDerivativeMarketWithMarkPrice(ctx, marketID, isEnabled)
 	if market == nil {
@@ -49,8 +46,7 @@ func (k DerivativeKeeper) SetDerivativeMarketWithInfo(
 	perpetualMarketInfo *v2.PerpetualMarketInfo,
 	expiryFuturesMarketInfo *v2.ExpiryFuturesMarketInfo,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetDerivativeMarketWithInfo")()
 
 	k.SetDerivativeMarket(ctx, market)
 	marketID := market.MarketID()
@@ -88,8 +84,7 @@ func (k DerivativeKeeper) SetDerivativeMarketWithInfo(
 
 // HasPositionsInMarket returns true if there are any positions in a given derivative market
 func (k DerivativeKeeper) HasPositionsInMarket(ctx sdk.Context, marketID common.Hash) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasPositionsInMarket")()
 
 	hasPositions := false
 
@@ -104,8 +99,7 @@ func (k DerivativeKeeper) HasPositionsInMarket(ctx sdk.Context, marketID common.
 }
 
 func (k DerivativeKeeper) IncrementMarketBalance(ctx sdk.Context, marketID common.Hash, amount math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IncrementMarketBalance")()
 
 	balance := k.GetMarketBalance(ctx, marketID)
 	balance = balance.Add(amount)
@@ -113,6 +107,8 @@ func (k DerivativeKeeper) IncrementMarketBalance(ctx sdk.Context, marketID commo
 }
 
 func (k DerivativeKeeper) GetDerivativeOrBinaryOptionsMarket(ctx sdk.Context, marketID common.Hash, isEnabled *bool) v2.DerivativeMarketI {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeOrBinaryOptionsMarket")()
+
 	isEnabledToCheck := true
 
 	shouldOnlyCheckOneStatus := isEnabled != nil
@@ -148,11 +144,12 @@ func (k DerivativeKeeper) GetDerivativeOrBinaryOptionsMarkPrice(
 	ctx sdk.Context,
 	market v2.DerivativeMarketI,
 ) (*math.LegacyDec, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeOrBinaryOptionsMarkPrice")()
+
 	switch market.GetMarketType() {
 	case types.MarketType_BinaryOption:
 		boMarket, ok := market.(*v2.BinaryOptionsMarket)
 		if !ok {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, errors.Wrapf(types.ErrBinaryOptionsMarketNotFound, "binary options market conversion in settlement failed")
 		}
 
@@ -166,7 +163,6 @@ func (k DerivativeKeeper) GetDerivativeOrBinaryOptionsMarkPrice(
 	default:
 		derivativeMarket, ok := market.(*v2.DerivativeMarket)
 		if !ok {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, errors.Wrapf(types.ErrDerivativeMarketNotFound, "derivative market conversion in settlement failed")
 		}
 
@@ -186,6 +182,8 @@ func (k DerivativeKeeper) GetDerivativeOrBinaryOptionsMarketWithMarkPrice(
 	marketID common.Hash,
 	isEnabled bool,
 ) (v2.DerivativeMarketI, math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeOrBinaryOptionsMarketWithMarkPrice")()
+
 	derivativeMarket := k.GetDerivativeMarket(ctx, marketID, isEnabled)
 	if derivativeMarket != nil {
 		price, err := k.GetDerivativeMarketPrice(
@@ -227,8 +225,7 @@ func (k DerivativeKeeper) GetDerivativeMarketPrice(
 	scaleFactor uint32,
 	oracleType oracletypes.OracleType,
 ) (*math.LegacyDec, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketPrice")()
 
 	var price *math.LegacyDec
 
@@ -242,7 +239,6 @@ func (k DerivativeKeeper) GetDerivativeMarketPrice(
 	}
 
 	if price == nil || price.IsNil() {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, errors.Wrapf(types.ErrInvalidOracle, "type %s base %s quote %s", oracleType.String(), base, quote)
 	}
 
@@ -255,6 +251,8 @@ func (k DerivativeKeeper) GetAvailableMarketFunds(
 	ctx sdk.Context,
 	marketID common.Hash,
 ) math.LegacyDec {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAvailableMarketFunds")()
+
 	var insuranceFundBalance math.LegacyDec
 
 	marketBalance := k.GetMarketBalance(ctx, marketID)
@@ -274,15 +272,13 @@ func (k DerivativeKeeper) GetAvailableMarketFunds(
 func (k DerivativeKeeper) GetDerivativeMarketCumulativePrice(
 	ctx sdk.Context, oracleBase, oracleQuote string, oracleType oracletypes.OracleType,
 ) (baseCumulative, quoteCumulative *math.LegacyDec, err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketCumulativePrice")()
 
 	baseCumulative, quoteCumulative = k.oracle.GetCumulativePrice(ctx, oracleType, oracleBase, oracleQuote)
 	baseNil := baseCumulative == nil || baseCumulative.IsNil()
 	quoteNil := quoteCumulative == nil || quoteCumulative.IsNil()
 
 	if baseNil || quoteNil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(types.ErrInvalidOracle,
 			"type %s base %s quote %s (baseCumulative nil: %t, quoteCumulative nil: %t)",
 			oracleType.String(), oracleBase, oracleQuote, baseNil, quoteNil)
@@ -304,11 +300,10 @@ func (k DerivativeKeeper) PerpetualMarketLaunch(
 	openNotionalCap v2.OpenNotionalCap,
 	adminInfo *v2.AdminInfo,
 ) (*v2.DerivativeMarket, *v2.PerpetualMarketInfo, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PerpetualMarketLaunch")()
 
-	relayerFeeShareRate := k.GetParams(ctx).RelayerFeeShareRate
-	minimalProtocolFeeRate := k.GetParams(ctx).MinimalProtocolFeeRate
+	relayerFeeShareRate := k.GetCachedParams(ctx).RelayerFeeShareRate
+	minimalProtocolFeeRate := k.GetCachedParams(ctx).MinimalProtocolFeeRate
 	discountSchedule := k.GetFeeDiscountSchedule(ctx)
 
 	if err := v2.ValidateMakerWithTakerFeeAndDiscounts(
@@ -318,37 +313,32 @@ func (k DerivativeKeeper) PerpetualMarketLaunch(
 	}
 
 	if !k.subaccount.IsDenomValid(ctx, quoteDenom) {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(types.ErrInvalidQuoteDenom, "denom %s does not exist in supply", quoteDenom)
 	}
 	quoteDecimals, err := k.TokenDenomDecimals(ctx, quoteDenom)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, err
 	}
 
 	marketID := types.NewPerpetualMarketID(ticker, quoteDenom, oracleBase, oracleQuote, oracleType)
 
 	if market := k.GetDerivativeMarketByID(ctx, marketID); market != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(types.ErrPerpetualMarketExists, "ticker %s quoteDenom %s", ticker, quoteDenom)
 	}
 
 	_, err = k.GetDerivativeMarketPrice(ctx, oracleBase, oracleQuote, oracleScaleFactor, oracleType)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, err
 	}
 
 	if !k.insurance.HasInsuranceFund(ctx, marketID) {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(insurancetypes.ErrInsuranceFundNotFound, "ticker %s marketID %s", ticker, marketID.Hex())
 	}
 
-	params := k.GetParams(ctx)
+	params := k.GetCachedParams(ctx)
 
 	// Get next hour
-	defaultFundingInterval := k.GetParams(ctx).DefaultFundingInterval
+	defaultFundingInterval := params.DefaultFundingInterval
 	nextFundingTimestamp := getNextIntervalTimestamp(ctx.BlockTime().Unix(), defaultFundingInterval)
 
 	market := &v2.DerivativeMarket{
@@ -407,14 +397,13 @@ func (k DerivativeKeeper) ExpiryFuturesMarketLaunch(
 	openNotionalCap v2.OpenNotionalCap,
 	adminInfo *v2.AdminInfo,
 ) (*v2.DerivativeMarket, *v2.ExpiryFuturesMarketInfo, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExpiryFuturesMarketLaunch")()
 
 	exchangeParams := k.GetParams(ctx)
 	relayerFeeShareRate := exchangeParams.RelayerFeeShareRate
 
 	discountSchedule := k.GetFeeDiscountSchedule(ctx)
-	minimalProtocolFeeRate := k.GetParams(ctx).MinimalProtocolFeeRate
+	minimalProtocolFeeRate := k.GetCachedParams(ctx).MinimalProtocolFeeRate
 
 	if err := v2.ValidateMakerWithTakerFeeAndDiscounts(
 		makerFeeRate, takerFeeRate, relayerFeeShareRate, minimalProtocolFeeRate, discountSchedule,
@@ -423,18 +412,15 @@ func (k DerivativeKeeper) ExpiryFuturesMarketLaunch(
 	}
 
 	if !k.subaccount.IsDenomValid(ctx, quoteDenom) {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(types.ErrInvalidQuoteDenom, "denom %s does not exist in supply", quoteDenom)
 	}
 	quoteDecimals, err := k.TokenDenomDecimals(ctx, quoteDenom)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, err
 	}
 
 	marketID := types.NewExpiryFuturesMarketID(ticker, quoteDenom, oracleBase, oracleQuote, oracleType, expiry)
 	if market := k.GetDerivativeMarketByID(ctx, marketID); market != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(
 			types.ErrExpiryFuturesMarketExists,
 			"ticker %s quoteDenom %s oracle base %s quote %s expiry %d",
@@ -447,7 +433,6 @@ func (k DerivativeKeeper) ExpiryFuturesMarketLaunch(
 	}
 
 	if expiry <= ctx.BlockTime().Unix() {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(
 			types.ErrExpiryFuturesMarketExpired,
 			"ticker %s quoteDenom %s oracleBase %s oracleQuote %s expiry %d expired. Current blocktime %d",
@@ -462,12 +447,10 @@ func (k DerivativeKeeper) ExpiryFuturesMarketLaunch(
 
 	_, err = k.GetDerivativeMarketPrice(ctx, oracleBase, oracleQuote, oracleScaleFactor, oracleType)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, err
 	}
 
 	if !k.insurance.HasInsuranceFund(ctx, marketID) {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, nil, errors.Wrapf(insurancetypes.ErrInsuranceFundNotFound, "ticker %s marketID %s", ticker, marketID.Hex())
 	}
 
@@ -522,8 +505,7 @@ func (k DerivativeKeeper) SettleMarket(
 	closingFeeRate math.LegacyDec,
 	settlementPrice *math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SettleMarket")()
 
 	marketID := market.MarketID()
 	derivativePositions := k.GetAllPositionsByMarket(ctx, marketID)
@@ -546,8 +528,7 @@ func (k DerivativeKeeper) executeSocializedLoss(
 	settlementPrice math.LegacyDec,
 	closingFeeRate math.LegacyDec,
 ) []v2.DeficitPositions {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "executeSocializedLoss")()
 
 	marketID := market.MarketID()
 	marketType := market.GetMarketType()
@@ -587,7 +568,6 @@ func (k DerivativeKeeper) executeSocializedLoss(
 	chainFormattedDeficitAmountAfterInsuranceFunds, err := k.PayDeficitFromInsuranceFund(ctx, marketID, chainFormatDeficitAmount)
 
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		k.Logger(ctx).Error(
 			"Retrieving from insurance fund upon settling failed for amount",
 			socializedLossData.DeficitAmountAbs.String(),
@@ -699,8 +679,7 @@ func (k DerivativeKeeper) PayDeficitFromInsuranceFund(
 	marketID common.Hash,
 	absoluteDeficitAmount math.LegacyDec,
 ) (remainingAbsoluteDeficitAmount math.LegacyDec, err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PayDeficitFromInsuranceFund")()
 
 	if absoluteDeficitAmount.IsZero() {
 		return math.LegacyZeroDec(), nil
@@ -709,7 +688,6 @@ func (k DerivativeKeeper) PayDeficitFromInsuranceFund(
 	insuranceFund := k.insurance.GetInsuranceFund(ctx, marketID)
 
 	if insuranceFund == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return absoluteDeficitAmount, insurancetypes.ErrInsuranceFundNotFound
 	}
 
@@ -720,7 +698,6 @@ func (k DerivativeKeeper) PayDeficitFromInsuranceFund(
 	}
 
 	if err := k.insurance.WithdrawFromInsuranceFund(ctx, marketID, withdrawalAmount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return absoluteDeficitAmount, err
 	}
 
@@ -741,6 +718,7 @@ func (k DerivativeKeeper) HandleFailedRegularSettlement(
 	shouldCancelMarketOrders bool,
 	availableMarketFunds math.LegacyDec,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandleFailedRegularSettlement")()
 	// make sure we also cancel transient orders because funds would be unaccounted for otherwise
 	if shouldCancelMarketOrders {
 		k.CancelAllDerivativeMarketOrders(ctx, market)
@@ -757,7 +735,6 @@ func (k DerivativeKeeper) HandleFailedRegularSettlement(
 	err := k.DemolishOrPauseGenericMarket(ctx, market)
 	if err != nil {
 		k.Logger(ctx).Error("failed to demolish or pause generic market", "error", err)
-		metrics.ReportFuncError(k.svcTags)
 	}
 
 	events.Emit(ctx, k.BaseKeeper, &v2.EventNotSettledMarketBalance{
@@ -768,18 +745,15 @@ func (k DerivativeKeeper) HandleFailedRegularSettlement(
 
 // We transfer full amount from insurance fund to market balance
 func (k DerivativeKeeper) TransferFullInsuranceFundBalance(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "TransferFullInsuranceFundBalance")()
 
 	insuranceFund := k.insurance.GetInsuranceFund(ctx, marketID)
 	if insuranceFund == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return
 	}
 
 	withdrawalAmount := insuranceFund.Balance
 	if err := k.insurance.WithdrawFromInsuranceFund(ctx, marketID, withdrawalAmount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return
 	}
 
@@ -792,8 +766,7 @@ func (k DerivativeKeeper) EnsureMarketSolvency(
 	marketBalanceDelta math.LegacyDec,
 	shouldCancelMarketOrders bool,
 ) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "EnsureMarketSolvency")()
 
 	marketID := market.MarketID()
 	availableMarketFunds := k.GetAvailableMarketFunds(ctx, marketID)
@@ -807,7 +780,6 @@ func (k DerivativeKeeper) EnsureMarketSolvency(
 	// if regular settlement fails due to missing oracle price, we at least pause the market and cancel all orders
 	if err := k.PauseMarketAndScheduleForSettlement(ctx, marketID, shouldCancelMarketOrders); err != nil {
 		k.Logger(ctx).Error("failed to pause market and schedule for settlement", "error", err)
-		metrics.ReportFuncError(k.svcTags)
 		k.HandleFailedRegularSettlement(ctx, market, marketID, shouldCancelMarketOrders, availableMarketFunds)
 	}
 
@@ -815,8 +787,7 @@ func (k DerivativeKeeper) EnsureMarketSolvency(
 }
 
 func (k DerivativeKeeper) ApplyMarketBalanceDelta(ctx sdk.Context, marketID common.Hash, delta math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ApplyMarketBalanceDelta")()
 
 	balance := k.GetMarketBalance(ctx, marketID)
 
@@ -825,8 +796,7 @@ func (k DerivativeKeeper) ApplyMarketBalanceDelta(ctx sdk.Context, marketID comm
 }
 
 func (k DerivativeKeeper) DecrementMarketBalance(ctx sdk.Context, marketID common.Hash, amount math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DecrementMarketBalance")()
 
 	balance := k.GetMarketBalance(ctx, marketID)
 	balance = balance.Sub(amount)
@@ -834,11 +804,12 @@ func (k DerivativeKeeper) DecrementMarketBalance(ctx sdk.Context, marketID commo
 }
 
 func (k DerivativeKeeper) DemolishOrPauseGenericMarket(ctx sdk.Context, market v2.DerivativeMarketI) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "DemolishOrPauseGenericMarket")()
+
 	switch market.GetMarketType() {
 	case types.MarketType_BinaryOption:
 		boMarket, ok := market.(*v2.BinaryOptionsMarket)
 		if !ok {
-			metrics.ReportFuncError(k.svcTags)
 			return errors.Wrapf(types.ErrBinaryOptionsMarketNotFound, "binary options market conversion in settlement failed")
 		}
 
@@ -850,7 +821,6 @@ func (k DerivativeKeeper) DemolishOrPauseGenericMarket(ctx sdk.Context, market v
 	default:
 		derivativeMarket, ok := market.(*v2.DerivativeMarket)
 		if !ok {
-			metrics.ReportFuncError(k.svcTags)
 			return errors.Wrapf(types.ErrDerivativeMarketNotFound, "derivative market conversion in settlement failed")
 		}
 
@@ -865,11 +835,12 @@ func (k DerivativeKeeper) DemolishOrPauseGenericMarket(ctx sdk.Context, market v
 }
 
 func (k DerivativeKeeper) ForcePauseGenericMarket(ctx sdk.Context, market v2.DerivativeMarketI, markPriceAtPausing *math.LegacyDec) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ForcePauseGenericMarket")()
+
 	switch market.GetMarketType() {
 	case types.MarketType_BinaryOption:
 		boMarket, ok := market.(*v2.BinaryOptionsMarket)
 		if !ok {
-			metrics.ReportFuncError(k.svcTags)
 			return errors.Wrapf(types.ErrBinaryOptionsMarketNotFound, "binary options market conversion in settlement failed")
 		}
 
@@ -886,7 +857,6 @@ func (k DerivativeKeeper) ForcePauseGenericMarket(ctx sdk.Context, market v2.Der
 	default:
 		derivativeMarket, ok := market.(*v2.DerivativeMarket)
 		if !ok {
-			metrics.ReportFuncError(k.svcTags)
 			return errors.Wrapf(types.ErrDerivativeMarketNotFound, "derivative market conversion in settlement failed")
 		}
 
@@ -910,12 +880,10 @@ func (k DerivativeKeeper) PauseMarketAndScheduleForSettlement(
 	marketID common.Hash,
 	shouldCancelMarketOrders bool,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "PauseMarketAndScheduleForSettlement")()
 
 	market, markPrice := k.GetDerivativeOrBinaryOptionsMarketWithMarkPrice(ctx, marketID, true)
 	if market == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrGenericMarketNotFound, "market or markPrice not found")
 	}
 
@@ -925,7 +893,6 @@ func (k DerivativeKeeper) PauseMarketAndScheduleForSettlement(
 	}
 
 	if markPrice.IsNil() {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrGenericMarketNotFound, "markPrice not found")
 	}
 
@@ -953,7 +920,6 @@ func (k DerivativeKeeper) PauseMarketAndScheduleForSettlement(
 
 	if err != nil {
 		k.Logger(ctx).Error("failed to demolish or pause generic market in settlement", "error", err)
-		metrics.ReportFuncError(k.svcTags)
 		return err
 	}
 
@@ -965,24 +931,20 @@ func (k DerivativeKeeper) MoveCoinsIntoInsuranceFund(
 	market v2.DerivativeMarketI,
 	insuranceFundPaymentAmount math.Int,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "MoveCoinsIntoInsuranceFund")()
 
 	marketID := market.MarketID()
 
 	if !k.insurance.HasInsuranceFund(ctx, marketID) {
-		metrics.ReportFuncError(k.svcTags)
 		return insurancetypes.ErrInsuranceFundNotFound
 	}
 
 	coinAmount := sdk.NewCoins(sdk.NewCoin(market.GetQuoteDenom(), insuranceFundPaymentAmount))
 	if err := k.bank.SendCoinsFromModuleToModule(ctx, types.ModuleName, insurancetypes.ModuleName, coinAmount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return err
 	}
 
 	if err := k.insurance.DepositIntoInsuranceFund(ctx, marketID, insuranceFundPaymentAmount); err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return err
 	}
 
@@ -999,8 +961,7 @@ func (k DerivativeKeeper) closeAllPositionsWithSettlePrice(
 	marketFunding *v2.PerpetualMarketFunding,
 	deficitPositions []v2.DeficitPositions,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "closeAllPositionsWithSettlePrice")()
 
 	depositDeltas := types.NewDepositDeltas()
 	marketID := market.MarketID()
@@ -1159,11 +1120,11 @@ func getDerivativeSocializedLossData(
 			settlementPrice,
 			closingFeeRate,
 		)
-		totalProfits = totalProfits.Add(positionProfit)
-		deficitAmountAbs = deficitAmountAbs.Add(positionDeficitAbs)
+		totalProfits.AddMut(positionProfit)
+		deficitAmountAbs.AddMut(positionDeficitAbs)
 
 		if payout.IsPositive() {
-			totalPositivePayouts = totalPositivePayouts.Add(payout)
+			totalPositivePayouts.AddMut(payout)
 		}
 
 		if isProfitable {
@@ -1232,8 +1193,8 @@ func getTotalMarginAndQuantity(positions []*v2.DerivativePosition) (totalMargin,
 	totalQuantity = math.LegacyZeroDec()
 
 	for idx := range positions {
-		totalMargin = totalMargin.Add(positions[idx].Position.Margin)
-		totalQuantity = totalQuantity.Add(positions[idx].Position.Quantity)
+		totalMargin.AddMut(positions[idx].Position.Margin)
+		totalQuantity.AddMut(positions[idx].Position.Quantity)
 	}
 
 	return totalMargin, totalQuantity
@@ -1268,8 +1229,7 @@ func (k DerivativeKeeper) CalculateMarketBalance(
 	markPrice math.LegacyDec,
 	marketFunding *v2.PerpetualMarketFunding,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CalculateMarketBalance")()
 
 	positions := k.GetAllPositionsByMarket(ctx, marketID)
 	marketBalance := math.LegacyZeroDec()
@@ -1292,7 +1252,7 @@ func (k DerivativeKeeper) CalculateMarketBalance(
 		chainFormattedMargin := market.NotionalToChainFormat(positionMargin)
 		chainFormattedPnlAtOraclePrice := market.NotionalToChainFormat(positionPnlAtOraclePrice)
 
-		marketBalance = marketBalance.Add(chainFormattedMargin).Add(chainFormattedPnlAtOraclePrice)
+		marketBalance.AddMut(chainFormattedMargin).AddMut(chainFormattedPnlAtOraclePrice)
 	}
 
 	return marketBalance
@@ -1300,8 +1260,7 @@ func (k DerivativeKeeper) CalculateMarketBalance(
 
 //nolint:revive // ok
 func (k DerivativeKeeper) ProcessMarketsScheduledToSettle(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessMarketsScheduledToSettle")()
 
 	marketSettlementInfos := k.GetAllScheduledSettlementDerivativeMarkets(ctx)
 
@@ -1355,7 +1314,6 @@ func (k DerivativeKeeper) ProcessMarketsScheduledToSettle(ctx sdk.Context) {
 			err := k.DemolishOrPauseGenericMarket(ctx, market)
 			if err != nil {
 				k.Logger(ctx).Error("failed to demolish or pause generic market in settlement", "error", err)
-				metrics.ReportFuncError(k.svcTags)
 			}
 		}
 	}
@@ -1363,8 +1321,7 @@ func (k DerivativeKeeper) ProcessMarketsScheduledToSettle(ctx sdk.Context) {
 
 // GetAllScheduledSettlementDerivativeMarkets returns all DerivativeMarketSettlementInfos.
 func (k DerivativeKeeper) GetAllScheduledSettlementDerivativeMarkets(ctx sdk.Context) []v2.DerivativeMarketSettlementInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllScheduledSettlementDerivativeMarkets")()
 
 	marketSettlementInfos := make([]v2.DerivativeMarketSettlementInfo, 0)
 	k.IterateScheduledSettlementDerivativeMarkets(ctx, func(i v2.DerivativeMarketSettlementInfo) (stop bool) {
@@ -1377,8 +1334,7 @@ func (k DerivativeKeeper) GetAllScheduledSettlementDerivativeMarkets(ctx sdk.Con
 
 //nolint:revive // ok
 func (k DerivativeKeeper) ProcessMatureExpiryFutureMarkets(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessMatureExpiryFutureMarkets")()
 
 	var (
 		blockTime               = ctx.BlockTime().Unix()
@@ -1503,8 +1459,7 @@ func (k DerivativeKeeper) ProcessMatureExpiryFutureMarkets(ctx sdk.Context) {
 
 // EmitAllTransientPositionUpdates emits the EventBatchDerivativePosition events for all of the modified positions in all markets
 func (k DerivativeKeeper) EmitAllTransientPositionUpdates(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "EmitAllTransientPositionUpdates")()
 
 	positions := make(map[common.Hash]map[common.Hash]*v2.Position) // marketID => subaccountID => position
 	k.IterateTransientPositions(ctx, func(marketID, subaccountID common.Hash, position *v2.Position) (stop bool) {
@@ -1553,8 +1508,7 @@ func (k DerivativeKeeper) EmitAllTransientPositionUpdates(ctx sdk.Context) {
 }
 
 func (k DerivativeKeeper) ProcessHourlyFundings(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessHourlyFundings")()
 
 	blockTime := ctx.BlockTime().Unix()
 
@@ -1627,8 +1581,7 @@ func (k DerivativeKeeper) ProcessHourlyFundings(ctx sdk.Context) {
 
 // GetFirstPerpetualMarketInfoState returns the first perpetual market info state
 func (k DerivativeKeeper) GetFirstPerpetualMarketInfoState(ctx sdk.Context) *v2.PerpetualMarketInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFirstPerpetualMarketInfoState")()
 
 	marketInfoStates := make([]v2.PerpetualMarketInfo, 0)
 	k.IteratePerpetualMarketInfos(ctx, func(p *v2.PerpetualMarketInfo, _ common.Hash) (stop bool) {
@@ -1645,8 +1598,7 @@ func (k DerivativeKeeper) GetFirstPerpetualMarketInfoState(ctx sdk.Context) *v2.
 
 // GetAllPerpetualMarketInfoStates returns all perpetual market's market infos
 func (k DerivativeKeeper) GetAllPerpetualMarketInfoStates(ctx sdk.Context) []v2.PerpetualMarketInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllPerpetualMarketInfoStates")()
 
 	marketInfo := make([]v2.PerpetualMarketInfo, 0)
 	k.IteratePerpetualMarketInfos(ctx, func(p *v2.PerpetualMarketInfo, _ common.Hash) (stop bool) {
@@ -1662,6 +1614,8 @@ func (k DerivativeKeeper) GetDerivativeMarketWithMarkPrice(
 	marketID common.Hash,
 	isEnabled bool,
 ) (*v2.DerivativeMarket, math.LegacyDec) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketWithMarkPrice")()
+
 	market := k.GetDerivativeMarket(ctx, marketID, isEnabled)
 	if market == nil {
 		return nil, math.LegacyDec{}
@@ -1669,7 +1623,6 @@ func (k DerivativeKeeper) GetDerivativeMarketWithMarkPrice(
 
 	price, err := k.GetDerivativeMarketPrice(ctx, market.OracleBase, market.OracleQuote, market.OracleScaleFactor, market.OracleType)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, math.LegacyDec{}
 	}
 
@@ -1690,8 +1643,7 @@ func capFundingRate(fundingRate, fundingRateCap math.LegacyDec) math.LegacyDec {
 
 // GetAllExpiryFuturesMarketInfoStates returns all expiry futures market's market infos.
 func (k DerivativeKeeper) GetAllExpiryFuturesMarketInfoStates(ctx sdk.Context) []v2.ExpiryFuturesMarketInfoState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllExpiryFuturesMarketInfoStates")()
 
 	marketInfoStates := make([]v2.ExpiryFuturesMarketInfoState, 0)
 	appendMarketInfo := func(p *v2.ExpiryFuturesMarketInfo, marketID common.Hash) (stop bool) {
@@ -1710,8 +1662,7 @@ func (k DerivativeKeeper) GetAllExpiryFuturesMarketInfoStates(ctx sdk.Context) [
 
 // GetDerivativeMarketAndStatus returns the Derivative Market by marketID and isEnabled status.
 func (k DerivativeKeeper) GetDerivativeMarketAndStatus(ctx sdk.Context, marketID common.Hash) (*v2.DerivativeMarket, bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetDerivativeMarketAndStatus")()
 
 	isEnabled := true
 	market := k.GetDerivativeMarket(ctx, marketID, isEnabled)
@@ -1724,8 +1675,7 @@ func (k DerivativeKeeper) GetDerivativeMarketAndStatus(ctx sdk.Context, marketID
 }
 
 func (k DerivativeKeeper) GetFullDerivativeMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) *v2.FullDerivativeMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetFullDerivativeMarket")()
 
 	market, markPrice := k.GetDerivativeMarketWithMarkPrice(ctx, marketID, isEnabled)
 	if market == nil {
@@ -1745,6 +1695,8 @@ func (k DerivativeKeeper) GetFullDerivativeMarket(ctx sdk.Context, marketID comm
 func (k DerivativeKeeper) populateDerivativeMarketInfo(
 	ctx sdk.Context, market *v2.DerivativeMarket, fullMarket *v2.FullDerivativeMarket,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "populateDerivativeMarketInfo")()
+
 	if market.IsPerpetual {
 		fullMarket.Info = &v2.FullDerivativeMarket_PerpetualInfo{
 			PerpetualInfo: &v2.PerpetualMarketState{
@@ -1760,6 +1712,8 @@ func (k DerivativeKeeper) populateDerivativeMarketInfo(
 }
 
 func (k *DerivativeKeeper) HandleForceSettleMarketByAdmin(ctx sdk.Context, marketID common.Hash, settlementPrice *math.LegacyDec) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HandleForceSettleMarketByAdmin")()
+
 	derivativeMarket := k.GetDerivativeMarketByID(ctx, marketID)
 	if derivativeMarket == nil {
 		return fmt.Errorf("derivative market with ID %s not found", marketID.Hex())
@@ -1798,5 +1752,3 @@ func (k *DerivativeKeeper) HandleForceSettleMarketByAdmin(ctx sdk.Context, marke
 
 	return nil
 }
-
-// (No EVM-hook-based market pause logic here; permission hooks are now handled in permissions module.)

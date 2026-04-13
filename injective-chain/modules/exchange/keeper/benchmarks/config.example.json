@@ -1,0 +1,63 @@
+{
+  "_comment": "Example benchmark configuration file. Copy to config.json and modify as needed.",
+  "_usage": "cp config.example.json config.json && BENCH_CONFIG=./config.json BENCHMARK_REPORT_DIR=./reports go test . -bench=BenchmarkRealisticTrading_Custom -benchtime=1x -run '^$' -v",
+  "_presets": "base_preset may be: light, heavy, extended, extreme.",
+  "_zero_values": "Numeric fields can be set to 0 to disable features (e.g. derivative_markets_count, batch_order_pct). Omit a field to use the base preset's default value.",
+  "_comment_seed": "random_seed makes runs deterministic. Omit it (or set 0) for non-deterministic runs.",
+
+  "base_preset": "heavy",
+  "random_seed": 12345,
+
+  "block_count": 100,
+  "orders_per_block": 200,
+  "cancellations_per_block": 40,
+
+  "spot_markets_count": 2,
+  "derivative_markets_count": 3,
+
+  "traders_count": 100,
+  "market_makers_count": 5,
+
+  "limit_order_pct": 80,
+  "market_order_pct": 10,
+  "conditional_order_pct": 10,
+
+  "initial_price": "2000",
+  "price_volatility": 0.02,
+  "mean_reversion": 0.1,
+
+  "spread_bps": 10,
+  "mm_refresh_blocks": 5,
+
+  "insurance_fund_balance": "500000",
+
+  "seconds_per_block": 120,
+  "oracle_divergence_pct": 0.02,
+  "oracle_trend_bias": 0.1,
+  "liquidation_trigger_pct": 0.01,
+
+  "steady_state": {
+    "orders_per_side": 300,
+    "price_spread_pct": 0.05,
+    "traders_with_positions": 50,
+    "avg_position_size": 5.0,
+    "skip_orderbook": false,
+    "skip_positions": false
+  },
+
+  "_comment_gas": "tx_gas_limit controls base GasWanted per tx (benchmark adds small headroom; batch messages may scale higher).",
+  "tx_gas_limit": 500000,
+
+  "_comment_batch": "Batch operations (market maker style order placement). batch_size is total orders per batch message (capped at 100).",
+  "batch_order_pct": 20,
+  "batch_size": 10,
+
+  "_comment_account": "Account operations (% of blocks to include these operations)",
+  "deposit_pct": 0.03,
+  "withdraw_pct": 0.02,
+  "subaccount_transfer_pct": 0.02,
+
+  "_comment_expiry": "Order expiration (% of limit orders with expiration block)",
+  "expiring_order_pct": 5,
+  "expiration_block_gap": 20
+}

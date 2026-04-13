@@ -8,8 +8,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
@@ -27,7 +25,7 @@ type StorkKeeper interface {
 
 // GetStorkPrice gets price for a given base quote pair.
 func (k *Keeper) GetStorkPrice(ctx sdk.Context, base, quote string) *math.LegacyDec {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetStorkPrice")()
 
 	basePriceState := k.GetStorkPriceState(ctx, base)
 	if basePriceState == nil {
@@ -55,7 +53,7 @@ func (k *Keeper) GetStorkPrice(ctx sdk.Context, base, quote string) *math.Legacy
 
 // SetStorkPriceState stores a given stork price state.
 func (k *Keeper) SetStorkPriceState(ctx sdk.Context, priceData *types.StorkPriceState) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetStorkPriceState")()
 
 	priceKey := types.GetStorkPriceStoreKey(priceData.Symbol)
 	bz := k.cdc.MustMarshal(priceData)
@@ -69,7 +67,7 @@ func (k *Keeper) SetStorkPriceState(ctx sdk.Context, priceData *types.StorkPrice
 }
 
 func (k *Keeper) GetStorkPriceState(ctx sdk.Context, symbol string) *types.StorkPriceState {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetStorkPriceState")()
 
 	var priceState types.StorkPriceState
 	bz := k.getStore(ctx).Get(types.GetStorkPriceStoreKey(symbol))
@@ -83,7 +81,7 @@ func (k *Keeper) GetStorkPriceState(ctx sdk.Context, symbol string) *types.Stork
 
 // GetAllStorkPriceStates fetches all stork price states.
 func (k *Keeper) GetAllStorkPriceStates(ctx sdk.Context) []*types.StorkPriceState {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllStorkPriceStates")()
 
 	priceStates := make([]*types.StorkPriceState, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -104,7 +102,7 @@ func (k *Keeper) GetAllStorkPriceStates(ctx sdk.Context) []*types.StorkPriceStat
 
 // SetStorkPublisher stores a given stork publisher address
 func (k *Keeper) SetStorkPublisher(ctx sdk.Context, address string) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetStorkPublisher")()
 
 	store := ctx.KVStore(k.storeKey)
 
@@ -114,7 +112,7 @@ func (k *Keeper) SetStorkPublisher(ctx sdk.Context, address string) {
 
 // DeleteStorkPublisher delete a given stork publisher address
 func (k *Keeper) DeleteStorkPublisher(ctx sdk.Context, address string) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteStorkPublisher")()
 
 	store := ctx.KVStore(k.storeKey)
 
@@ -124,7 +122,7 @@ func (k *Keeper) DeleteStorkPublisher(ctx sdk.Context, address string) {
 
 // GetAllStorkPublishers fetches all stork publisher addresses.
 func (k *Keeper) GetAllStorkPublishers(ctx sdk.Context) []string {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllStorkPublishers")()
 
 	publishers := make([]string, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -142,7 +140,7 @@ func (k *Keeper) GetAllStorkPublishers(ctx sdk.Context) []string {
 }
 
 func (k *Keeper) IsStorkPublisher(ctx sdk.Context, address string) bool {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsStorkPublisher")()
 
 	store := ctx.KVStore(k.storeKey)
 	storkPublisherStore := prefix.NewStore(store, types.StorkPublisherKey)
@@ -150,14 +148,20 @@ func (k *Keeper) IsStorkPublisher(ctx sdk.Context, address string) bool {
 	return storkPublisherStore.Has(common.HexToAddress(address).Bytes())
 }
 
+type publisherTimestampKey struct {
+	addr common.Address
+	ts   uint64
+}
+
 func (k *Keeper) ProcessStorkAssetPairsData(ctx sdk.Context, assetPairs []*types.AssetPair) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProcessStorkAssetPairsData")()
 
 	storkPriceStates := make([]*types.StorkPriceState, 0, len(assetPairs))
 	for idx := range assetPairs {
 		pair := assetPairs[idx]
 		legalSignedPrices := make([]*types.SignedPriceOfAssetPair, 0, len(pair.SignedPrices))
 
+		seen := make(map[publisherTimestampKey]struct{}, len(pair.SignedPrices))
 		latestTimestamp := uint64(0)
 		for i := range pair.SignedPrices {
 			signedPrice := pair.SignedPrices[i]
@@ -165,6 +169,12 @@ func (k *Keeper) ProcessStorkAssetPairsData(ctx sdk.Context, assetPairs []*types
 			if !k.IsStorkPublisher(ctx, signedPrice.PublisherKey) {
 				continue
 			}
+
+			key := publisherTimestampKey{addr: common.HexToAddress(signedPrice.PublisherKey), ts: signedPrice.Timestamp}
+			if _, alreadySeen := seen[key]; alreadySeen {
+				continue
+			}
+			seen[key] = struct{}{}
 
 			legalSignedPrices = append(legalSignedPrices, signedPrice)
 			if timestamp > latestTimestamp {

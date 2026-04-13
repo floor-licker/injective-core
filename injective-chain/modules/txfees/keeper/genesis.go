@@ -7,10 +7,14 @@ import (
 )
 
 func (k *Keeper) InitGenesis(ctx sdk.Context, data types.GenesisState) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "InitGenesis")()
+
 	k.SetParams(ctx, data.Params)
 }
 
 func (k *Keeper) ExportGenesis(ctx sdk.Context) *types.GenesisState {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExportGenesis")()
+
 	return &types.GenesisState{
 		Params: k.GetParams(ctx),
 	}

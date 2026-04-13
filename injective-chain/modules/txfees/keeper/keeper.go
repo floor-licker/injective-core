@@ -1,9 +1,11 @@
 package keeper
 
 import (
+	"context"
+
 	"cosmossdk.io/log"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	consensustypes "github.com/cosmos/cosmos-sdk/x/consensus/types"
@@ -20,8 +22,9 @@ type Keeper struct {
 	dataDir         string
 	CurFeeState     *mempool1559.FeeState
 
-	svcTags   metrics.Tags
 	authority string
+
+	meter metrics.Meter
 }
 
 func NewKeeper(
@@ -39,14 +42,19 @@ func NewKeeper(
 		// Initialize the EIP state with the default values. They will be updated in the BeginBlocker.
 		CurFeeState: mempool1559.DefaultFeeState(),
 		authority:   authority,
-		svcTags: metrics.Tags{
-			"svc": "txfees_k",
-		},
 	}
 }
 
 func (*Keeper) Logger(ctx sdk.Context) log.Logger {
 	return ctx.Logger().With("module", types.ModuleName)
+}
+
+func (k *Keeper) Meter(ctx context.Context) metrics.Meter {
+	if k.meter == nil {
+		k.meter = sdk.UnwrapSDKContext(ctx).Meter().SubMeter(types.ModuleName, metrics.Tag("svc", types.ModuleName))
+	}
+
+	return k.meter
 }
 
 // GetConsParams returns the current consensus parameters from the consensus params store.

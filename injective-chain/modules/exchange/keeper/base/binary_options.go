@@ -2,7 +2,6 @@ package base
 
 import (
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -11,8 +10,7 @@ import (
 )
 
 func (k *BaseKeeper) GetBinaryOptionsMarketByID(ctx sdk.Context, marketID common.Hash) *v2.BinaryOptionsMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBinaryOptionsMarketByID")()
 
 	market := k.GetBinaryOptionsMarket(ctx, marketID, true)
 	if market != nil {
@@ -27,8 +25,7 @@ func (k *BaseKeeper) IterateBinaryOptionsMarketExpiryTimestamps(
 	endTimestampLimit uint64,
 	process func(marketID common.Hash) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateBinaryOptionsMarketExpiryTimestamps")()
 
 	expirationStore := prefix.NewStore(k.getStore(ctx), types.BinaryOptionsMarketExpiryTimestampPrefix)
 	endTimestampLimitBytes := sdk.Uint64ToBigEndian(endTimestampLimit)
@@ -44,8 +41,7 @@ func (k *BaseKeeper) IterateBinaryOptionsMarketSettlementTimestamps(
 	endTimestampLimit uint64,
 	process func(marketIDBytes []byte) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateBinaryOptionsMarketSettlementTimestamps")()
 
 	settlementStore := prefix.NewStore(k.getStore(ctx), types.BinaryOptionsMarketSettlementTimestampPrefix)
 	endTimestampLimitBytes := sdk.Uint64ToBigEndian(endTimestampLimit)
@@ -57,8 +53,7 @@ func (k *BaseKeeper) IterateBinaryOptionsMarketSettlementTimestamps(
 
 // HasBinaryOptionsMarket returns true the if the binary options market exists in the store.
 func (k *BaseKeeper) HasBinaryOptionsMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasBinaryOptionsMarket")()
 
 	store := k.getStore(ctx)
 	key := types.GetBinaryOptionsMarketKey(isEnabled, marketID)
@@ -67,8 +62,7 @@ func (k *BaseKeeper) HasBinaryOptionsMarket(ctx sdk.Context, marketID common.Has
 
 // GetBinaryOptionsMarket fetches the binary options Market from the store by marketID.
 func (k *BaseKeeper) GetBinaryOptionsMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) *v2.BinaryOptionsMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBinaryOptionsMarket")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.GetBinaryOptionsMarketPrefix(isEnabled))
@@ -85,8 +79,7 @@ func (k *BaseKeeper) GetBinaryOptionsMarket(ctx sdk.Context, marketID common.Has
 }
 
 func (k *BaseKeeper) SetBinaryOptionsMarket(ctx sdk.Context, market *v2.BinaryOptionsMarket) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBinaryOptionsMarket")()
 
 	store := k.getStore(ctx)
 
@@ -100,8 +93,7 @@ func (k *BaseKeeper) SetBinaryOptionsMarket(ctx sdk.Context, market *v2.BinaryOp
 
 // DeleteBinaryOptionsMarket deletes Binary Options Market from the markets store (needed for moving to another hash).
 func (k *BaseKeeper) DeleteBinaryOptionsMarket(ctx sdk.Context, market *v2.BinaryOptionsMarket, isEnabled bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteBinaryOptionsMarket")()
 
 	store := k.getStore(ctx)
 	marketID := market.MarketID()
@@ -116,8 +108,7 @@ func (k *BaseKeeper) DeleteBinaryOptionsMarket(ctx sdk.Context, market *v2.Binar
 
 // DeleteBinaryOptionsMarketExpiryTimestampIndex deletes the binary options market's market id index from the keeper.
 func (k *BaseKeeper) DeleteBinaryOptionsMarketExpiryTimestampIndex(ctx sdk.Context, marketID common.Hash, expirationTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteBinaryOptionsMarketExpiryTimestampIndex")()
 
 	store := k.getStore(ctx)
 	key := types.GetBinaryOptionsMarketExpiryTimestampKey(expirationTimestamp, marketID)
@@ -126,8 +117,7 @@ func (k *BaseKeeper) DeleteBinaryOptionsMarketExpiryTimestampIndex(ctx sdk.Conte
 
 // SetBinaryOptionsMarketExpiryTimestampIndex saves the binary options market id keyed by expiration timestamp
 func (k *BaseKeeper) SetBinaryOptionsMarketExpiryTimestampIndex(ctx sdk.Context, marketID common.Hash, expirationTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBinaryOptionsMarketExpiryTimestampIndex")()
 
 	store := k.getStore(ctx)
 	key := types.GetBinaryOptionsMarketExpiryTimestampKey(expirationTimestamp, marketID)
@@ -136,8 +126,7 @@ func (k *BaseKeeper) SetBinaryOptionsMarketExpiryTimestampIndex(ctx sdk.Context,
 
 // DeleteBinaryOptionsMarketSettlementTimestampIndex deletes the binary options market's market id index from the keeper.
 func (k *BaseKeeper) DeleteBinaryOptionsMarketSettlementTimestampIndex(ctx sdk.Context, marketID common.Hash, settlementTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteBinaryOptionsMarketSettlementTimestampIndex")()
 
 	store := k.getStore(ctx)
 	key := types.GetBinaryOptionsMarketSettlementTimestampKey(settlementTimestamp, marketID)
@@ -146,8 +135,7 @@ func (k *BaseKeeper) DeleteBinaryOptionsMarketSettlementTimestampIndex(ctx sdk.C
 
 // SetBinaryOptionsMarketSettlementTimestampIndex saves the binary options market id keyed by settlement timestamp
 func (k *BaseKeeper) SetBinaryOptionsMarketSettlementTimestampIndex(ctx sdk.Context, marketID common.Hash, settlementTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetBinaryOptionsMarketSettlementTimestampIndex")()
 
 	store := k.getStore(ctx)
 	key := types.GetBinaryOptionsMarketSettlementTimestampKey(settlementTimestamp, marketID)
@@ -156,8 +144,7 @@ func (k *BaseKeeper) SetBinaryOptionsMarketSettlementTimestampIndex(ctx sdk.Cont
 
 // ScheduleBinaryOptionsMarketForSettlement saves the Binary Options market ID into the keeper to be settled later in the next BeginBlocker
 func (k *BaseKeeper) ScheduleBinaryOptionsMarketForSettlement(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ScheduleBinaryOptionsMarketForSettlement")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.BinaryOptionsMarketSettlementSchedulePrefix)
@@ -166,8 +153,7 @@ func (k *BaseKeeper) ScheduleBinaryOptionsMarketForSettlement(ctx sdk.Context, m
 
 // IterateScheduledBinaryOptionsMarketSettlements iterates over binary options markets ready to be settled, calling process on each one.
 func (k *BaseKeeper) IterateScheduledBinaryOptionsMarketSettlements(ctx sdk.Context, process func(marketID common.Hash) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateScheduledBinaryOptionsMarketSettlements")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.BinaryOptionsMarketSettlementSchedulePrefix)
@@ -180,8 +166,7 @@ func (k *BaseKeeper) IterateScheduledBinaryOptionsMarketSettlements(ctx sdk.Cont
 
 // RemoveScheduledSettlementOfBinaryOptionsMarket removes scheduled market id from the store
 func (k *BaseKeeper) RemoveScheduledSettlementOfBinaryOptionsMarket(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RemoveScheduledSettlementOfBinaryOptionsMarket")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.BinaryOptionsMarketSettlementSchedulePrefix)
@@ -194,8 +179,7 @@ func (k *BaseKeeper) IterateBinaryOptionsMarkets(
 	isEnabled *bool,
 	process func(market *v2.BinaryOptionsMarket) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateBinaryOptionsMarkets")()
 
 	store := k.getStore(ctx)
 	var marketStore prefix.Store
@@ -213,8 +197,7 @@ func (k *BaseKeeper) IterateBinaryOptionsMarkets(
 }
 
 func (k *BaseKeeper) ScheduleBinaryOptionsMarketParamUpdate(ctx sdk.Context, p *v2.BinaryOptionsMarketParamUpdateProposal) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ScheduleBinaryOptionsMarketParamUpdate")()
 
 	store := k.getTransientStore(ctx)
 	marketID := common.HexToHash(p.MarketId)
@@ -228,8 +211,7 @@ func (k *BaseKeeper) ScheduleBinaryOptionsMarketParamUpdate(ctx sdk.Context, p *
 func (k *BaseKeeper) IterateBinaryOptionsMarketParamUpdates(
 	ctx sdk.Context, process func(*v2.BinaryOptionsMarketParamUpdateProposal,
 	) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateBinaryOptionsMarketParamUpdates")()
 
 	store := k.getTransientStore(ctx)
 	paramUpdateStore := prefix.NewStore(store, types.BinaryOptionsMarketParamUpdateSchedulePrefix)
@@ -252,8 +234,7 @@ func (k *BaseKeeper) IterateBinaryOptionsMarketParamUpdates(
 
 // GetAllBinaryOptionsMarkets returns all binary options markets.
 func (k *BaseKeeper) GetAllBinaryOptionsMarkets(ctx sdk.Context) []*v2.BinaryOptionsMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBinaryOptionsMarkets")()
 
 	markets := make([]*v2.BinaryOptionsMarket, 0)
 	k.IterateBinaryOptionsMarkets(ctx, nil, func(p *v2.BinaryOptionsMarket) (stop bool) {
@@ -267,8 +248,7 @@ func (k *BaseKeeper) GetAllBinaryOptionsMarkets(ctx sdk.Context) []*v2.BinaryOpt
 
 // GetAllActiveBinaryOptionsMarkets returns all active binary options markets.
 func (k *BaseKeeper) GetAllActiveBinaryOptionsMarkets(ctx sdk.Context) []*v2.BinaryOptionsMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllActiveBinaryOptionsMarkets")()
 
 	isEnabled := true
 	markets := make([]*v2.BinaryOptionsMarket, 0)
@@ -297,8 +277,7 @@ func (k *BaseKeeper) GetAllActiveBinaryOptionsMarkets(ctx sdk.Context) []*v2.Bin
 
 // SaveBinaryOptionsMarket saves the binary options market in keeper.
 func (k *BaseKeeper) SaveBinaryOptionsMarket(ctx sdk.Context, market *v2.BinaryOptionsMarket) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SaveBinaryOptionsMarket")()
 
 	isEnabled := market.IsActive()
 	marketID := market.MarketID()

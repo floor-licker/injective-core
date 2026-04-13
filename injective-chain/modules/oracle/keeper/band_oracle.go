@@ -3,7 +3,6 @@ package keeper
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
@@ -11,8 +10,7 @@ import (
 
 // GetAllBandRelayers fetches all band price relayers.
 func (k *Keeper) GetAllBandRelayers(ctx sdk.Context) []string {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBandRelayers")()
 
 	bandRelayers := make([]string, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -31,8 +29,7 @@ func (k *Keeper) GetAllBandRelayers(ctx sdk.Context) []string {
 
 // GetBandPriceState reads the stored price state.
 func (k *Keeper) GetBandPriceState(ctx sdk.Context, symbol string) *types.BandPriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandPriceState")()
 
 	var priceState types.BandPriceState
 	bz := k.getStore(ctx).Get(types.GetBandPriceStoreKey(symbol))
@@ -46,8 +43,7 @@ func (k *Keeper) GetBandPriceState(ctx sdk.Context, symbol string) *types.BandPr
 
 // GetBandReferencePrice fetches prices for a given pair in math.LegacyDec
 func (k *Keeper) GetBandReferencePrice(ctx sdk.Context, base, quote string) *math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBandReferencePrice")()
 	// query ref by using GetBandPriceState
 	basePriceState := k.GetBandPriceState(ctx, base)
 	if basePriceState == nil {
@@ -77,8 +73,7 @@ func (k *Keeper) GetBandReferencePrice(ctx sdk.Context, base, quote string) *mat
 
 // GetAllBandPriceStates reads all stored band price states.
 func (k *Keeper) GetAllBandPriceStates(ctx sdk.Context) []*types.BandPriceState {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBandPriceStates")()
 
 	priceStates := make([]*types.BandPriceState, 0)
 	store := ctx.KVStore(k.storeKey)

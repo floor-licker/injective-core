@@ -23,10 +23,6 @@ import (
 //
 // $ peggo orchestrator
 func orchestratorCmd(cmd *cli.Cmd) {
-	cmd.Before = func() {
-		initMetrics(cmd)
-	}
-
 	cmd.Action = func() {
 		// ensure a clean exit
 		defer closer.Close()
@@ -56,6 +52,9 @@ func orchestratorCmd(cmd *cli.Cmd) {
 				EthNodeAlchemyWS:      *cfg.ethNodeAlchemyWS,
 			}
 		)
+
+		peggoMeter, err := initMetrics(*cfg.cosmosChainID)
+		orShutdown(err)
 
 		if *cfg.cosmosUseLedger || *cfg.ethUseLedger {
 			log.Fatalln("cannot use Ledger for orchestrator, since signatures must be realtime")
@@ -87,7 +86,7 @@ func orchestratorCmd(cmd *cli.Cmd) {
 		log.Infoln("initialized Ethereum keyring", ethKeyFromAddress.String())
 
 		cosmosNetworkCfg.ValidatorAddress = cosmosKeyring.Addr.String()
-		cosmosNetwork, err := cosmos.NewNetwork(cosmosKeyring, personalSignFn, cosmosNetworkCfg)
+		cosmosNetwork, err := cosmos.NewNetwork(cosmosKeyring, personalSignFn, cosmosNetworkCfg, peggoMeter)
 		orShutdown(errors.Wrap(err, "failed to connect to cosmos"))
 		log.WithFields(log.Fields{"chain_id": *cfg.cosmosChainID, "gas_price": *cfg.cosmosGasPrices}).Infoln("connected to Injective network")
 
@@ -107,7 +106,7 @@ func orchestratorCmd(cmd *cli.Cmd) {
 
 		// 2. Connect to ethereum network
 
-		ethNetwork, err := ethereum.NewNetwork(peggyContractAddr, ethKeyFromAddress, signerFn, ethNetworkCfg)
+		ethNetwork, err := ethereum.NewNetwork(peggyContractAddr, ethKeyFromAddress, signerFn, ethNetworkCfg, peggoMeter)
 		orShutdown(errors.Wrap(err, "failed to connect to ethereum"))
 		log.WithFields(log.Fields{
 			"chain_id":             *cfg.ethChainID,
@@ -167,8 +166,9 @@ func orchestratorCmd(cmd *cli.Cmd) {
 		peggo, err := orchestrator.NewOrchestrator(
 			cosmosNetwork,
 			ethNetwork,
-			pricefeed.NewCoingeckoPriceFeed(100, &pricefeed.Config{BaseURL: *cfg.coingeckoApi}),
+			pricefeed.NewCoingeckoPriceFeed(100, &pricefeed.Config{BaseURL: *cfg.coingeckoApi}, peggoMeter),
 			orchestratorCfg,
+			peggoMeter,
 		)
 		orShutdown(err)
 

@@ -26,6 +26,8 @@ func (k Keeper) HasPermissionsForAction(ctx sdk.Context, denom string, actor sdk
 }
 
 func (k Keeper) CheckPermissionsForAction(ctx sdk.Context, denom string, actor sdk.AccAddress, action types.Action) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "CheckPermissionsForAction")()
+
 	if k.IsActionDisabledByPolicy(ctx, denom, action) {
 		return errors.Wrapf(types.ErrRestrictedAction, "action %s on %s is disabled", action, denom)
 	}
@@ -44,6 +46,7 @@ func (k Keeper) CheckPermissionsForAction(ctx sdk.Context, denom string, actor s
 
 // getTotalAllowedActionsForAddress returns the total allowed actions for the given address and denom
 func (k Keeper) getTotalAllowedActionsForAddress(ctx sdk.Context, denom string, actor sdk.AccAddress) (ActionBitMask, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "getTotalAllowedActionsForAddress")()
 	// check that action is allowed for address
 	roleIDs, err := k.GetActorRoleIDs(ctx, denom, actor)
 	if err != nil {
@@ -76,6 +79,8 @@ func (k Keeper) getTotalAllowedActionsForAddress(ctx sdk.Context, denom string, 
 
 // GetAddressRoleNames returns all the assigned roles for this address. Returns EVERYONE role if no roles found for this address.
 func (k Keeper) GetAddressRoleNames(ctx sdk.Context, denom string, addr sdk.AccAddress) ([]string, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAddressRoleNames")()
+
 	store := k.getActorRolesStore(ctx, denom)
 	bz := store.Get(addr.Bytes())
 	if len(bz) == 0 {
@@ -103,6 +108,8 @@ func (k Keeper) GetAddressRoleNames(ctx sdk.Context, denom string, addr sdk.AccA
 
 // GetActorRoleIDs returns all the assigned role ids for this address. Returns EVERYONE role id if no roles found for this address.
 func (k Keeper) GetActorRoleIDs(ctx sdk.Context, denom string, addr sdk.AccAddress) ([]uint32, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetActorRoleIDs")()
+
 	store := k.getActorRolesStore(ctx, denom)
 	bz := store.Get(addr.Bytes())
 	if len(bz) == 0 {
@@ -119,6 +126,8 @@ func (k Keeper) GetActorRoleIDs(ctx sdk.Context, denom string, addr sdk.AccAddre
 
 // GetAllActorRoles gathers all actor roles inside namespace for this denom
 func (k Keeper) GetAllActorRoles(ctx sdk.Context, denom string) ([]*types.ActorRoles, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllActorRoles")()
+
 	var actorRoles []*types.ActorRoles
 	roleIDToName := make(map[uint32]string)
 
@@ -150,6 +159,8 @@ func (k Keeper) GetAllActorRoles(ctx sdk.Context, denom string) ([]*types.ActorR
 }
 
 func (k Keeper) IterateActorRoles(ctx sdk.Context, denom string, cb func(actor sdk.AccAddress, roleIDs []uint32) error) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateActorRoles")()
+
 	store := k.getActorRolesStore(ctx, denom)
 	iter := store.Iterator(nil, nil)
 	defer iter.Close()
@@ -175,18 +186,24 @@ func (k Keeper) IterateActorRoles(ctx sdk.Context, denom string, cb func(actor s
 
 // HasRoleName returns true if the role name exists
 func (k Keeper) HasRoleName(ctx sdk.Context, denom, role string) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasRoleName")()
+
 	rolesStore := k.getRoleNamesStore(ctx, denom)
 	return rolesStore.Has([]byte(role))
 }
 
 // HasRoleID returns true if the role ID exists
 func (k Keeper) HasRoleID(ctx sdk.Context, denom string, roleID uint32) bool {
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasRoleID")()
+
 	roleIDsStore := k.getRolesStore(ctx, denom)
 	return roleIDsStore.Has(types.Uint32ToLittleEndian(roleID))
 }
 
 // GetRoleByName returns a role by it's name
-func (k Keeper) GetRoleByName(ctx sdk.Context, denom, role string) (*types.Role, error) {
+func (k Keeper) GetRoleByName(ctx sdk.Context, denom, role string) (roleInfo *types.Role, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetRoleByName")(&err)
+
 	roleId, ok := k.GetRoleID(ctx, denom, role)
 	if !ok {
 		return nil, types.ErrUnknownRole
@@ -196,6 +213,8 @@ func (k Keeper) GetRoleByName(ctx sdk.Context, denom, role string) (*types.Role,
 
 // GetRoleByID returns a role by its id
 func (k Keeper) GetRoleByID(ctx sdk.Context, denom string, roleID uint32) (*types.Role, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetRoleByID")()
+
 	store := k.getRolesStore(ctx, denom)
 	key := types.Uint32ToLittleEndian(roleID)
 	bz := store.Get(key)
@@ -214,6 +233,8 @@ func (k Keeper) GetRoleByID(ctx sdk.Context, denom string, roleID uint32) (*type
 
 // GetRoleID returns role id by its name
 func (k Keeper) GetRoleID(ctx sdk.Context, denom, roleName string) (id uint32, ok bool) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetRoleID")()
+
 	store := k.getRoleNamesStore(ctx, denom)
 	bz := store.Get([]byte(roleName))
 
@@ -227,6 +248,8 @@ func (k Keeper) GetRoleID(ctx sdk.Context, denom, roleName string) (id uint32, o
 // GetAllRoles returns all defined roles and permissions for them inside namespace
 // Returns map [role_id] => Role{}
 func (k Keeper) GetAllRoles(ctx sdk.Context, denom string) ([]*types.Role, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllRoles")()
+
 	roles := make([]*types.Role, 0)
 	store := k.getRolesStore(ctx, denom)
 	iter := store.Iterator(nil, nil)
@@ -244,6 +267,8 @@ func (k Keeper) GetAllRoles(ctx sdk.Context, denom string) ([]*types.Role, error
 
 // setActorRoles converts all role names into its respective ids and stores them for address
 func (k Keeper) setActorRoles(ctx sdk.Context, denom string, addr sdk.AccAddress, roleIDs []uint32) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setActorRoles")()
+
 	store := k.getActorRolesStore(ctx, denom)
 
 	// if no roles are assigned to the actor, delete the entry
@@ -265,6 +290,8 @@ func (k Keeper) setActorRoles(ctx sdk.Context, denom string, addr sdk.AccAddress
 }
 
 func (k Keeper) addActorRoles(ctx sdk.Context, denom string, addr sdk.AccAddress, roleIDs []uint32) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "addActorRoles")()
+
 	existingRoleIDs, err := k.GetActorRoleIDs(ctx, denom, addr)
 	if err != nil {
 		return err
@@ -277,6 +304,8 @@ func (k Keeper) addActorRoles(ctx sdk.Context, denom string, addr sdk.AccAddress
 }
 
 func (k Keeper) revokeActorRoles(ctx sdk.Context, denom string, addr sdk.AccAddress, roleIDs []uint32) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "revokeActorRoles")()
+
 	existingRoleIDs, err := k.GetActorRoleIDs(ctx, denom, addr)
 	if err != nil {
 		return err
@@ -292,6 +321,7 @@ func (k Keeper) revokeActorRoles(ctx sdk.Context, denom string, addr sdk.AccAddr
 
 // setRole sets the role and role name index in store
 func (k Keeper) setRole(ctx sdk.Context, denom string, role *types.Role) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "setRole")()
 	// store role first
 	store := k.getRolesStore(ctx, denom)
 	key := types.Uint32ToLittleEndian(role.RoleId)
@@ -311,6 +341,8 @@ func (k Keeper) setRole(ctx sdk.Context, denom string, role *types.Role) error {
 
 // updateRole creates or updates the role in the store
 func (k Keeper) updateRole(ctx sdk.Context, denom string, role *types.Role) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateRole")()
+
 	existsRoleName := k.HasRoleName(ctx, denom, role.Name)
 	existsRoleID := k.HasRoleID(ctx, denom, role.RoleId)
 

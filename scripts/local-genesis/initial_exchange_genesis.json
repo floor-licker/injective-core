@@ -24,6 +24,8 @@
       "inj_reward_staked_requirement_threshold": "100000000000000000000",
       "trading_rewards_vesting_duration": "1200",
       "liquidator_reward_share_rate": "0.050000000000000000",
+      "white_knight_liquidators": [],
+      "white_knight_liquidator_reward_share_rate": "0.050000000000000000",
       "spot_atomic_market_order_fee_multiplier": "2.5",
       "derivative_atomic_market_order_fee_multiplier": "2.5",
       "binary_options_atomic_market_order_fee_multiplier": "2.5",

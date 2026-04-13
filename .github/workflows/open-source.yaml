@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       app_tag:
-        description: "Tag to open source (e.g. v1.17.0, v1.18.0-beta)"
+        description: "Tag to open source (e.g. v1.19.0, v1.19.0-beta)"
         required: true
         type: string
       target_branch:

@@ -4,7 +4,6 @@ import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -14,8 +13,7 @@ import (
 
 // GetIsOptedOutOfRewards returns if the account is opted out of rewards
 func (k *BaseKeeper) GetIsOptedOutOfRewards(ctx sdk.Context, account sdk.AccAddress) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetIsOptedOutOfRewards")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetIsOptedOutOfRewardsKey(account))
@@ -30,8 +28,7 @@ func (k *BaseKeeper) GetIsOptedOutOfRewards(ctx sdk.Context, account sdk.AccAddr
 //
 //nolint:revive // ok
 func (k *BaseKeeper) SetIsOptedOutOfRewards(ctx sdk.Context, account sdk.AccAddress, isOptedOut bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetIsOptedOutOfRewards")()
 
 	store := k.getStore(ctx)
 	key := types.GetIsOptedOutOfRewardsKey(account)
@@ -50,8 +47,7 @@ func (k *BaseKeeper) IterateOptedOutRewardAccounts(
 	ctx sdk.Context,
 	process func(account sdk.AccAddress, isOptedOut bool) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateOptedOutRewardAccounts")()
 
 	store := k.getStore(ctx)
 
@@ -66,8 +62,7 @@ func (k *BaseKeeper) IterateOptedOutRewardAccounts(
 
 // GetCurrentCampaignEndTimestamp fetches the end timestamp of the current TradingRewardCampaign.
 func (k *BaseKeeper) GetCurrentCampaignEndTimestamp(ctx sdk.Context) int64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCurrentCampaignEndTimestamp")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.TradingRewardCurrentCampaignEndTimeKey)
@@ -81,8 +76,7 @@ func (k *BaseKeeper) GetCurrentCampaignEndTimestamp(ctx sdk.Context) int64 {
 
 // DeleteCurrentCampaignEndTimestamp deletes the end timestamp of the current TradingRewardCampaign.
 func (k *BaseKeeper) DeleteCurrentCampaignEndTimestamp(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteCurrentCampaignEndTimestamp")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.TradingRewardCurrentCampaignEndTimeKey)
@@ -90,8 +84,7 @@ func (k *BaseKeeper) DeleteCurrentCampaignEndTimestamp(ctx sdk.Context) {
 
 // SetCurrentCampaignEndTimestamp sets the end timestamp of the current TradingRewardCampaign.
 func (k *BaseKeeper) SetCurrentCampaignEndTimestamp(ctx sdk.Context, endTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCurrentCampaignEndTimestamp")()
 
 	store := k.getStore(ctx)
 	store.Set(types.TradingRewardCurrentCampaignEndTimeKey, sdk.Uint64ToBigEndian(uint64(endTimestamp)))
@@ -99,8 +92,7 @@ func (k *BaseKeeper) SetCurrentCampaignEndTimestamp(ctx sdk.Context, endTimestam
 
 // GetCampaignInfo fetches the TradingRewardCampaignInfo.
 func (k *BaseKeeper) GetCampaignInfo(ctx sdk.Context) *v2.TradingRewardCampaignInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCampaignInfo")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.TradingRewardCampaignInfoKey)
@@ -116,8 +108,7 @@ func (k *BaseKeeper) GetCampaignInfo(ctx sdk.Context) *v2.TradingRewardCampaignI
 
 // DeleteCampaignInfo deletes the TradingRewardCampaignInfo.
 func (k *BaseKeeper) DeleteCampaignInfo(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteCampaignInfo")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.TradingRewardCampaignInfoKey)
@@ -125,8 +116,7 @@ func (k *BaseKeeper) DeleteCampaignInfo(ctx sdk.Context) {
 
 // SetCampaignInfo sets the TradingRewardCampaignInfo.
 func (k *BaseKeeper) SetCampaignInfo(ctx sdk.Context, campaignInfo *v2.TradingRewardCampaignInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCampaignInfo")()
 
 	store := k.getStore(ctx)
 	bz := k.cdc.MustMarshal(campaignInfo)
@@ -136,8 +126,7 @@ func (k *BaseKeeper) SetCampaignInfo(ctx sdk.Context, campaignInfo *v2.TradingRe
 // GetEffectiveTradingRewardsMarketPointsMultiplierConfig returns the market's points multiplier if the marketID is qualified
 // and has a multiplier, and returns a multiplier of 0 otherwise
 func (k *BaseKeeper) GetEffectiveTradingRewardsMarketPointsMultiplierConfig(ctx sdk.Context, marketID common.Hash) v2.PointsMultiplier {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetEffectiveTradingRewardsMarketPointsMultiplierConfig")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetTradingRewardsMarketPointsMultiplierKey(marketID))
@@ -167,8 +156,7 @@ func (k *BaseKeeper) GetEffectiveTradingRewardsMarketPointsMultiplierConfig(ctx 
 
 // DeleteTradingRewardsMarketPointsMultiplier deletes the market's points multiplier
 func (k *BaseKeeper) DeleteTradingRewardsMarketPointsMultiplier(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTradingRewardsMarketPointsMultiplier")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetTradingRewardsMarketPointsMultiplierKey(marketID))
@@ -176,8 +164,7 @@ func (k *BaseKeeper) DeleteTradingRewardsMarketPointsMultiplier(ctx sdk.Context,
 
 // SetTradingRewardsMarketPointsMultiplier sets the market's points multiplier
 func (k *BaseKeeper) SetTradingRewardsMarketPointsMultiplier(ctx sdk.Context, marketID common.Hash, multiplier *v2.PointsMultiplier) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTradingRewardsMarketPointsMultiplier")()
 
 	store := k.getStore(ctx)
 	bz := k.cdc.MustMarshal(multiplier)
@@ -189,8 +176,7 @@ func (k *BaseKeeper) IterateTradingRewardsMarketPointsMultipliers(
 	ctx sdk.Context,
 	process func(*v2.PointsMultiplier, common.Hash) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateTradingRewardsMarketPointsMultipliers")()
 
 	store := k.getStore(ctx)
 
@@ -206,8 +192,7 @@ func (k *BaseKeeper) IterateTradingRewardsMarketPointsMultipliers(
 
 // IsMarketQualifiedForTradingRewards returns true if the given marketID qualifies for trading rewards
 func (k *BaseKeeper) IsMarketQualifiedForTradingRewards(ctx sdk.Context, marketID common.Hash) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsMarketQualifiedForTradingRewards")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetCampaignMarketQualificationKey(marketID))
@@ -220,8 +205,7 @@ func (k *BaseKeeper) IsMarketQualifiedForTradingRewards(ctx sdk.Context, marketI
 
 // DeleteTradingRewardsMarketQualification deletes the market's trading reward qualification indicator
 func (k *BaseKeeper) DeleteTradingRewardsMarketQualification(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTradingRewardsMarketQualification")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetCampaignMarketQualificationKey(marketID))
@@ -235,8 +219,7 @@ func (k *BaseKeeper) SetTradingRewardsMarketQualification(
 	marketID common.Hash,
 	isQualified bool,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTradingRewardsMarketQualification")()
 
 	store := k.getStore(ctx)
 	qualificationBz := []byte{types.TrueByte}
@@ -251,8 +234,7 @@ func (k *BaseKeeper) IterateTradingRewardsMarketQualifications(
 	ctx sdk.Context,
 	process func(common.Hash, bool) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateTradingRewardsMarketQualifications")()
 
 	store := k.getStore(ctx)
 
@@ -268,8 +250,7 @@ func (k *BaseKeeper) IterateTradingRewardsMarketQualifications(
 func (k *BaseKeeper) GetCampaignTradingRewardPendingPoints(
 	ctx sdk.Context, account sdk.AccAddress, pendingPoolStartTimestamp int64,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCampaignTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetTradingRewardAccountPendingPointsKey(account, pendingPoolStartTimestamp))
@@ -286,8 +267,7 @@ func (k *BaseKeeper) DeleteAccountCampaignTradingRewardPendingPoints(
 	account sdk.AccAddress,
 	pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAccountCampaignTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetTradingRewardAccountPendingPointsKey(account, pendingPoolStartTimestamp))
@@ -297,8 +277,7 @@ func (k *BaseKeeper) DeleteAccountCampaignTradingRewardPendingPoints(
 func (k *BaseKeeper) SetAccountCampaignTradingRewardPendingPoints(
 	ctx sdk.Context, account sdk.AccAddress, pendingPoolStartTimestamp int64, points math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAccountCampaignTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 
@@ -312,8 +291,7 @@ func (k *BaseKeeper) IterateAccountCampaignTradingRewardPendingPoints(
 	ctx sdk.Context,
 	process func(pendingPoolStartTimestamp int64, account sdk.AccAddress, points math.LegacyDec) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateAccountCampaignTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 
@@ -331,8 +309,7 @@ func (k *BaseKeeper) IterateAccountTradingRewardPendingPointsForPool(
 	pendingPoolStartTimestamp int64,
 	process func(*types.TradingRewardAccountPoints) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateAccountTradingRewardPendingPointsForPool")()
 
 	store := k.getStore(ctx)
 
@@ -353,8 +330,7 @@ func (k *BaseKeeper) GetTotalTradingRewardPendingPoints(
 	ctx sdk.Context,
 	pendingPoolStartTimestamp int64,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTotalTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetTradingRewardTotalPendingPointsKey(pendingPoolStartTimestamp))
@@ -370,8 +346,7 @@ func (k *BaseKeeper) SetTotalTradingRewardPendingPoints(
 	points math.LegacyDec,
 	pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTotalTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 	bz := types.UnsignedDecToUnsignedDecBytes(points)
@@ -383,8 +358,7 @@ func (k *BaseKeeper) DeleteTotalTradingRewardPendingPoints(
 	ctx sdk.Context,
 	pendingPoolStartTimestamp int64,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTotalTradingRewardPendingPoints")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetTradingRewardTotalPendingPointsKey(pendingPoolStartTimestamp))
@@ -392,8 +366,7 @@ func (k *BaseKeeper) DeleteTotalTradingRewardPendingPoints(
 
 // GetCampaignRewardPendingPool fetches the trading reward pool corresponding to a given start timestamp.
 func (k *BaseKeeper) GetCampaignRewardPendingPool(ctx sdk.Context, startTimestamp int64) *v2.CampaignRewardPool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCampaignRewardPendingPool")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetCampaignRewardPendingPoolKey(startTimestamp))
@@ -408,8 +381,7 @@ func (k *BaseKeeper) GetCampaignRewardPendingPool(ctx sdk.Context, startTimestam
 
 // DeleteCampaignRewardPendingPool deletes the trading reward pool corresponding to a given start timestamp.
 func (k *BaseKeeper) DeleteCampaignRewardPendingPool(ctx sdk.Context, startTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteCampaignRewardPendingPool")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetCampaignRewardPendingPoolKey(startTimestamp))
@@ -417,8 +389,7 @@ func (k *BaseKeeper) DeleteCampaignRewardPendingPool(ctx sdk.Context, startTimes
 
 // SetCampaignRewardPendingPool sets the trading reward pool corresponding to a given start timestamp.
 func (k *BaseKeeper) SetCampaignRewardPendingPool(ctx sdk.Context, rewardPool *v2.CampaignRewardPool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCampaignRewardPendingPool")()
 
 	store := k.getStore(ctx)
 	bz := k.cdc.MustMarshal(rewardPool)
@@ -433,8 +404,7 @@ func (k *BaseKeeper) IterateCampaignRewardPendingPools(
 	shouldReverseIterate bool,
 	process func(*v2.CampaignRewardPool) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateCampaignRewardPendingPools")()
 
 	store := k.getStore(ctx)
 	rewardPoolStore := prefix.NewStore(store, types.TradingRewardCampaignRewardPendingPoolPrefix)
@@ -455,8 +425,7 @@ func (k *BaseKeeper) IterateCampaignRewardPendingPools(
 
 // GetCampaignTradingRewardPoints fetches the trading reward points for a given account.
 func (k *BaseKeeper) GetCampaignTradingRewardPoints(ctx sdk.Context, account sdk.AccAddress) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCampaignTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetTradingRewardAccountPointsKey(account))
@@ -468,8 +437,7 @@ func (k *BaseKeeper) GetCampaignTradingRewardPoints(ctx sdk.Context, account sdk
 
 // DeleteAccountCampaignTradingRewardPoints deletes the trading reward points for a given account.
 func (k *BaseKeeper) DeleteAccountCampaignTradingRewardPoints(ctx sdk.Context, account sdk.AccAddress) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAccountCampaignTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetTradingRewardAccountPointsKey(account))
@@ -477,8 +445,7 @@ func (k *BaseKeeper) DeleteAccountCampaignTradingRewardPoints(ctx sdk.Context, a
 
 // SetAccountCampaignTradingRewardPoints sets the trading reward points for a given account.
 func (k *BaseKeeper) SetAccountCampaignTradingRewardPoints(ctx sdk.Context, account sdk.AccAddress, points math.LegacyDec) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetAccountCampaignTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 
@@ -492,8 +459,7 @@ func (k *BaseKeeper) IterateAccountCampaignTradingRewardPoints(
 	ctx sdk.Context,
 	process func(*types.TradingRewardAccountPoints) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateAccountCampaignTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 	pointsStore := prefix.NewStore(store, types.TradingRewardAccountPointsPrefix)
@@ -511,8 +477,7 @@ func (k *BaseKeeper) IterateAccountCampaignTradingRewardPoints(
 func (k *BaseKeeper) GetTotalTradingRewardPoints(
 	ctx sdk.Context,
 ) math.LegacyDec {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTotalTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.TradingRewardCampaignTotalPointsKey)
@@ -527,8 +492,7 @@ func (k *BaseKeeper) SetTotalTradingRewardPoints(
 	ctx sdk.Context,
 	points math.LegacyDec,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTotalTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 	bz := types.UnsignedDecToUnsignedDecBytes(points)
@@ -539,8 +503,7 @@ func (k *BaseKeeper) SetTotalTradingRewardPoints(
 func (k *BaseKeeper) DeleteTotalTradingRewardPoints(
 	ctx sdk.Context,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteTotalTradingRewardPoints")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.TradingRewardCampaignTotalPointsKey)
@@ -548,8 +511,7 @@ func (k *BaseKeeper) DeleteTotalTradingRewardPoints(
 
 // GetCampaignRewardPool fetches the trading reward pool corresponding to a given start timestamp.
 func (k *BaseKeeper) GetCampaignRewardPool(ctx sdk.Context, startTimestamp int64) *v2.CampaignRewardPool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetCampaignRewardPool")()
 
 	store := k.getStore(ctx)
 	bz := store.Get(types.GetCampaignRewardPoolKey(startTimestamp))
@@ -564,8 +526,7 @@ func (k *BaseKeeper) GetCampaignRewardPool(ctx sdk.Context, startTimestamp int64
 
 // DeleteCampaignRewardPool deletes the trading reward pool corresponding to a given start timestamp.
 func (k *BaseKeeper) DeleteCampaignRewardPool(ctx sdk.Context, startTimestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteCampaignRewardPool")()
 
 	store := k.getStore(ctx)
 	store.Delete(types.GetCampaignRewardPoolKey(startTimestamp))
@@ -573,8 +534,7 @@ func (k *BaseKeeper) DeleteCampaignRewardPool(ctx sdk.Context, startTimestamp in
 
 // SetCampaignRewardPool sets the trading reward pool corresponding to a given start timestamp.
 func (k *BaseKeeper) SetCampaignRewardPool(ctx sdk.Context, rewardPool *v2.CampaignRewardPool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetCampaignRewardPool")()
 
 	store := k.getStore(ctx)
 	bz := k.cdc.MustMarshal(rewardPool)
@@ -589,8 +549,7 @@ func (k *BaseKeeper) IterateCampaignRewardPools(
 	shouldReverseIterate bool,
 	process func(*v2.CampaignRewardPool) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateCampaignRewardPools")()
 
 	store := k.getStore(ctx)
 	rewardPoolStore := prefix.NewStore(store, types.TradingRewardCampaignRewardPoolPrefix)

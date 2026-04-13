@@ -74,7 +74,7 @@
           "TraderSpotTransientOrders": "LegacyTraderSpotTransientOrders",
           "TradeRewardCampaign": "LegacyTradeRewardCampaign",
           "TradeRewardPoints": "LegacyTradeRewardPoints",
-          "QueryMarketIDFromVault": "LegacyQueryMarketIDFromVault", 
+          "QueryMarketIDFromVault": "LegacyQueryMarketIDFromVault",
           "QueryExchangeParams": "LegacyQueryExchangeParams"
         }
       }
@@ -96,18 +96,12 @@
       }
     },
     {
-      "url": "./tmp-swagger-gen/injective/ocr/v1beta1/query.swagger.json",
-      "operationIds": {
-        "rename": {
-          "Params": "OcrParams"
-        }
-      }
-    },
-    {
       "url": "./tmp-swagger-gen/injective/auction/v1beta1/query.swagger.json",
       "operationIds": {
         "rename": {
-          "Params": "AuctionParams"
+          "Params": "AuctionParams",
+          "Vouchers": "AuctionVouchers",
+          "Voucher": "AuctionVoucher"
         }
       }
     },
@@ -123,7 +117,9 @@
       "url": "./tmp-swagger-gen/injective/insurance/v1beta1/query.swagger.json",
       "operationIds": {
         "rename": {
-          "Params": "InsuranceParams"
+          "Params": "InsuranceParams",
+          "Vouchers": "InsuranceVouchers",
+          "Voucher": "InsuranceVoucher"
         }
       }
     },

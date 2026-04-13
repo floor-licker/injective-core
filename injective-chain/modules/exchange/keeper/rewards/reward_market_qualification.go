@@ -1,19 +1,16 @@
 package rewards
 
 import (
-	"github.com/InjectiveLabs/metrics"
+	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
 
 func (k TradingKeeper) SetTradingRewardsMarketQualificationForAllQualifyingMarkets(
 	ctx sdk.Context,
 	campaignInfo *v2.TradingRewardCampaignInfo,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTradingRewardsMarketQualificationForAllQualifyingMarkets")()
 
 	marketIDQuoteDenoms := k.GetAllMarketIDsWithQuoteDenoms(ctx)
 
@@ -35,8 +32,7 @@ func (k TradingKeeper) SetTradingRewardsMarketQualificationForAllQualifyingMarke
 
 // DeleteAllTradingRewardsMarketQualifications deletes the trading reward qualifications for all markets
 func (k TradingKeeper) DeleteAllTradingRewardsMarketQualifications(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteAllTradingRewardsMarketQualifications")()
 
 	marketIDs, _ := k.GetAllTradingRewardsMarketQualification(ctx)
 	for _, marketID := range marketIDs {
@@ -46,8 +42,7 @@ func (k TradingKeeper) DeleteAllTradingRewardsMarketQualifications(ctx sdk.Conte
 
 // GetAllTradingRewardsMarketQualification gets all market qualification statuses
 func (k TradingKeeper) GetAllTradingRewardsMarketQualification(ctx sdk.Context) ([]common.Hash, []bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllTradingRewardsMarketQualification")()
 
 	marketIDs := make([]common.Hash, 0)
 	isQualified := make([]bool, 0)
@@ -68,8 +63,7 @@ func (k TradingKeeper) CheckQuoteAndSetTradingRewardQualification(
 	marketID common.Hash,
 	quoteDenom string,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CheckQuoteAndSetTradingRewardQualification")()
 
 	if campaign := k.GetCampaignInfo(ctx); campaign != nil {
 		disqualified := false

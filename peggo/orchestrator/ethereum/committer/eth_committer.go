@@ -5,7 +5,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/InjectiveLabs/coretracer"
+	"github.com/InjectiveLabs/metrics/v2"
 	"github.com/ethereum/go-ethereum"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -26,11 +26,16 @@ func NewEthCommitter(
 	ethMaxGasPrice string,
 	fromSigner bind.SignerFn,
 	evmProvider provider.EVMProviderWithRet,
+	meter metrics.Meter,
 	committerOpts ...EVMCommitterOption,
 ) (EVMCommitter, error) {
+	if meter == nil {
+		meter = metrics.NewNilMeter()
+	}
+
 	committer := &ethCommitter{
 		committerOpts: defaultOptions(),
-		svcTags:       coretracer.NewTag("module", "eth_committer"),
+		meter:         meter.SubMeter("eth_committer", metrics.Tag("svc", "eth_committer")),
 
 		ethGasPriceAdjustment: ethGasPriceAdjustment,
 		ethMaxGasPrice:        ParseMaxGasPrice(ethMaxGasPrice),
@@ -63,7 +68,7 @@ type ethCommitter struct {
 	evmProvider           provider.EVMProviderWithRet
 	nonceCache            util.NonceCache
 
-	svcTags coretracer.Tags
+	meter metrics.Meter
 }
 
 func (e *ethCommitter) FromAddress() common.Address {
@@ -79,7 +84,8 @@ func (e *ethCommitter) SendTx(
 	recipient common.Address,
 	txData []byte,
 ) (txHash common.Hash, err error) {
-	defer coretracer.Trace(&ctx, e.svcTags)()
+	ctx, done := e.meter.FuncTimingCtx(ctx, "SendTx")
+	defer done(&err)
 
 	opts := &bind.TransactOpts{
 		From:   e.fromAddress,
@@ -93,7 +99,6 @@ func (e *ethCommitter) SendTx(
 	// Figure out the gas price values
 	suggestedGasPrice, err := e.evmProvider.SuggestGasPrice(opts.Context)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return common.Hash{}, errors.Errorf("failed to suggest gas price: %v", err)
 	}
 
@@ -110,7 +115,6 @@ func (e *ethCommitter) SendTx(
 	maxGasPrice := big.NewInt(int64(e.ethMaxGasPrice))
 	if opts.GasPrice.Cmp(maxGasPrice) > 0 {
 		err = errors.Errorf("Suggested gas price %v is greater than max gas price %v", opts.GasPrice.Int64(), maxGasPrice.Int64())
-		coretracer.TraceError(ctx, err)
 		return common.Hash{}, err
 	}
 
@@ -125,7 +129,6 @@ func (e *ethCommitter) SendTx(
 
 	gasLimit, err := e.evmProvider.EstimateGas(opts.Context, msg)
 	if err != nil {
-		coretracer.TraceError(ctx, err)
 		return common.Hash{}, errors.Wrap(err, "failed to estimate gas")
 	}
 
@@ -213,8 +216,6 @@ func (e *ethCommitter) SendTx(
 			}
 		}
 	}); err != nil {
-		coretracer.TraceError(ctx, err)
-
 		log.WithError(err).Errorln("SendTx serialize failed")
 
 		return common.Hash{}, err

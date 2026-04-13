@@ -7,6 +7,8 @@ import (
 
 // GetParams returns the total set of evm parameters.
 func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetParams")()
+
 	bz := ctx.KVStore(k.storeKey).Get(types.KeyPrefixParams)
 	var params types.Params
 	k.cdc.MustUnmarshal(bz, &params)
@@ -15,6 +17,8 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams sets the EVM params each in their individual key for better get performance
 func (k Keeper) SetParams(ctx sdk.Context, p types.Params) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetParams")()
+
 	if err := p.Validate(); err != nil {
 		return err
 	}

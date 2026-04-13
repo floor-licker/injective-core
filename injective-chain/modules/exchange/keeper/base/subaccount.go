@@ -3,7 +3,6 @@ package base
 import (
 	"cosmossdk.io/store/prefix"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -16,8 +15,7 @@ func (k *BaseKeeper) IterateSubaccountOrderbookMetadataForMarket(
 	marketID common.Hash,
 	process func(subaccountID common.Hash, isBuy bool, metadata *v2.SubaccountOrderbookMetadata) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSubaccountOrderbookMetadataForMarket")()
 
 	store := k.getStore(ctx)
 	prefixKey := types.SubaccountOrderbookMetadataPrefix
@@ -43,8 +41,7 @@ func (k *BaseKeeper) GetSubaccountIDsWithOrderbookMetadataForMarketByAccountAddr
 	marketID common.Hash,
 	accountAddress common.Address,
 ) []common.Hash {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSubaccountIDsWithOrderbookMetadataForMarketByAccountAddress")()
 
 	store := k.getStore(ctx)
 	prefixKey := types.SubaccountOrderbookMetadataPrefix
@@ -83,8 +80,7 @@ func (k *BaseKeeper) IterateSubaccountOrders(
 	ctx sdk.Context,
 	process func(marketID, subaccountID common.Hash, isBuy bool, order *v2.SubaccountOrder) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSubaccountOrders")()
 
 	store := k.getStore(ctx)
 	prefixKey := types.SubaccountOrderPrefix
@@ -107,8 +103,7 @@ func (k *BaseKeeper) GetSubaccountTradeNonce(
 	ctx sdk.Context,
 	subaccountID common.Hash,
 ) *v2.SubaccountTradeNonce {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSubaccountTradeNonce")()
 
 	store := k.getStore(ctx)
 	key := types.GetSubaccountTradeNonceKey(subaccountID)
@@ -129,8 +124,7 @@ func (k *BaseKeeper) SetSubaccountTradeNonce(
 	subaccountID common.Hash,
 	subaccountTradeNonce *v2.SubaccountTradeNonce,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSubaccountTradeNonce")()
 
 	store := k.getStore(ctx)
 	key := types.GetSubaccountTradeNonceKey(subaccountID)
@@ -142,8 +136,7 @@ func (k *BaseKeeper) SetSubaccountTradeNonce(
 func (k *BaseKeeper) GetAllSubaccountTradeNonces(
 	ctx sdk.Context,
 ) []v2.SubaccountNonce {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllSubaccountTradeNonces")()
 
 	store := k.getStore(ctx)
 	nonceStore := prefix.NewStore(store, types.SubaccountTradeNoncePrefix)
@@ -170,8 +163,7 @@ func (k *BaseKeeper) GetSubaccountOrderbookMetadata(
 	subaccountID common.Hash,
 	isBuy bool,
 ) *v2.SubaccountOrderbookMetadata {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSubaccountOrderbookMetadata")()
 
 	store := k.getStore(ctx)
 	key := types.GetSubaccountOrderbookMetadataKey(marketID, subaccountID, isBuy)
@@ -194,8 +186,7 @@ func (k *BaseKeeper) SetSubaccountOrderbookMetadata(
 	isBuy bool,
 	metadata *v2.SubaccountOrderbookMetadata,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSubaccountOrderbookMetadata")()
 
 	// no more margin locked while having placed RO conditionals => raise the flag for later invalidation of RO conditional orders
 	if (metadata.VanillaLimitOrderCount+metadata.VanillaConditionalOrderCount) == 0 && metadata.ReduceOnlyConditionalOrderCount > 0 {
@@ -218,8 +209,7 @@ func (k *BaseKeeper) SetSubaccountOrder(
 	orderHash common.Hash,
 	subaccountOrder *v2.SubaccountOrder,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSubaccountOrder")()
 
 	store := k.getStore(ctx)
 	key := types.GetSubaccountOrderKey(marketID, subaccountID, isBuy, subaccountOrder.Price, orderHash)
@@ -242,8 +232,7 @@ func (k *BaseKeeper) IterateSubaccountOrdersStartingFromOrder(
 	startFromInfix []byte, // if set will start iteration from this element, else from the first
 	process func(order *v2.SubaccountOrder, orderHash common.Hash) (stop bool),
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSubaccountOrdersStartingFromOrder")()
 
 	store := k.getStore(ctx)
 	prefixKey := types.GetSubaccountOrderPrefixByMarketSubaccountDirection(marketID, subaccountID, isBuy)
@@ -274,8 +263,7 @@ func (k *BaseKeeper) IterateSubaccountOrdersStartingFromOrder(
 }
 
 func (k *BaseKeeper) HasSubaccountAlreadyPlacedMarketOrder(ctx sdk.Context, marketID, subaccountID common.Hash) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasSubaccountAlreadyPlacedMarketOrder")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)
@@ -286,8 +274,7 @@ func (k *BaseKeeper) HasSubaccountAlreadyPlacedMarketOrder(ctx sdk.Context, mark
 }
 
 func (k *BaseKeeper) HasSubaccountAlreadyPlacedLimitOrder(ctx sdk.Context, marketID, subaccountID common.Hash) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasSubaccountAlreadyPlacedLimitOrder")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)
@@ -298,8 +285,7 @@ func (k *BaseKeeper) HasSubaccountAlreadyPlacedLimitOrder(ctx sdk.Context, marke
 }
 
 func (k *BaseKeeper) SetTransientSubaccountMarketOrderIndicator(ctx sdk.Context, marketID, subaccountID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTransientSubaccountMarketOrderIndicator")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)
@@ -309,8 +295,7 @@ func (k *BaseKeeper) SetTransientSubaccountMarketOrderIndicator(ctx sdk.Context,
 }
 
 func (k *BaseKeeper) SetTransientSubaccountLimitOrderIndicator(ctx sdk.Context, marketID, subaccountID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTransientSubaccountLimitOrderIndicator")()
 
 	// use transient store key
 	store := k.getTransientStore(ctx)

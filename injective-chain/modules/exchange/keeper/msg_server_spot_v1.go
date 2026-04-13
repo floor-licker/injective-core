@@ -11,13 +11,11 @@ import (
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
-	"github.com/InjectiveLabs/metrics"
 )
 
 type SpotV1MsgServer struct {
-	keeper  Keeper
-	server  v2.MsgServer
-	svcTags metrics.Tags
+	keeper Keeper
+	server v2.MsgServer
 }
 
 // NewSpotV1MsgServerImpl returns an implementation of the bank MsgServer interface for the provided Keeper for spot market functions.
@@ -25,18 +23,12 @@ func NewSpotV1MsgServerImpl(k Keeper, server v2.MsgServer) SpotV1MsgServer {
 	return SpotV1MsgServer{
 		keeper: k,
 		server: server,
-		svcTags: metrics.Tags{
-			"svc": "spot_v1_msg_h",
-		},
 	}
 }
 
 func (k SpotV1MsgServer) InstantSpotMarketLaunch(
 	goCtx context.Context, msg *types.MsgInstantSpotMarketLaunch,
 ) (*types.MsgInstantSpotMarketLaunchResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
-
 	humanReadableMinPriceTickSize := types.PriceFromChainFormat(msg.MinPriceTickSize, msg.BaseDecimals, msg.QuoteDecimals)
 	humanReadableMinQuantityTickSize := types.QuantityFromChainFormat(msg.MinQuantityTickSize, msg.BaseDecimals)
 	humanReadableMinNotional := types.NotionalFromChainFormat(msg.MinNotional, msg.QuoteDecimals)
@@ -69,8 +61,6 @@ func (k SpotV1MsgServer) InstantSpotMarketLaunch(
 func (k SpotV1MsgServer) CreateSpotLimitOrder(
 	goCtx context.Context, msg *types.MsgCreateSpotLimitOrder,
 ) (*types.MsgCreateSpotLimitOrderResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 
@@ -103,8 +93,6 @@ func (k SpotV1MsgServer) CreateSpotLimitOrder(
 func (k SpotV1MsgServer) CreateSpotMarketOrder(
 	goCtx context.Context, msg *types.MsgCreateSpotMarketOrder,
 ) (*types.MsgCreateSpotMarketOrderResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	ctx := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 
@@ -148,7 +136,6 @@ func (k SpotV1MsgServer) CreateSpotMarketOrder(
 func (k SpotV1MsgServer) BatchCreateSpotLimitOrders(
 	goCtx context.Context, msg *types.MsgBatchCreateSpotLimitOrders,
 ) (*types.MsgBatchCreateSpotLimitOrdersResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
 	unwrappedContext := sdk.UnwrapSDKContext(goCtx)
 	marketFinder := marketfinder.New(k.keeper.BaseKeeper)
 
@@ -185,8 +172,6 @@ func (k SpotV1MsgServer) BatchCreateSpotLimitOrders(
 }
 
 func (k SpotV1MsgServer) CancelSpotOrder(goCtx context.Context, msg *types.MsgCancelSpotOrder) (*types.MsgCancelSpotOrderResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2Msg := &v2.MsgCancelSpotOrder{
 		Sender:       msg.Sender,
 		MarketId:     msg.MarketId,
@@ -207,8 +192,6 @@ func (k SpotV1MsgServer) CancelSpotOrder(goCtx context.Context, msg *types.MsgCa
 func (k SpotV1MsgServer) BatchCancelSpotOrders(
 	goCtx context.Context, msg *types.MsgBatchCancelSpotOrders,
 ) (*types.MsgBatchCancelSpotOrdersResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	v2OrderDataList := make([]v2.OrderData, 0, len(msg.Data))
 	for _, orderData := range msg.Data {
 		v2OrderData := v2.OrderData{
@@ -241,9 +224,6 @@ func (k SpotV1MsgServer) BatchCancelSpotOrders(
 }
 
 func (k SpotV1MsgServer) UpdateSpotMarket(c context.Context, msg *types.MsgUpdateSpotMarket) (*types.MsgUpdateSpotMarketResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
-
 	market := k.keeper.GetSpotMarketByID(sdk.UnwrapSDKContext(c), common.HexToHash(msg.MarketId))
 	if market == nil {
 		return nil, sdkerrors.Wrap(types.ErrSpotMarketNotFound, "unknown market id")

@@ -19,6 +19,7 @@ import (
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles/bindings/cosmos/precompile/staking"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles/types"
+	"github.com/InjectiveLabs/metrics/v2"
 )
 
 const (
@@ -135,6 +136,10 @@ func (sc *StakingContract) run(evm *vm.EVM, contract *vm.Contract, readonly bool
 	if err != nil {
 		return nil, err
 	}
+
+	stateDB := evm.StateDB.(precompiles.ExtStateDB)                                        //nolint:revive // ok
+	defer func(origCtx sdk.Context) { *stateDB.ContextPtr() = origCtx }(stateDB.Context()) // put back original ctx to remove trace span set on the next line
+	defer stateDB.Meter().FuncTiming(stateDB.ContextPtr(), "run", metrics.Tag("svc", "stakingpc"), metrics.Tag("method", method.Name))()
 
 	args, err := method.Inputs.Unpack(contract.Input[4:])
 	if err != nil {

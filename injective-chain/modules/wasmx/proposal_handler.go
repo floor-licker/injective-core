@@ -28,7 +28,9 @@ func NewWasmxProposalHandler(k keeper.Keeper, wasmProposalHandler govtypes.Handl
 	}
 }
 
-func handleContractRegistrationRequestProposal(ctx sdk.Context, k keeper.Keeper, p *types.ContractRegistrationRequestProposal) error {
+func handleContractRegistrationRequestProposal(ctx sdk.Context, k keeper.Keeper, p *types.ContractRegistrationRequestProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleContractRegistrationRequestProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -37,7 +39,9 @@ func handleContractRegistrationRequestProposal(ctx sdk.Context, k keeper.Keeper,
 	return k.HandleContractRegistration(ctx, params, p.ContractRegistrationRequest)
 }
 
-func handleBatchContractRegistrationRequestProposal(ctx sdk.Context, k keeper.Keeper, p *types.BatchContractRegistrationRequestProposal) error {
+func handleBatchContractRegistrationRequestProposal(ctx sdk.Context, k keeper.Keeper, p *types.BatchContractRegistrationRequestProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleBatchContractRegistrationRequestProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -53,13 +57,18 @@ func handleBatchContractRegistrationRequestProposal(ctx sdk.Context, k keeper.Ke
 	return nil
 }
 
-func handleBatchContractDeregistrationProposal(ctx sdk.Context, k keeper.Keeper, p *types.BatchContractDeregistrationProposal) error {
+func handleBatchContractDeregistrationProposal(ctx sdk.Context, k keeper.Keeper, p *types.BatchContractDeregistrationProposal) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleBatchContractDeregistrationProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
 
 	for _, contract := range p.Contracts {
-		contractAddress := sdk.MustAccAddressFromBech32(contract)
+		contractAddress, err := sdk.AccAddressFromBech32(contract)
+		if err != nil {
+			return err
+		}
 
 		if err := k.DeregisterContract(ctx, contractAddress); err != nil {
 			if sdkerrors.ErrNotFound.Is(err) {
@@ -73,7 +82,9 @@ func handleBatchContractDeregistrationProposal(ctx sdk.Context, k keeper.Keeper,
 	return nil
 }
 
-func handleBatchStoreCodeProposal(ctx sdk.Context, _ keeper.Keeper, p *types.BatchStoreCodeProposal, wasmProposalHandler govtypes.Handler) error {
+func handleBatchStoreCodeProposal(ctx sdk.Context, k keeper.Keeper, p *types.BatchStoreCodeProposal, wasmProposalHandler govtypes.Handler) (err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "handleBatchStoreCodeProposal")(&err)
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}

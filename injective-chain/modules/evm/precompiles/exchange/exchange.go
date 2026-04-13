@@ -19,6 +19,7 @@ import (
 	exchangekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/keeper"
 	exchangetypesv1 "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	exchangetypesv2 "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
+	"github.com/InjectiveLabs/metrics/v2"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/evm/precompiles/bindings/cosmos/precompile/exchange"
@@ -226,6 +227,10 @@ func (ec *ExchangeContract) run(evm *vm.EVM, contract *vm.Contract, readonly boo
 	if err != nil {
 		return nil, err
 	}
+
+	stateDB := evm.StateDB.(precompiles.ExtStateDB)                                        //nolint:revive // ok
+	defer func(origCtx sdk.Context) { *stateDB.ContextPtr() = origCtx }(stateDB.Context()) // put back original ctx to remove trace span set on the next line
+	defer stateDB.Meter().FuncTiming(stateDB.ContextPtr(), "run", metrics.Tag("svc", "exchangepc"), metrics.Tag("method", method.Name))()
 
 	args, err := method.Inputs.Unpack(contract.Input[4:])
 	if err != nil {

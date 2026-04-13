@@ -3,7 +3,6 @@ package keeper
 import (
 	"context"
 
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	govtypes "github.com/cosmos/cosmos-sdk/x/gov/types"
@@ -14,21 +13,17 @@ import (
 
 type GeneralMsgServer struct {
 	*Keeper
-	svcTags metrics.Tags
 }
 
 func NewGeneralMsgServerImpl(keeper *Keeper) GeneralMsgServer {
 	return GeneralMsgServer{
 		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "general_msg_h",
-		},
 	}
 }
 
 func (k GeneralMsgServer) UpdateParams(c context.Context, msg *v2.MsgUpdateParams) (*v2.MsgUpdateParamsResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateParams")()
 
 	// Check if sender is governance authority
 	if !k.IsGovernanceAuthorityAddress(msg.Authority) {
@@ -39,19 +34,18 @@ func (k GeneralMsgServer) UpdateParams(c context.Context, msg *v2.MsgUpdateParam
 		return nil, err
 	}
 
-	k.SetParams(sdk.UnwrapSDKContext(c), msg.Params)
+	k.SetParams(ctx, msg.Params)
 
 	return &v2.MsgUpdateParamsResponse{}, nil
 }
 
 func (k GeneralMsgServer) BatchUpdateOrders(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgBatchUpdateOrders,
 ) (*v2.MsgBatchUpdateOrdersResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchUpdateOrders")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		return k.FixedGasBatchUpdateOrders(ctx, msg)
 	}
@@ -78,13 +72,11 @@ func (k GeneralMsgServer) BatchUpdateOrders(
 }
 
 func (k GeneralMsgServer) BatchExchangeModification(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgBatchExchangeModification,
 ) (*v2.MsgBatchExchangeModificationResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchExchangeModification")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -170,11 +162,10 @@ func (k GeneralMsgServer) BatchExchangeModification(
 }
 
 func (k GeneralMsgServer) BatchSpendCommunityPool(
-	goCtx context.Context, msg *v2.MsgBatchCommunityPoolSpend,
+	c context.Context, msg *v2.MsgBatchCommunityPoolSpend,
 ) (*v2.MsgBatchCommunityPoolSpendResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchSpendCommunityPool")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -188,11 +179,10 @@ func (k GeneralMsgServer) BatchSpendCommunityPool(
 }
 
 func (k GeneralMsgServer) ForceSettleMarket(
-	goCtx context.Context, msg *v2.MsgMarketForcedSettlement,
+	c context.Context, msg *v2.MsgMarketForcedSettlement,
 ) (*v2.MsgMarketForcedSettlementResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ForceSettleMarket")()
 
 	if k.IsAdmin(ctx, msg.Sender) {
 		if err := msg.Proposal.ValidateBasic(); err != nil {
@@ -219,11 +209,10 @@ func (k GeneralMsgServer) ForceSettleMarket(
 }
 
 func (k GeneralMsgServer) LaunchTradingRewardCampaign(
-	goCtx context.Context, msg *v2.MsgTradingRewardCampaignLaunch,
+	c context.Context, msg *v2.MsgTradingRewardCampaignLaunch,
 ) (*v2.MsgTradingRewardCampaignLaunchResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LaunchTradingRewardCampaign")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -237,11 +226,10 @@ func (k GeneralMsgServer) LaunchTradingRewardCampaign(
 }
 
 func (k GeneralMsgServer) UpdateTradingRewardCampaign(
-	goCtx context.Context, msg *v2.MsgTradingRewardCampaignUpdate,
+	c context.Context, msg *v2.MsgTradingRewardCampaignUpdate,
 ) (*v2.MsgTradingRewardCampaignUpdateResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateTradingRewardCampaign")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -254,10 +242,9 @@ func (k GeneralMsgServer) UpdateTradingRewardCampaign(
 	return &v2.MsgTradingRewardCampaignUpdateResponse{}, nil
 }
 
-func (k GeneralMsgServer) EnableExchange(goCtx context.Context, msg *v2.MsgExchangeEnable) (*v2.MsgExchangeEnableResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k GeneralMsgServer) EnableExchange(c context.Context, msg *v2.MsgExchangeEnable) (*v2.MsgExchangeEnableResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "EnableExchange")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -271,11 +258,10 @@ func (k GeneralMsgServer) EnableExchange(goCtx context.Context, msg *v2.MsgExcha
 }
 
 func (k GeneralMsgServer) UpdateTradingRewardPendingPoints(
-	goCtx context.Context, msg *v2.MsgTradingRewardPendingPointsUpdate,
+	c context.Context, msg *v2.MsgTradingRewardPendingPointsUpdate,
 ) (*v2.MsgTradingRewardPendingPointsUpdateResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateTradingRewardPendingPoints")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -288,10 +274,9 @@ func (k GeneralMsgServer) UpdateTradingRewardPendingPoints(
 	return &v2.MsgTradingRewardPendingPointsUpdateResponse{}, nil
 }
 
-func (k GeneralMsgServer) UpdateFeeDiscount(goCtx context.Context, msg *v2.MsgFeeDiscount) (*v2.MsgFeeDiscountResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k GeneralMsgServer) UpdateFeeDiscount(c context.Context, msg *v2.MsgFeeDiscount) (*v2.MsgFeeDiscountResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateFeeDiscount")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -305,11 +290,10 @@ func (k GeneralMsgServer) UpdateFeeDiscount(goCtx context.Context, msg *v2.MsgFe
 }
 
 func (k GeneralMsgServer) UpdateAtomicMarketOrderFeeMultiplierSchedule(
-	goCtx context.Context, msg *v2.MsgAtomicMarketOrderFeeMultiplierSchedule,
+	c context.Context, msg *v2.MsgAtomicMarketOrderFeeMultiplierSchedule,
 ) (*v2.MsgAtomicMarketOrderFeeMultiplierScheduleResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateAtomicMarketOrderFeeMultiplierSchedule")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -325,13 +309,11 @@ func (k GeneralMsgServer) UpdateAtomicMarketOrderFeeMultiplierSchedule(
 // CancelPostOnlyMode sets a flag to cancel post-only mode in the next BeginBlock
 // This method can only be called by governance authority or exchange admin.
 func (k GeneralMsgServer) CancelPostOnlyMode(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgCancelPostOnlyMode,
 ) (*v2.MsgCancelPostOnlyModeResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CancelPostOnlyMode")()
 
 	// Check if sender is governance authority or exchange admin
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) && !k.IsAdmin(ctx, msg.Sender) {
@@ -347,13 +329,11 @@ func (k GeneralMsgServer) CancelPostOnlyMode(
 // ActivatePostOnlyMode activates post-only mode for a specified number of blocks.
 // Can only be called by governance authority or exchange admin.
 func (k GeneralMsgServer) ActivatePostOnlyMode(
-	goCtx context.Context,
+	c context.Context,
 	msg *v2.MsgActivatePostOnlyMode,
 ) (*v2.MsgActivatePostOnlyModeResponse, error) {
-	doneFn := metrics.ReportFuncCallAndTiming(k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "ActivatePostOnlyMode")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) && !k.IsAdmin(ctx, msg.Sender) {
 		return nil, govtypes.ErrInvalidSigner.Wrap("sender must be governance authority or exchange admin")

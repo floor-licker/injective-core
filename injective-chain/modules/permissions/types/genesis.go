@@ -1,9 +1,13 @@
 package types
 
 import (
+	"fmt"
+
 	"cosmossdk.io/errors"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	gethtypes "github.com/ethereum/go-ethereum/common"
+
+	voucherstypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/common/vouchers/types"
 )
 
 // DefaultGenesis returns the default Permissions genesis state
@@ -11,7 +15,7 @@ func DefaultGenesis() *GenesisState {
 	return &GenesisState{
 		Params:     DefaultParams(),
 		Namespaces: []Namespace{},
-		Vouchers:   []*AddressVoucher{},
+		Vouchers:   []voucherstypes.AddressVoucher{},
 	}
 }
 
@@ -60,6 +64,15 @@ func (gs GenesisState) Validate() error {
 		// Validate policies (policy statuses and policy manager capabilities)
 		if err := ns.ValidatePolicies(); err != nil {
 			return errors.Wrapf(err, "invalid policies for denom %s", ns.GetDenom())
+		}
+	}
+
+	for i, av := range gs.Vouchers {
+		if _, err := sdk.AccAddressFromBech32(av.Address); err != nil {
+			return fmt.Errorf("invalid voucher address %q at index %d: %w", av.Address, i, err)
+		}
+		if err := av.Voucher.Validate(); err != nil {
+			return fmt.Errorf("invalid voucher coin for address %q: %w", av.Address, err)
 		}
 	}
 

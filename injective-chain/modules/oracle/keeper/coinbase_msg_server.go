@@ -6,42 +6,32 @@ import (
 	"cosmossdk.io/math"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
 type CoinbaseMsgServer struct {
-	Keeper
-	svcTags metrics.Tags
+	*Keeper
 }
 
 // NewCoinbaseMsgServerImpl returns an implementation of the coinbase provider MsgServer interface for the provided Keeper for coinbase provider oracle functions.
 func NewCoinbaseMsgServerImpl(keeper Keeper) CoinbaseMsgServer {
 	return CoinbaseMsgServer{
-		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "coinbase_msg_h",
-		},
+		Keeper: &keeper,
 	}
 }
 
 func (k CoinbaseMsgServer) RelayCoinbaseMessages(c context.Context, msg *types.MsgRelayCoinbaseMessages) (*types.MsgRelayCoinbaseMessagesResponse, error) {
-	c, doneFn := metrics.ReportFuncCallAndTimingCtx(c, k.svcTags)
-	defer doneFn()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "RelayCoinbaseMessages")()
 
 	for idx := range msg.Messages {
 		err := types.ValidateCoinbaseSignature(msg.Messages[idx], msg.Signatures[idx])
 		if err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, err
 		}
 
 		newCoinbasePriceState, err := types.ParseCoinbaseMessage(msg.Messages[idx])
 		if err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, err
 		}
 
@@ -61,7 +51,6 @@ func (k CoinbaseMsgServer) RelayCoinbaseMessages(c context.Context, msg *types.M
 		}
 
 		if err = k.SetCoinbasePriceState(ctx, newCoinbasePriceState); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return nil, err
 		}
 	}

@@ -3,7 +3,6 @@ package base
 import (
 	"cosmossdk.io/math"
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -16,7 +15,8 @@ func (k *BaseKeeper) ExistsGrantAuthorization(
 	granter sdk.AccAddress,
 	grantee sdk.AccAddress,
 ) bool {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ExistsGrantAuthorization")()
+
 	key := types.GetGrantAuthorizationKey(granter, grantee)
 	return k.getStore(ctx).Has(key)
 }
@@ -26,7 +26,8 @@ func (k *BaseKeeper) GetGrantAuthorization(
 	granter sdk.AccAddress,
 	grantee sdk.AccAddress,
 ) math.Int {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetGrantAuthorization")()
+
 	key := types.GetGrantAuthorizationKey(granter, grantee)
 
 	bz := k.getStore(ctx).Get(key)
@@ -37,7 +38,7 @@ func (k *BaseKeeper) GetGrantAuthorization(
 }
 
 func (k *BaseKeeper) GetAllGranterAuthorizations(ctx sdk.Context, granter sdk.AccAddress) []*v2.GrantAuthorization {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllGranterAuthorizations")()
 
 	authorizationsPrefix := types.GetGrantAuthorizationIteratorPrefix(granter)
 	authorizationsStore := prefix.NewStore(k.getStore(ctx), authorizationsPrefix)
@@ -58,7 +59,7 @@ func (k *BaseKeeper) GetAllGranterAuthorizations(ctx sdk.Context, granter sdk.Ac
 }
 
 func (k *BaseKeeper) GetAllGrantAuthorizations(ctx sdk.Context) []*v2.FullGrantAuthorizations {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllGrantAuthorizations")()
 
 	authorizationsStore := prefix.NewStore(k.getStore(ctx), types.GrantAuthorizationsPrefix)
 
@@ -102,7 +103,8 @@ func (k *BaseKeeper) SetGrantAuthorization(
 	grantee sdk.AccAddress,
 	amount math.Int,
 ) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetGrantAuthorization")()
+
 	key := types.GetGrantAuthorizationKey(granter, grantee)
 
 	if amount.IsZero() {
@@ -118,14 +120,15 @@ func (k *BaseKeeper) deleteGrantAuthorization(
 	granter sdk.AccAddress,
 	grantee sdk.AccAddress,
 ) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "deleteGrantAuthorization")()
+
 	key := types.GetGrantAuthorizationKey(granter, grantee)
 
 	k.getStore(ctx).Delete(key)
 }
 
 func (k *BaseKeeper) GetTotalGrantAmount(ctx sdk.Context, granter sdk.AccAddress) math.Int {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetTotalGrantAmount")()
 
 	bz := k.getStore(ctx).Get(types.GetTotalGrantAmountKey(granter))
 	if bz == nil {
@@ -140,7 +143,7 @@ func (k *BaseKeeper) SetTotalGrantAmount(
 	granter sdk.AccAddress,
 	amount math.Int,
 ) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetTotalGrantAmount")()
 
 	if amount.IsZero() {
 		k.deleteTotalGrantAmount(ctx, granter)
@@ -155,14 +158,16 @@ func (k *BaseKeeper) deleteTotalGrantAmount(
 	ctx sdk.Context,
 	granter sdk.AccAddress,
 ) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "deleteTotalGrantAmount")()
+
 	key := types.GetTotalGrantAmountKey(granter)
 
 	k.getStore(ctx).Delete(key)
 }
 
 func (k *BaseKeeper) GetActiveGrant(ctx sdk.Context, grantee sdk.AccAddress) *v2.ActiveGrant {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetActiveGrant")()
+
 	key := types.GetActiveGrantKey(grantee)
 
 	bz := k.getStore(ctx).Get(key)
@@ -177,7 +182,7 @@ func (k *BaseKeeper) GetActiveGrant(ctx sdk.Context, grantee sdk.AccAddress) *v2
 }
 
 func (k *BaseKeeper) GetAllActiveGrants(ctx sdk.Context) []*v2.FullActiveGrant {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllActiveGrants")()
 
 	activeGrantsStore := prefix.NewStore(k.getStore(ctx), types.ActiveGrantPrefix)
 	activeGrants := make([]*v2.FullActiveGrant, 0)
@@ -197,7 +202,7 @@ func (k *BaseKeeper) GetAllActiveGrants(ctx sdk.Context) []*v2.FullActiveGrant {
 }
 
 func (k *BaseKeeper) SetActiveGrant(ctx sdk.Context, grantee sdk.AccAddress, grant *v2.ActiveGrant) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetActiveGrant")()
 
 	if grant.Amount.IsZero() {
 		k.DeleteActiveGrant(ctx, grantee)
@@ -211,13 +216,14 @@ func (k *BaseKeeper) SetActiveGrant(ctx sdk.Context, grantee sdk.AccAddress, gra
 }
 
 func (k *BaseKeeper) DeleteActiveGrant(ctx sdk.Context, grantee sdk.AccAddress) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteActiveGrant")()
+
 	key := types.GetActiveGrantKey(grantee)
 	k.getStore(ctx).Delete(key)
 }
 
 func (k *BaseKeeper) SetLastValidGrantDelegationCheckTime(ctx sdk.Context, granter string, timestamp int64) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetLastValidGrantDelegationCheckTime")()
 
 	if granter == "" {
 		return
@@ -228,7 +234,7 @@ func (k *BaseKeeper) SetLastValidGrantDelegationCheckTime(ctx sdk.Context, grant
 }
 
 func (k *BaseKeeper) GetLastValidGrantDelegationCheckTime(ctx sdk.Context, granter sdk.AccAddress) int64 {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetLastValidGrantDelegationCheckTime")()
 
 	bz := k.getStore(ctx).Get(types.GetLastValidGrantDelegationCheckTimeKey(granter))
 	if bz == nil {

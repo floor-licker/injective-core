@@ -2,7 +2,6 @@ package keeper
 
 import (
 	"cosmossdk.io/math"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -17,15 +16,17 @@ func (k *Keeper) validateSpotMarketOrder(
 	marketID common.Hash,
 	subaccountID common.Hash,
 ) (*v2.SpotMarket, error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "validateSpotMarketOrder")()
+
 	if k.IsPostOnlyMode(ctx) {
 		return nil, types.ErrPostOnlyMode.Wrapf(
 			"cannot create market orders in post only mode until height %d",
-			k.GetParams(ctx).PostOnlyModeHeightThreshold,
+			k.GetCachedParams(ctx).PostOnlyModeHeightThreshold,
 		)
 	}
 
 	if order.ExpirationBlock != 0 {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, types.ErrInvalidExpirationBlock.Wrap("market orders cannot have expiration block")
 	}
 
@@ -38,6 +39,8 @@ func (k *Keeper) createSpotMarketOrder(
 	order *v2.SpotOrder,
 	market *v2.SpotMarket,
 ) (hash common.Hash, err error) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "createSpotMarketOrder")()
+
 	_, possibleHash, err := k.createSpotMarketOrderWithResultsForAtomicExecution(ctx, sender, order, market)
 	if possibleHash == nil {
 		hash = common.Hash{}
@@ -54,8 +57,7 @@ func (k *Keeper) createSpotMarketOrderWithResultsForAtomicExecution(
 	order *v2.SpotOrder,
 	market *v2.SpotMarket,
 ) (marketOrderResults *v2.SpotMarketOrderResults, hash *common.Hash, err error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "createSpotMarketOrderWithResultsForAtomicExecution")()
 
 	marketID := common.HexToHash(order.MarketId)
 	subaccountID := types.MustGetSubaccountIDOrDeriveFromNonce(sender, order.OrderInfo.SubaccountId)
@@ -80,7 +82,7 @@ func (k *Keeper) createSpotMarketOrderWithResultsForAtomicExecution(
 
 	orderHash, err := order.ComputeOrderHash(subaccountNonce.Nonce)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, nil, err
 	}
 
@@ -89,7 +91,7 @@ func (k *Keeper) createSpotMarketOrderWithResultsForAtomicExecution(
 	bestPrice := k.GetBestSpotLimitOrderPrice(ctx, marketID, !order.IsBuy())
 
 	if err := k.validateMarketOrderBestPriceAgainstOrder(order, bestPrice); err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		return nil, &orderHash, err
 	}
 
@@ -156,6 +158,8 @@ func (k *Keeper) executeOrQueueMarketOrder(
 	originalOrder *v2.SpotOrder,
 	orderHash common.Hash,
 ) (results *v2.SpotMarketOrderResults) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "executeOrQueueMarketOrder")()
+
 	if isAtomic {
 		return k.ExecuteAtomicSpotMarketOrder(ctx, market, marketOrder, feeRate)
 	}
@@ -170,8 +174,7 @@ func (k *Keeper) cancelSpotLimitOrderWithIdentifier(
 	market *v2.SpotMarket,
 	marketID common.Hash,
 ) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "cancelSpotLimitOrderWithIdentifier")()
 
 	orderHash, err := k.GetOrderHashFromIdentifier(ctx, subaccountID, identifier)
 	if err != nil {

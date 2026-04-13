@@ -59,7 +59,6 @@ import (
 	stakingkeeper "github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 	"github.com/cosmos/ibc-go/modules/capability"
-	capabilitykeeper "github.com/cosmos/ibc-go/modules/capability/keeper"
 	capabilitytypes "github.com/cosmos/ibc-go/modules/capability/types"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
@@ -106,6 +105,10 @@ var (
 	// Ensure that StakingKeeperMock implements required interface
 	_ types.StakingKeeper = &StakingKeeperMock{}
 )
+
+func init() {
+	chaintypes.InitSDKConfig()
+}
 
 var (
 	// ConsPrivKeys generate ed25519 ConsPrivKeys to be used for validator operator keys
@@ -313,9 +316,6 @@ func CreateTestEnv(t *testing.T) TestInput {
 
 	logger := log.NewNopLogger()
 
-	config := sdk.GetConfig()
-	chaintypes.SetBech32Prefixes(config)
-
 	authority := authtypes.NewModuleAddress(govtypes.ModuleName).String()
 
 	// Initialize store keys
@@ -333,10 +333,10 @@ func CreateTestEnv(t *testing.T) TestInput {
 	keyOracle := storetypes.NewKVStoreKey(oracletypes.StoreKey)
 	keyOracleMemStore := storetypes.NewKVStoreKey(oracletypes.MemStoreKey)
 	keyCapability := storetypes.NewKVStoreKey(capabilitytypes.StoreKey)
-	keyCapabilityMemStore := storetypes.NewKVStoreKey(capabilitytypes.MemStoreKey)
 	keyInsurance := storetypes.NewKVStoreKey(insurancetypes.StoreKey)
 	keyExchange := storetypes.NewKVStoreKey(exchangetypes.StoreKey)
 	tkeyExchange := storetypes.NewTransientStoreKey(exchangetypes.TStoreKey)
+	okeyExchange := storetypes.NewObjectStoreKey(exchangetypes.ObjectStoreKey)
 	keyDowntime := storetypes.NewKVStoreKey(downtimedetectortypes.StoreKey)
 
 	// Initialize memory database and mount stores on it
@@ -358,6 +358,7 @@ func CreateTestEnv(t *testing.T) TestInput {
 	ms.MountStoreWithDB(keyInsurance, storetypes.StoreTypeIAVL, nil)
 	ms.MountStoreWithDB(keyExchange, storetypes.StoreTypeIAVL, nil)
 	ms.MountStoreWithDB(tkeyExchange, storetypes.StoreTypeIAVL, nil)
+	ms.MountStoreWithDB(okeyExchange, storetypes.StoreTypeObject, nil)
 	err := ms.LoadLatestVersion()
 	require.Nil(t, err)
 
@@ -502,18 +503,12 @@ func CreateTestEnv(t *testing.T) TestInput {
 	)
 
 	// add capability keeper and ScopeToModule for ibc module
-	capabilityKeeper := capabilitykeeper.NewKeeper(marshaler, keyCapability, keyCapabilityMemStore)
-	scopedOracleKeeper := capabilityKeeper.ScopeToModule(oracletypes.ModuleName)
 	oracleKeeper := oraclekeeper.NewKeeper(
 		marshaler,
 		keyOracle,
 		keyOracleMemStore,
 		accountKeeper,
 		bankKeeper,
-		nil,
-		nil,
-		scopedOracleKeeper,
-		nil,
 		nil,
 		authority,
 	)
@@ -534,10 +529,11 @@ func CreateTestEnv(t *testing.T) TestInput {
 		marshaler,
 		keyExchange,
 		tkeyExchange,
+		okeyExchange,
 		accountKeeper,
 		bankKeeper,
 		&oracleKeeper,
-		&insuranceKeeper,
+		insuranceKeeper,
 		distKeeper,
 		stakingKeeper,
 		downtimeDetectorKeeper,

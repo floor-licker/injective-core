@@ -2,7 +2,6 @@ package base
 
 import (
 	"cosmossdk.io/store/prefix"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
@@ -11,8 +10,7 @@ import (
 )
 
 func (k *BaseKeeper) GetSpotMarketByID(ctx sdk.Context, marketID common.Hash) *v2.SpotMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSpotMarketByID")()
 
 	market := k.GetSpotMarket(ctx, marketID, true)
 	if market != nil {
@@ -24,8 +22,7 @@ func (k *BaseKeeper) GetSpotMarketByID(ctx sdk.Context, marketID common.Hash) *v
 
 // IsSpotExchangeEnabled returns true if Spot Exchange is enabled
 func (k *BaseKeeper) IsSpotExchangeEnabled(ctx sdk.Context) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IsSpotExchangeEnabled")()
 
 	store := k.getStore(ctx)
 	return store.Has(types.SpotExchangeEnabledKey)
@@ -33,8 +30,7 @@ func (k *BaseKeeper) IsSpotExchangeEnabled(ctx sdk.Context) bool {
 
 // SetSpotExchangeEnabled sets the indicator to enable spot exchange
 func (k *BaseKeeper) SetSpotExchangeEnabled(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSpotExchangeEnabled")()
 
 	store := k.getStore(ctx)
 	store.Set(types.SpotExchangeEnabledKey, []byte{1})
@@ -42,8 +38,7 @@ func (k *BaseKeeper) SetSpotExchangeEnabled(ctx sdk.Context) {
 
 // HasSpotMarket returns true if SpotMarket exists by ID.
 func (k *BaseKeeper) HasSpotMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) bool {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "HasSpotMarket")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.GetSpotMarketKey(isEnabled))
@@ -52,8 +47,7 @@ func (k *BaseKeeper) HasSpotMarket(ctx sdk.Context, marketID common.Hash, isEnab
 
 // GetSpotMarket returns Spot Market from marketID.
 func (k *BaseKeeper) GetSpotMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) *v2.SpotMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSpotMarket")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.GetSpotMarketKey(isEnabled))
@@ -70,8 +64,7 @@ func (k *BaseKeeper) GetSpotMarket(ctx sdk.Context, marketID common.Hash, isEnab
 }
 
 func (k *BaseKeeper) ScheduleSpotMarketParamUpdate(ctx sdk.Context, p *v2.SpotMarketParamUpdateProposal) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "ScheduleSpotMarketParamUpdate")()
 
 	store := k.getTransientStore(ctx)
 	marketID := common.HexToHash(p.MarketId)
@@ -83,8 +76,7 @@ func (k *BaseKeeper) ScheduleSpotMarketParamUpdate(ctx sdk.Context, p *v2.SpotMa
 
 // IterateSpotMarketParamUpdates iterates over SpotMarketParamUpdates calling process on each pair.
 func (k *BaseKeeper) IterateSpotMarketParamUpdates(ctx sdk.Context, process func(*v2.SpotMarketParamUpdateProposal) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSpotMarketParamUpdates")()
 
 	store := k.getTransientStore(ctx)
 	paramUpdateStore := prefix.NewStore(store, types.SpotMarketParamUpdateScheduleKey)
@@ -106,8 +98,7 @@ func (k *BaseKeeper) IterateSpotMarketParamUpdates(ctx sdk.Context, process func
 
 // SetSpotMarket sets SpotMarket in keeper.
 func (k *BaseKeeper) SetSpotMarket(ctx sdk.Context, spotMarket *v2.SpotMarket) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSpotMarket")()
 
 	store := k.getStore(ctx)
 	marketID := common.HexToHash(spotMarket.MarketId)
@@ -119,8 +110,7 @@ func (k *BaseKeeper) SetSpotMarket(ctx sdk.Context, spotMarket *v2.SpotMarket) {
 
 // DeleteSpotMarket deletes SpotMarket from keeper (needed for moving to another hash).
 func (k *BaseKeeper) DeleteSpotMarket(ctx sdk.Context, marketID common.Hash, isEnabled bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteSpotMarket")()
 
 	store := k.getStore(ctx)
 
@@ -135,8 +125,7 @@ func (k *BaseKeeper) DeleteSpotMarket(ctx sdk.Context, marketID common.Hash, isE
 
 // IterateSpotMarkets iterates over SpotMarkets calling process on each pair.
 func (k *BaseKeeper) IterateSpotMarkets(ctx sdk.Context, isEnabled *bool, process func(*v2.SpotMarket) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateSpotMarkets")()
 
 	store := k.getStore(ctx)
 
@@ -156,8 +145,7 @@ func (k *BaseKeeper) IterateSpotMarkets(ctx sdk.Context, isEnabled *bool, proces
 
 // IterateForceCloseSpotMarkets iterates over Spot market settlement infos calling process on each info.
 func (k *BaseKeeper) IterateForceCloseSpotMarkets(ctx sdk.Context, process func(common.Hash) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateForceCloseSpotMarkets")()
 
 	store := k.getStore(ctx)
 	marketStore := prefix.NewStore(store, types.SpotMarketForceCloseInfoKey)
@@ -170,8 +158,7 @@ func (k *BaseKeeper) IterateForceCloseSpotMarkets(ctx sdk.Context, process func(
 
 // GetSpotMarketForceCloseInfo gets the SpotMarketForceCloseInfo from the keeper.
 func (k *BaseKeeper) GetSpotMarketForceCloseInfo(ctx sdk.Context, marketID common.Hash) *common.Hash {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetSpotMarketForceCloseInfo")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.SpotMarketForceCloseInfoKey)
@@ -187,8 +174,7 @@ func (k *BaseKeeper) GetSpotMarketForceCloseInfo(ctx sdk.Context, marketID commo
 
 // SetSpotMarketForceCloseInfo saves the SpotMarketSettlementInfo to the keeper.
 func (k *BaseKeeper) SetSpotMarketForceCloseInfo(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetSpotMarketForceCloseInfo")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.SpotMarketForceCloseInfoKey)
@@ -197,8 +183,7 @@ func (k *BaseKeeper) SetSpotMarketForceCloseInfo(ctx sdk.Context, marketID commo
 
 // DeleteSpotMarketForceCloseInfo deletes the SpotMarketForceCloseInfo from the keeper.
 func (k *BaseKeeper) DeleteSpotMarketForceCloseInfo(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteSpotMarketForceCloseInfo")()
 
 	store := k.getStore(ctx)
 	settlementStore := prefix.NewStore(store, types.SpotMarketForceCloseInfoKey)
@@ -212,8 +197,7 @@ func (k *BaseKeeper) DeleteSpotMarketForceCloseInfo(ctx sdk.Context, marketID co
 }
 
 func (k *BaseKeeper) GetAllSpotMarkets(ctx sdk.Context) []*v2.SpotMarket {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllSpotMarkets")()
 
 	spotMarkets := make([]*v2.SpotMarket, 0)
 	k.IterateSpotMarkets(ctx, nil, func(m *v2.SpotMarket) (stop bool) {

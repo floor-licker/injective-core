@@ -23,6 +23,7 @@ func (m Migrator) Migrate1to2(ctx sdk.Context) error {
 	return v2.Migrate(
 		ctx,
 		ctx.KVStore(m.keeper.storeKey),
+		ctx.ObjectStore(m.keeper.objectStoreKey),
 		m.subspace,
 		m.keeper.cdc,
 	)

@@ -7,7 +7,6 @@ import (
 
 	sdkerrors "cosmossdk.io/errors"
 	storetypes "cosmossdk.io/store/types"
-	"github.com/InjectiveLabs/metrics"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	errortypes "github.com/cosmos/cosmos-sdk/types/errors"
 	"github.com/ethereum/go-ethereum/common"
@@ -18,26 +17,20 @@ import (
 
 type SpotMsgServer struct {
 	*Keeper
-	svcTags metrics.Tags
 }
 
 // NewSpotMsgServerImpl returns an implementation of the bank MsgServer interface for the provided Keeper for spot market functions.
 func NewSpotMsgServerImpl(keeper *Keeper) SpotMsgServer {
 	return SpotMsgServer{
 		Keeper: keeper,
-		svcTags: metrics.Tags{
-			"svc": "spot_msg_h",
-		},
 	}
 }
 
 func (k SpotMsgServer) InstantSpotMarketLaunch(
-	goCtx context.Context, msg *v2.MsgInstantSpotMarketLaunch,
+	c context.Context, msg *v2.MsgInstantSpotMarketLaunch,
 ) (*v2.MsgInstantSpotMarketLaunchResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "InstantSpotMarketLaunch")()
 
 	sender, _ := sdk.AccAddressFromBech32(msg.Sender)
 
@@ -48,7 +41,7 @@ func (k SpotMsgServer) InstantSpotMarketLaunch(
 	// check if the market launch proposal already exists
 	marketID := types.NewSpotMarketID(msg.BaseDenom, msg.QuoteDenom)
 	if k.checkIfMarketLaunchProposalExist(ctx, marketID, types.ProposalTypeSpotMarketLaunch, v2.ProposalTypeSpotMarketLaunch) {
-		metrics.ReportFuncError(k.svcTags)
+
 		k.Logger(ctx).Error("the spot market launch proposal already exists: marketID=%s", marketID.Hex())
 		return nil, types.ErrMarketLaunchProposalAlreadyExists.Wrapf(
 			"the spot market launch proposal already exists: marketID=%s", marketID.Hex(),
@@ -68,14 +61,14 @@ func (k SpotMsgServer) InstantSpotMarketLaunch(
 	)
 
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		k.Logger(ctx).Error("failed launching spot market", err)
 		return nil, err
 	}
 
-	fee := k.GetParams(ctx).SpotMarketInstantListingFee
+	fee := k.GetCachedParams(ctx).SpotMarketInstantListingFee
 	if err = k.DistributionKeeper.FundCommunityPool(ctx, sdk.Coins{fee}, sender); err != nil {
-		metrics.ReportFuncError(k.svcTags)
+
 		k.Logger(ctx).Error("failed launching spot market", err)
 		return nil, err
 	}
@@ -84,9 +77,8 @@ func (k SpotMsgServer) InstantSpotMarketLaunch(
 }
 
 func (k SpotMsgServer) UpdateSpotMarket(c context.Context, msg *v2.MsgUpdateSpotMarket) (*v2.MsgUpdateSpotMarketResponse, error) {
-	defer metrics.ReportFuncCallAndTiming(k.svcTags)()
-
 	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "UpdateSpotMarket")()
 
 	market := k.GetSpotMarketByID(ctx, common.HexToHash(msg.MarketId))
 	if market == nil {
@@ -155,12 +147,11 @@ func (k SpotMsgServer) UpdateSpotMarket(c context.Context, msg *v2.MsgUpdateSpot
 }
 
 func (k SpotMsgServer) CreateSpotLimitOrder(
-	goCtx context.Context, msg *v2.MsgCreateSpotLimitOrder,
+	c context.Context, msg *v2.MsgCreateSpotLimitOrder,
 ) (*v2.MsgCreateSpotLimitOrderResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateSpotLimitOrder")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgCreateSpotLimitOrder")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -179,12 +170,11 @@ func (k SpotMsgServer) CreateSpotLimitOrder(
 }
 
 func (k SpotMsgServer) CreateSpotMarketOrder(
-	goCtx context.Context, msg *v2.MsgCreateSpotMarketOrder,
+	c context.Context, msg *v2.MsgCreateSpotMarketOrder,
 ) (*v2.MsgCreateSpotMarketOrderResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CreateSpotMarketOrder")()
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgCreateSpotMarketOrder")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -210,10 +200,10 @@ func (k SpotMsgServer) CreateSpotMarketOrder(
 }
 
 func (k SpotMsgServer) BatchCreateSpotLimitOrders(
-	goCtx context.Context, msg *v2.MsgBatchCreateSpotLimitOrders,
+	c context.Context, msg *v2.MsgBatchCreateSpotLimitOrders,
 ) (*v2.MsgBatchCreateSpotLimitOrdersResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchCreateSpotLimitOrders")()
 
 	// Naive, unoptimized implementation
 	var (
@@ -230,7 +220,6 @@ func (k SpotMsgServer) BatchCreateSpotLimitOrders(
 		}
 	)
 
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgBatchCreateSpotLimitOrders")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -239,7 +228,7 @@ func (k SpotMsgServer) BatchCreateSpotLimitOrders(
 	for idx := range msg.Orders {
 		order := msg.Orders[idx]
 		if orderHash, err := k.SpotKeeper.CreateSpotLimitOrder(ctx, sender, &order, nil); err != nil {
-			metrics.ReportFuncError(k.svcTags)
+
 			sdkerror := &sdkerrors.Error{}
 			if errors.As(err, &sdkerror) {
 				orderHashes[idx] = fmt.Sprintf("%d", sdkerror.ABCICode())
@@ -262,9 +251,9 @@ func (k SpotMsgServer) BatchCreateSpotLimitOrders(
 	}, nil
 }
 
-func (k SpotMsgServer) CancelSpotOrder(goCtx context.Context, msg *v2.MsgCancelSpotOrder) (*v2.MsgCancelSpotOrderResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+func (k SpotMsgServer) CancelSpotOrder(c context.Context, msg *v2.MsgCancelSpotOrder) (*v2.MsgCancelSpotOrderResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "CancelSpotOrder")()
 
 	var (
 		sender       = sdk.MustAccAddressFromBech32(msg.Sender)
@@ -274,7 +263,6 @@ func (k SpotMsgServer) CancelSpotOrder(goCtx context.Context, msg *v2.MsgCancelS
 	)
 
 	// Reject if spot market id does not reference an active, suspended or demolished spot market
-	ctx := sdk.UnwrapSDKContext(goCtx)
 	if k.IsFixedGasEnabled() {
 		ctx.GasMeter().ConsumeGas(DetermineGas(msg), "MsgCancelSpotOrder")
 		ctx = ctx.WithGasMeter(storetypes.NewInfiniteGasMeter())
@@ -290,22 +278,22 @@ func (k SpotMsgServer) CancelSpotOrder(goCtx context.Context, msg *v2.MsgCancelS
 }
 
 func (k SpotMsgServer) BatchCancelSpotOrders(
-	goCtx context.Context, msg *v2.MsgBatchCancelSpotOrders,
+	c context.Context, msg *v2.MsgBatchCancelSpotOrders,
 ) (*v2.MsgBatchCancelSpotOrdersResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "BatchCancelSpotOrders")()
 
 	// Naive, unoptimized implementation
 	successes := make([]bool, len(msg.Data))
 	for idx := range msg.Data {
-		if _, err := k.CancelSpotOrder(goCtx, &v2.MsgCancelSpotOrder{
+		if _, err := k.CancelSpotOrder(ctx, &v2.MsgCancelSpotOrder{
 			Sender:       msg.Sender,
 			MarketId:     msg.Data[idx].MarketId,
 			SubaccountId: msg.Data[idx].SubaccountId,
 			OrderHash:    msg.Data[idx].OrderHash,
 			Cid:          msg.Data[idx].Cid,
 		}); err != nil {
-			metrics.ReportFuncError(k.svcTags)
+
 		} else {
 			successes[idx] = true
 		}
@@ -314,11 +302,9 @@ func (k SpotMsgServer) BatchCancelSpotOrders(
 	return &v2.MsgBatchCancelSpotOrdersResponse{Success: successes}, nil
 }
 
-func (k SpotMsgServer) LaunchSpotMarket(goCtx context.Context, msg *v2.MsgSpotMarketLaunch) (*v2.MsgSpotMarketLaunchResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+func (k SpotMsgServer) LaunchSpotMarket(c context.Context, msg *v2.MsgSpotMarketLaunch) (*v2.MsgSpotMarketLaunchResponse, error) {
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "LaunchSpotMarket")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized
@@ -332,12 +318,10 @@ func (k SpotMsgServer) LaunchSpotMarket(goCtx context.Context, msg *v2.MsgSpotMa
 }
 
 func (k SpotMsgServer) SpotMarketParamUpdate(
-	goCtx context.Context, msg *v2.MsgSpotMarketParamUpdate,
+	c context.Context, msg *v2.MsgSpotMarketParamUpdate,
 ) (*v2.MsgSpotMarketParamUpdateResponse, error) {
-	goCtx, doneFn := metrics.ReportFuncCallAndTimingCtx(goCtx, k.svcTags)
-	defer doneFn()
-
-	ctx := sdk.UnwrapSDKContext(goCtx)
+	ctx := sdk.UnwrapSDKContext(c)
+	defer k.Meter(ctx).FuncTiming(&ctx, "SpotMarketParamUpdate")()
 
 	if !k.IsGovernanceAuthorityAddress(msg.Sender) {
 		return nil, errortypes.ErrUnauthorized

@@ -44,15 +44,12 @@ func IsBatchOrValsetUpdateTx(inputData hexutil.Bytes) bool {
 	submitBatchMethod := peggyABI.Methods["submitBatch"]
 	valsetUpdateMethod := peggyABI.Methods["updateValset"]
 
-	if len(inputData) < 4 {
+	if len(inputData) < 4 || (!bytes.Equal(submitBatchMethod.ID, inputData[:4]) &&
+		!bytes.Equal(valsetUpdateMethod.ID, inputData[:4])) {
 		return false
 	}
 
-	if bytes.Equal(submitBatchMethod.ID, inputData[:4]) || bytes.Equal(valsetUpdateMethod.ID, inputData[:4]) {
-		return true
-	} else {
-		return false
-	}
+	return true
 }
 
 func (p PendingTxInputList) IsPendingTxInput(txInput []byte, pendingTxWaitDuration time.Duration) bool {

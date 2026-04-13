@@ -11,8 +11,6 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/types"
 )
 
@@ -22,8 +20,7 @@ import (
 // - persists an OutgoingTx
 // - adds the TX to the `available` TX pool via a second index
 func (k *Keeper) AddToOutgoingPool(ctx sdk.Context, sender sdk.AccAddress, counterpartReceiver common.Address, amount, fee sdk.Coin) (uint64, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AddToOutgoingPool")()
 
 	totalAmount := amount.Add(fee)
 	totalInVouchers := sdk.Coins{totalAmount}
@@ -49,7 +46,6 @@ func (k *Keeper) AddToOutgoingPool(ctx sdk.Context, sender sdk.AccAddress, count
 
 		// burn vouchers to send them back to ETH
 		if err := k.bankKeeper.BurnCoins(ctx, types.ModuleName, totalInVouchers); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			panic(err)
 		}
 	}
@@ -88,31 +84,26 @@ func (k *Keeper) AddToOutgoingPool(ctx sdk.Context, sender sdk.AccAddress, count
 // - deletes the unbatched tx from the pool
 // - issues the tokens back to the sender
 func (k *Keeper) RemoveFromOutgoingPoolAndRefund(ctx sdk.Context, txId uint64, sender sdk.AccAddress) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "RemoveFromOutgoingPoolAndRefund")()
 
 	// check that we actually have a tx with that id and what it's details are
 	tx, err := k.getPoolEntry(ctx, txId)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return err
 	}
 
 	txSender, err := sdk.AccAddressFromBech32(tx.Sender)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return err
 	}
 
 	if !sender.Equals(txSender) {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrInvalid, "Invalid sender address")
 	}
 
 	// An inconsistent entry should never enter the store, but this is the ideal place to exploit
 	// it such a bug if it did ever occur, so we should double check to be really sure
 	if tx.Erc20Fee.Contract != tx.Erc20Token.Contract {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrInvalid, "Inconsistent tokens to cancel!: %s %s", tx.Erc20Fee.Contract, tx.Erc20Token.Contract)
 	}
 
@@ -124,14 +115,12 @@ func (k *Keeper) RemoveFromOutgoingPoolAndRefund(ctx sdk.Context, txId uint64, s
 		}
 	}
 	if !found {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrInvalid, "txId %d is not in unbatched pool! Must be in batch!", txId)
 	}
 
 	// delete this tx from both indexes
 	err = k.removeFromUnbatchedTXIndex(ctx, common.HexToAddress(tx.Erc20Token.Contract), tx.Erc20Fee, txId)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrapf(types.ErrInvalid, "txId %d not in unbatched index! Must be in a batch!", txId)
 	}
 	k.removePoolEntry(ctx, txId)
@@ -155,18 +144,15 @@ func (k *Keeper) RemoveFromOutgoingPoolAndRefund(ctx sdk.Context, txId uint64, s
 	// If it is a cosmos-originated the coins are in the module (see AddToOutgoingPool) so we can just take them out
 	if isCosmosOriginated {
 		if err := k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, sender, totalToRefundCoins); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return err
 		}
 	} else {
 		// If it is an ethereum-originated asset we have to mint it (see Handle in attestation_handler.go)
 		// mint coins in module for prep to send
 		if err := k.bankKeeper.MintCoins(ctx, types.ModuleName, totalToRefundCoins); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return errors.Wrapf(err, "mint vouchers coins: %s", totalToRefundCoins)
 		}
 		if err = k.bankKeeper.SendCoinsFromModuleToAccount(ctx, types.ModuleName, sender, totalToRefundCoins); err != nil {
-			metrics.ReportFuncError(k.svcTags)
 			return errors.Wrap(err, "transfer vouchers")
 		}
 	}
@@ -182,8 +168,7 @@ func (k *Keeper) RemoveFromOutgoingPoolAndRefund(ctx sdk.Context, txId uint64, s
 
 // appendToUnbatchedTXIndex add at the end when tx with same fee exists
 func (k *Keeper) appendToUnbatchedTXIndex(ctx sdk.Context, tokenContract common.Address, fee *types.ERC20Token, txID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "appendToUnbatchedTXIndex")()
 
 	store := ctx.KVStore(k.storeKey)
 	idxKey := types.GetFeeSecondIndexKey(tokenContract, fee)
@@ -198,8 +183,7 @@ func (k *Keeper) appendToUnbatchedTXIndex(ctx sdk.Context, tokenContract common.
 
 // appendToUnbatchedTXIndex add at the top when tx with same fee exists
 func (k *Keeper) prependToUnbatchedTXIndex(ctx sdk.Context, tokenContract common.Address, fee *types.ERC20Token, txID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "prependToUnbatchedTXIndex")()
 
 	store := ctx.KVStore(k.storeKey)
 	idxKey := types.GetFeeSecondIndexKey(tokenContract, fee)
@@ -218,8 +202,7 @@ func (k *Keeper) prependToUnbatchedTXIndex(ctx sdk.Context, tokenContract common
 // from the pool for good in OutgoingTxBatchExecuted, but if a batch is canceled or timed out we 'reactivate'
 // an entry by adding it back to the second index.
 func (k *Keeper) removeFromUnbatchedTXIndex(ctx sdk.Context, tokenContract common.Address, fee *types.ERC20Token, txID uint64) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "removeFromUnbatchedTXIndex")()
 
 	store := ctx.KVStore(k.storeKey)
 	idxKey := types.GetFeeSecondIndexKey(tokenContract, fee)
@@ -227,7 +210,6 @@ func (k *Keeper) removeFromUnbatchedTXIndex(ctx sdk.Context, tokenContract commo
 	var idSet types.IDSet
 	bz := store.Get(idxKey)
 	if bz == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return errors.Wrap(types.ErrUnknown, "fee")
 	}
 
@@ -244,17 +226,14 @@ func (k *Keeper) removeFromUnbatchedTXIndex(ctx sdk.Context, tokenContract commo
 		}
 	}
 
-	metrics.ReportFuncError(k.svcTags)
 	return errors.Wrap(types.ErrUnknown, "tx id")
 }
 
 func (k *Keeper) setPoolEntry(ctx sdk.Context, outgoingTransferTx *types.OutgoingTransferTx) error {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "setPoolEntry")()
 
 	bz, err := k.cdc.Marshal(outgoingTransferTx)
 	if err != nil {
-		metrics.ReportFuncError(k.svcTags)
 		return err
 	}
 
@@ -267,14 +246,12 @@ func (k *Keeper) setPoolEntry(ctx sdk.Context, outgoingTransferTx *types.Outgoin
 // getPoolEntry grabs an entry from the tx pool, this *does* include transactions in batches
 // so check the UnbatchedTxIndex or call GetPoolTransactions for that purpose
 func (k *Keeper) getPoolEntry(ctx sdk.Context, id uint64) (*types.OutgoingTransferTx, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "getPoolEntry")()
 
 	store := ctx.KVStore(k.storeKey)
 
 	bz := store.Get(types.GetOutgoingTxPoolKey(id))
 	if bz == nil {
-		metrics.ReportFuncError(k.svcTags)
 		return nil, types.ErrUnknown
 	}
 
@@ -291,8 +268,7 @@ func (k *Keeper) getPoolEntry(ctx sdk.Context, id uint64) (*types.OutgoingTransf
 // removePoolEntry removes an entry from the tx pool, this *does* include transactions in batches
 // so you will need to run it when cleaning up after a executed batch
 func (k *Keeper) removePoolEntry(ctx sdk.Context, id uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "removePoolEntry")()
 
 	store := ctx.KVStore(k.storeKey)
 	store.Delete(types.GetOutgoingTxPoolKey(id))
@@ -301,8 +277,7 @@ func (k *Keeper) removePoolEntry(ctx sdk.Context, id uint64) {
 // GetPoolTransactions, grabs all transactions from the tx pool, useful for queries or genesis save/load
 // this does not include all transactions in batches, because it iterates using the second index key
 func (k *Keeper) GetPoolTransactions(ctx sdk.Context) []*types.OutgoingTransferTx {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetPoolTransactions")()
 
 	prefixStore := ctx.KVStore(k.storeKey)
 	// we must use the second index key here because transactions are left in the store, but removed
@@ -318,7 +293,6 @@ func (k *Keeper) GetPoolTransactions(ctx sdk.Context) []*types.OutgoingTransferT
 		for _, id := range ids.Ids {
 			tx, err := k.getPoolEntry(ctx, id)
 			if err != nil {
-				metrics.ReportFuncError(k.svcTags)
 				panic("Invalid id in tx index!")
 			}
 			ret = append(ret, tx)
@@ -330,8 +304,7 @@ func (k *Keeper) GetPoolTransactions(ctx sdk.Context) []*types.OutgoingTransferT
 
 // IterateOutgoingPoolByFee itetates over the outgoing pool which is sorted by fee
 func (k *Keeper) IterateOutgoingPoolByFee(ctx sdk.Context, tokenContract common.Address, cb func(uint64, *types.OutgoingTransferTx) bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateOutgoingPoolByFee")()
 
 	prefixStore := prefix.NewStore(ctx.KVStore(k.storeKey), types.SecondIndexOutgoingTXFeeKey)
 	iter := prefixStore.ReverseIterator(PrefixRange(tokenContract.Bytes()))
@@ -344,7 +317,6 @@ func (k *Keeper) IterateOutgoingPoolByFee(ctx sdk.Context, tokenContract common.
 		for _, id := range ids.Ids {
 			tx, err := k.getPoolEntry(ctx, id)
 			if err != nil {
-				metrics.ReportFuncError(k.svcTags)
 				panic("Invalid id in tx index!")
 			}
 			if cb(id, tx) {
@@ -363,8 +335,7 @@ func (k *Keeper) GetBatchFeesByTokenType(
 	tokenAddr common.Address,
 	maxTransactions int,
 ) (*types.BatchFees, error) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetBatchFeesByTokenType")()
 
 	store := ctx.KVStore(k.storeKey)
 	tokenFeesPrefix := make([]byte, 0, len(types.SecondIndexOutgoingTXFeeKey)+len(tokenAddr))
@@ -398,7 +369,6 @@ func (k *Keeper) GetBatchFeesByTokenType(
 		for range num {
 			newFee, err := totalFees.SafeAdd(feeAmount)
 			if err != nil {
-				metrics.ReportFuncError(k.svcTags)
 				return nil, errors.Wrapf(err, "failed to sum batch fees")
 			}
 
@@ -417,8 +387,7 @@ func (k *Keeper) GetBatchFeesByTokenType(
 // GetAllBatchFees creates a fee entry for every batch type currently in the store
 // this can be used by relayers to determine what batch types are desirable to request
 func (k *Keeper) GetAllBatchFees(ctx sdk.Context) (batchFees []*types.BatchFees) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllBatchFees")()
 
 	batchFeesMap := k.createBatchFees(ctx)
 	// create array of batchFees
@@ -437,8 +406,7 @@ func (k *Keeper) GetAllBatchFees(ctx sdk.Context) (batchFees []*types.BatchFees)
 
 // CreateBatchFees iterates over the outgoing pool and creates batch token fee map
 func (k *Keeper) createBatchFees(ctx sdk.Context) map[common.Address]*types.BatchFees {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "createBatchFees")()
 
 	prefixStore := prefix.NewStore(ctx.KVStore(k.storeKey), types.SecondIndexOutgoingTXFeeKey)
 	iter := prefixStore.Iterator(nil, nil)
@@ -486,8 +454,7 @@ func (k *Keeper) createBatchFees(ctx sdk.Context) map[common.Address]*types.Batc
 }
 
 func (k *Keeper) AutoIncrementID(ctx sdk.Context, idKey []byte) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AutoIncrementID")()
 
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(idKey)
@@ -504,8 +471,7 @@ func (k *Keeper) AutoIncrementID(ctx sdk.Context, idKey []byte) uint64 {
 }
 
 func (k *Keeper) GetLastOutgoingBatchID(ctx sdk.Context) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetLastOutgoingBatchID")()
 
 	store := ctx.KVStore(k.storeKey)
 	key := types.KeyLastOutgoingBatchID
@@ -518,8 +484,7 @@ func (k *Keeper) GetLastOutgoingBatchID(ctx sdk.Context) uint64 {
 }
 
 func (k *Keeper) SetLastOutgoingBatchID(ctx sdk.Context, lastOutgoingBatchID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetLastOutgoingBatchID")()
 
 	store := ctx.KVStore(k.storeKey)
 	key := types.KeyLastOutgoingBatchID
@@ -528,8 +493,7 @@ func (k *Keeper) SetLastOutgoingBatchID(ctx sdk.Context, lastOutgoingBatchID uin
 }
 
 func (k *Keeper) GetLastOutgoingPoolID(ctx sdk.Context) uint64 {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetLastOutgoingPoolID")()
 
 	store := ctx.KVStore(k.storeKey)
 	key := types.KeyLastTXPoolID
@@ -542,8 +506,7 @@ func (k *Keeper) GetLastOutgoingPoolID(ctx sdk.Context) uint64 {
 }
 
 func (k *Keeper) SetLastOutgoingPoolID(ctx sdk.Context, lastOutgoingPoolID uint64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetLastOutgoingPoolID")()
 
 	store := ctx.KVStore(k.storeKey)
 	key := types.KeyLastTXPoolID

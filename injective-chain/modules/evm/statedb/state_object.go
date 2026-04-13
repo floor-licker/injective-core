@@ -180,6 +180,9 @@ func (s *stateObject) Nonce() uint64 {
 
 // GetCommittedState query the committed state
 func (s *stateObject) GetCommittedState(key common.Hash) common.Hash {
+	ctx := s.db.Context()
+	defer s.db.Meter().FuncTiming(&ctx, "GetCommittedState")()
+
 	if s.overrideStorage != nil {
 		if value, ok := s.overrideStorage[key]; ok {
 			return value

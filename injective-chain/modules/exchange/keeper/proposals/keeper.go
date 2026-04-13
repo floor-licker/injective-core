@@ -67,6 +67,8 @@ func (k *ProposalKeeper) HandleExchangeEnableProposal(
 	ctx sdk.Context,
 	p *v2.ExchangeEnableProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleExchangeEnableProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -89,6 +91,8 @@ func (k *ProposalKeeper) HandleBatchExchangeModificationProposal(
 	ctx sdk.Context,
 	p *v2.BatchExchangeModificationProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleBatchExchangeModificationProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -173,6 +177,8 @@ func (k *ProposalKeeper) HandleUpdateAuctionExchangeTransferDenomDecimalsProposa
 	ctx sdk.Context,
 	p *v2.UpdateAuctionExchangeTransferDenomDecimalsProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleUpdateAuctionExchangeTransferDenomDecimalsProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -188,6 +194,8 @@ func (k *ProposalKeeper) HandleDenomMinNotionalProposal(
 	ctx sdk.Context,
 	p *v2.DenomMinNotionalProposal,
 ) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleDenomMinNotionalProposal")()
+
 	for _, denomMinNotional := range p.DenomMinNotionals {
 		k.SetMinNotionalForDenom(ctx, denomMinNotional.Denom, denomMinNotional.MinNotional)
 	}
@@ -197,6 +205,8 @@ func (k *ProposalKeeper) HandleBatchCommunityPoolSpendProposal(
 	ctx sdk.Context,
 	p *v2.BatchCommunityPoolSpendProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleBatchCommunityPoolSpendProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -226,6 +236,8 @@ func (k *ProposalKeeper) HandleAtomicMarketOrderFeeMultiplierScheduleProposal(
 	ctx sdk.Context,
 	p *v2.AtomicMarketOrderFeeMultiplierScheduleProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleAtomicMarketOrderFeeMultiplierScheduleProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}

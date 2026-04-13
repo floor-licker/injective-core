@@ -7,14 +7,11 @@ import (
 	"cosmossdk.io/store/prefix"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/oracle/types"
 )
 
 func (k *Keeper) AppendPriceRecord(ctx sdk.Context, oracleType types.OracleType, symbol string, priceRecord *types.PriceRecord) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "AppendPriceRecord")()
 
 	existingOrEmptyRecord, _ := k.GetHistoricalPriceRecords(ctx, oracleType, symbol, priceRecord.Timestamp-types.MaxHistoricalPriceRecordAge)
 
@@ -31,8 +28,7 @@ func (k *Keeper) AppendPriceRecord(ctx sdk.Context, oracleType types.OracleType,
 }
 
 func (k *Keeper) updateLastPriceTimestampMap(ctx sdk.Context, oracleType types.OracleType, symbol string, timestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "updateLastPriceTimestampMap")()
 
 	var lastPriceTimestamps types.LastPriceTimestamps
 
@@ -58,8 +54,7 @@ type symbolRef struct {
 }
 
 func (k *Keeper) CleanupHistoricalPriceRecords(ctx sdk.Context) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "CleanupHistoricalPriceRecords")()
 
 	var lastPriceTimestamps types.LastPriceTimestamps
 
@@ -109,8 +104,7 @@ func (k *Keeper) setHistoricalPriceRecords(
 	symbol string,
 	entry *types.PriceRecords,
 ) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "setHistoricalPriceRecords")()
 
 	store := k.getStore(ctx)
 
@@ -119,8 +113,7 @@ func (k *Keeper) setHistoricalPriceRecords(
 }
 
 func (k *Keeper) setLastPriceTimestampMap(ctx sdk.Context, entry *types.LastPriceTimestamps) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "setLastPriceTimestampMap")()
 
 	store := k.getStore(ctx)
 
@@ -142,8 +135,7 @@ func (k *Keeper) GetMixedHistoricalPriceRecords(
 	baseSymbol, quoteSymbol string,
 	from int64,
 ) (mixed *types.PriceRecords, ok bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetMixedHistoricalPriceRecords")()
 
 	store := k.getStore(ctx)
 
@@ -283,8 +275,7 @@ func (k *Keeper) GetHistoricalPriceRecords(
 	symbol string,
 	from int64,
 ) (entry *types.PriceRecords, omitted bool) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetHistoricalPriceRecords")()
 
 	entry = &types.PriceRecords{
 		Oracle:   oracleType,
@@ -306,8 +297,7 @@ func (k *Keeper) GetHistoricalPriceRecords(
 }
 
 func (k *Keeper) GetAllHistoricalPriceRecords(ctx sdk.Context) []*types.PriceRecords {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetAllHistoricalPriceRecords")()
 
 	allPriceRecords := make([]*types.PriceRecords, 0)
 	store := ctx.KVStore(k.storeKey)
@@ -450,8 +440,7 @@ func (k *Keeper) GetOracleVolatility(
 	base, quote *types.OracleInfo,
 	options *types.OracleHistoryOptions,
 ) (vol *math.LegacyDec, points []*types.PriceRecord, meta *types.MetadataStatistics) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetOracleVolatility")()
 
 	var priceRecords *types.PriceRecords
 

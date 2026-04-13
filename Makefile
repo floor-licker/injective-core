@@ -219,6 +219,11 @@ ictest-peggo-erc20: rm-testcache
 	cd interchaintest && go test -timeout 30m -v -run Test_Peggo_ERC20DenomDeployed .
 	./scripts/coverage-html.sh interchaintest/coverage/Test_Peggo_ERC20DenomDeployed
 
+ictest-peggo-rate-limit: rm-testcache
+	rm -rf interchaintest/coverage/Test_Peggo_RateLimit
+	cd interchaintest && go test -timeout 30m -v -run Test_Peggo_RateLimit .
+	./scripts/coverage-html.sh interchaintest/coverage/Test_Peggo_RateLimit
+
 ictest-evm: rm-testcache
 	rm -rf interchaintest/coverage/TestEVMRPC
 	cd interchaintest && go test -v -run "(EVMRPC*|EVMKeeper*)" .
@@ -274,10 +279,25 @@ ictest-peggy-bad-signature-replay: rm-testcache
 	cd interchaintest && go test -timeout 30m -v -run Test_PeggyBadSignatureEvidenceMalleabilityReplay .
 	./scripts/coverage-html.sh interchaintest/coverage/Test_PeggyBadSignatureEvidenceMalleabilityReplay
 
+ictest-peggy-confirm-batch-unbonded: rm-testcache
+	rm -rf interchaintest/coverage/Test_PeggyConfirmBatch_RejectUnbonded
+	cd interchaintest && go test -timeout 30m -v -run Test_PeggyConfirmBatch_RejectUnbonded .
+	./scripts/coverage-html.sh interchaintest/coverage/Test_PeggyConfirmBatch_RejectUnbonded
+
+ictest-peggo-unbonded-valset-confirm-test: rm-testcache
+	rm -rf interchaintest/coverage/Test_Peggo_UnbondedValidatorCannotSubmitValsetConfirm
+	cd interchaintest && go test -timeout 30m -v -run Test_Peggo_UnbondedValidatorCannotSubmitValsetConfirm .
+	./scripts/coverage-html.sh interchaintest/coverage/Test_Peggo_UnbondedValidatorCannotSubmitValsetConfirm
+
+ictest-peggy-valset-slashing-rejoin: rm-testcache
+	rm -rf interchaintest/coverage/Test_PeggyValsetSlashingAfterValidatorRejoin
+	cd interchaintest && go test -timeout 30m -v -run Test_PeggyValsetSlashingAfterValidatorRejoin .
+	./scripts/coverage-html.sh interchaintest/coverage/Test_PeggyValsetSlashingAfterValidatorRejoin
+
 .PHONY: rm-testcache rm-ic-coverage
 .PHONY: ictest-all ictest-basic ictest-upgrade ictest-ibchooks ictest-permissions-wasm-hook ictest-pfm ictest-lanes
-.PHONY: ictest-fixed-gas ictest-fixed-gas-regression ictest-peggo ictest-peggo-ibc ictest-hyperlane ictest-evm ictest-circle
-.PHONY: ictest-downtime-detector ictest-chainstream ictest-chainstream-websocket ictest-validator-jailed ictest-wasm-fees-to-auction ictest-chainlink-data-streams ictest-ante-multisig ictest-peggy-bad-signature-replay
+.PHONY: ictest-fixed-gas ictest-fixed-gas-regression ictest-peggo ictest-peggo-ibc ictest-peggo-rate-limit ictest-hyperlane ictest-evm ictest-circle
+.PHONY: ictest-downtime-detector ictest-chainstream ictest-chainstream-websocket ictest-validator-jailed ictest-wasm-fees-to-auction ictest-chainlink-data-streams ictest-ante-multisig ictest-peggy-bad-signature-replay ictest-peggo-unbonded-valset-confirm-test ictest-peggy-valset-slashing-rejoin ictest-peggy-confirm-batch-unbonded
 
 ###############################################################################
 

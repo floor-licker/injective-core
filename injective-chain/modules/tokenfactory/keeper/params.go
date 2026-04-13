@@ -8,7 +8,9 @@ import (
 )
 
 // GetParams returns the total set params.
-func (k Keeper) GetParams(ctx sdk.Context) types.Params {
+func (k *Keeper) GetParams(ctx sdk.Context) types.Params {
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetParams")()
+
 	store := ctx.KVStore(k.storeKey)
 	bz := store.Get(types.ParamsKey)
 	if bz == nil {
@@ -25,6 +27,8 @@ func (k Keeper) GetParams(ctx sdk.Context) types.Params {
 
 // SetParams sets the total set of params.
 func (k Keeper) SetParams(ctx sdk.Context, params types.Params) {
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetParams")()
+	
 	store := ctx.KVStore(k.storeKey)
 
 	bz, _ := proto.Marshal(&params)

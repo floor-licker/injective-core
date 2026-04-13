@@ -20,8 +20,6 @@ import (
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	"github.com/spf13/cobra"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/client/cli"
 	insurancekeeper "github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/keeper"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/insurance/types"
@@ -91,8 +89,7 @@ func (AppModuleBasic) GetQueryCmd() *cobra.Command {
 type AppModule struct {
 	AppModuleBasic
 
-	svcTags        metrics.Tags
-	keeper         insurancekeeper.Keeper
+	keeper         *insurancekeeper.Keeper
 	accountKeeper  authkeeper.AccountKeeper
 	bankKeeper     bankkeeper.Keeper
 	legacySubspace exported.Subspace
@@ -104,7 +101,7 @@ func (am AppModule) IsAppModule() {}
 
 // NewAppModule creates a new AppModule Object
 func NewAppModule(
-	keeper insurancekeeper.Keeper,
+	keeper *insurancekeeper.Keeper,
 	accountKeeper authkeeper.AccountKeeper,
 	bankKeeper bankkeeper.Keeper,
 	legacySubspace exported.Subspace,
@@ -115,9 +112,6 @@ func NewAppModule(
 		accountKeeper:  accountKeeper,
 		bankKeeper:     bankKeeper,
 		legacySubspace: legacySubspace,
-		svcTags: metrics.Tags{
-			"svc": "insurance_m",
-		},
 	}
 }
 
@@ -134,7 +128,7 @@ func (am AppModule) QuerierRoute() string {
 // RegisterServices registers module services.
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	types.RegisterMsgServer(cfg.MsgServer(), insurancekeeper.NewMsgServerImpl(am.keeper))
-	types.RegisterQueryServer(cfg.QueryServer(), &am.keeper)
+	types.RegisterQueryServer(cfg.QueryServer(), am.keeper)
 
 	migrator := insurancekeeper.NewMigrator(am.keeper, am.legacySubspace)
 	if err := cfg.RegisterMigration(types.ModuleName, 1, migrator.Migrate1to2); err != nil {
@@ -143,7 +137,7 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 }
 
 func (am AppModule) EndBlock(ctx context.Context) error {
-	am.EndBlocker(sdk.UnwrapSDKContext(ctx), am.keeper)
+	am.EndBlocker(sdk.UnwrapSDKContext(ctx))
 	return nil
 }
 

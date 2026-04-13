@@ -13,6 +13,8 @@ func (k *ProposalKeeper) HandleTradingRewardPendingPointsUpdateProposal(
 	ctx sdk.Context,
 	p *v2.TradingRewardPendingPointsUpdateProposal,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleTradingRewardPendingPointsUpdateProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -47,6 +49,8 @@ func (k *ProposalKeeper) HandleTradingRewardPendingPointsUpdateProposal(
 }
 
 func (k *ProposalKeeper) HandleTradingRewardCampaignLaunchProposal(ctx sdk.Context, p *v2.TradingRewardCampaignLaunchProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleTradingRewardCampaignLaunchProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -84,6 +88,8 @@ func (k *ProposalKeeper) HandleTradingRewardCampaignLaunchProposal(ctx sdk.Conte
 }
 
 func (k *ProposalKeeper) HandleTradingRewardCampaignUpdateProposal(ctx sdk.Context, p *v2.TradingRewardCampaignUpdateProposal) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.HandleTradingRewardCampaignUpdateProposal")()
+
 	if err := p.ValidateBasic(); err != nil {
 		return err
 	}
@@ -137,6 +143,8 @@ func (k *ProposalKeeper) updateRewardPool(
 	poolsUpdates []*v2.CampaignRewardPool,
 	firstTradingRewardPoolStartTimestamp int64,
 ) error {
+	defer k.Meter(ctx).FuncTiming(&ctx, "ProposalKeeper.updateRewardPool")()
+
 	if len(poolsUpdates) == 0 {
 		return nil
 	}

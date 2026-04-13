@@ -5,16 +5,13 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/ethereum/go-ethereum/common"
 
-	"github.com/InjectiveLabs/metrics"
-
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
 	"github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 )
 
 // GetExpiryFuturesMarketInfo gets the expiry futures market's market info from the keeper.
 func (k *BaseKeeper) GetExpiryFuturesMarketInfo(ctx sdk.Context, marketID common.Hash) *v2.ExpiryFuturesMarketInfo {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "GetExpiryFuturesMarketInfo")()
 
 	store := k.getStore(ctx)
 	expiryFuturesMarketInfoStore := prefix.NewStore(store, types.ExpiryFuturesMarketInfoPrefix)
@@ -32,8 +29,7 @@ func (k *BaseKeeper) GetExpiryFuturesMarketInfo(ctx sdk.Context, marketID common
 
 // SetExpiryFuturesMarketInfo saves the expiry futures market's market info to the keeper.
 func (k *BaseKeeper) SetExpiryFuturesMarketInfo(ctx sdk.Context, marketID common.Hash, marketInfo *v2.ExpiryFuturesMarketInfo) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetExpiryFuturesMarketInfo")()
 
 	store := k.getStore(ctx)
 	expiryFuturesMarketInfoStore := prefix.NewStore(store, types.ExpiryFuturesMarketInfoPrefix)
@@ -50,8 +46,7 @@ func (k *BaseKeeper) SetExpiryFuturesMarketInfo(ctx sdk.Context, marketID common
 
 // DeleteExpiryFuturesMarketInfo deletes the expiry futures market's market info from the keeper.
 func (k *BaseKeeper) DeleteExpiryFuturesMarketInfo(ctx sdk.Context, marketID common.Hash) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteExpiryFuturesMarketInfo")()
 
 	store := k.getStore(ctx)
 	expiryFuturesMarketInfoStore := prefix.NewStore(store, types.ExpiryFuturesMarketInfoPrefix)
@@ -60,8 +55,7 @@ func (k *BaseKeeper) DeleteExpiryFuturesMarketInfo(ctx sdk.Context, marketID com
 
 // SetExpiryFuturesMarketInfoByTimestamp saves the expiry futures market's market info index to the keeper.
 func (k *BaseKeeper) SetExpiryFuturesMarketInfoByTimestamp(ctx sdk.Context, marketID common.Hash, timestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "SetExpiryFuturesMarketInfoByTimestamp")()
 
 	store := k.getStore(ctx)
 	key := types.GetExpiryFuturesMarketInfoByTimestampKey(timestamp, marketID)
@@ -70,8 +64,7 @@ func (k *BaseKeeper) SetExpiryFuturesMarketInfoByTimestamp(ctx sdk.Context, mark
 
 // DeleteExpiryFuturesMarketInfoByTimestamp deletes the expiry futures market's market info index from the keeper.
 func (k *BaseKeeper) DeleteExpiryFuturesMarketInfoByTimestamp(ctx sdk.Context, marketID common.Hash, timestamp int64) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "DeleteExpiryFuturesMarketInfoByTimestamp")()
 
 	store := k.getStore(ctx)
 	key := types.GetExpiryFuturesMarketInfoByTimestampKey(timestamp, marketID)
@@ -80,8 +73,7 @@ func (k *BaseKeeper) DeleteExpiryFuturesMarketInfoByTimestamp(ctx sdk.Context, m
 
 // IterateExpiryFuturesMarketInfos iterates over expiry futures market's market info calling process on each market info.
 func (k *BaseKeeper) IterateExpiryFuturesMarketInfos(ctx sdk.Context, process func(*v2.ExpiryFuturesMarketInfo, common.Hash) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateExpiryFuturesMarketInfos")()
 
 	store := k.getStore(ctx)
 	expiryFuturesMarketInfoStore := prefix.NewStore(store, types.ExpiryFuturesMarketInfoPrefix)
@@ -94,8 +86,7 @@ func (k *BaseKeeper) IterateExpiryFuturesMarketInfos(ctx sdk.Context, process fu
 }
 
 func (k *BaseKeeper) IterateExpiryFuturesMarketInfoByTimestamp(ctx sdk.Context, process func(common.Hash) (stop bool)) {
-	ctx, doneFn := metrics.ReportFuncCallAndTimingSdkCtx(ctx, k.svcTags)
-	defer doneFn()
+	defer k.Meter(ctx).FuncTiming(&ctx, "IterateExpiryFuturesMarketInfoByTimestamp")()
 
 	store := k.getStore(ctx)
 	expiryFuturesMarketInfoStore := prefix.NewStore(store, types.ExpiryFuturesMarketInfoByTimestampPrefix)

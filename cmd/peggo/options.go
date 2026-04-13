@@ -29,6 +29,48 @@ func initGlobalOptions(
 		EnvVar: "PEGGO_SERVICE_WAIT_TIMEOUT",
 		Value:  "1m",
 	})
+
+	metricsEnabled = app.Bool(cli.BoolOpt{
+		Name:   "metrics-enable-metrics",
+		Desc:   "Enable OpenTelemetry metrics.",
+		EnvVar: "PEGGO_METRICS_ENABLE_METRICS",
+		Value:  false,
+	})
+
+	tracingEnabled = app.Bool(cli.BoolOpt{
+		Name:   "metrics-enable-tracing",
+		Desc:   "Enable OpenTelemetry tracing.",
+		EnvVar: "PEGGO_METRICS_ENABLE_TRACING",
+		Value:  false,
+	})
+
+	metricsEndpoint = app.String(cli.StringOpt{
+		Name:   "metrics-endpoint",
+		Desc:   "OpenTelemetry collector gRPC address.",
+		EnvVar: "PEGGO_METRICS_ENDPOINT",
+		Value:  "localhost:4317",
+	})
+
+	metricsInsecure = app.Bool(cli.BoolOpt{
+		Name:   "metrics-insecure",
+		Desc:   "Disable TLS for the OpenTelemetry collector connection.",
+		EnvVar: "PEGGO_METRICS_INSECURE",
+		Value:  false,
+	})
+
+	metricsStuckFunc = app.String(cli.StringOpt{
+		Name:   "metrics-stuck-func",
+		Desc:   "Mark a function as stuck after this duration. 0 disables timeouts.",
+		EnvVar: "PEGGO_METRICS_STUCK_FUNC",
+		Value:  "0m",
+	})
+
+	metricsExportInterval = app.String(cli.StringOpt{
+		Name:   "metrics-export-interval",
+		Desc:   "Interval to batch and send metrics",
+		EnvVar: "PEGGO_METRICS_EXPORT_INTERVAL",
+		Value:  "10s",
+	})
 }
 
 func initInteractiveOptions(
@@ -172,59 +214,6 @@ func initEthereumKeyOptions(
 		Desc:   "Use the Ethereum app on hardware ledger to sign transactions.",
 		EnvVar: "PEGGO_ETH_USE_LEDGER",
 		Value:  false,
-	})
-}
-
-// initStatsdOptions sets options for StatsD metrics.
-func initStatsdOptions(
-	cmd *cli.Cmd,
-	statsdAgent **string,
-	statsdPrefix **string,
-	statsdAddr **string,
-	statsdStuckDur **string,
-	statsdMocking **string,
-	statsdDisabled **string,
-) {
-	*statsdAgent = cmd.String(cli.StringOpt{
-		Name:   "statsd-agent",
-		Desc:   "Specify StatsD agent.",
-		EnvVar: "PEGGO_STATSD_AGENT",
-		Value:  "telegraf",
-	})
-
-	*statsdPrefix = cmd.String(cli.StringOpt{
-		Name:   "statsd-prefix",
-		Desc:   "Specify StatsD compatible metrics prefix.",
-		EnvVar: "PEGGO_STATSD_PREFIX",
-		Value:  "peggo",
-	})
-
-	*statsdAddr = cmd.String(cli.StringOpt{
-		Name:   "statsd-addr",
-		Desc:   "UDP address of a StatsD compatible metrics aggregator.",
-		EnvVar: "PEGGO_STATSD_ADDR",
-		Value:  "localhost:8125",
-	})
-
-	*statsdStuckDur = cmd.String(cli.StringOpt{
-		Name:   "statsd-stuck-func",
-		Desc:   "Sets a duration to consider a function to be stuck (e.g. in deadlock).",
-		EnvVar: "PEGGO_STATSD_STUCK_DUR",
-		Value:  "5m",
-	})
-
-	*statsdMocking = cmd.String(cli.StringOpt{
-		Name:   "statsd-mocking",
-		Desc:   "If enabled replaces statsd client with a mock one that simply logs values.",
-		EnvVar: "PEGGO_STATSD_MOCKING",
-		Value:  "false",
-	})
-
-	*statsdDisabled = cmd.String(cli.StringOpt{
-		Name:   "statsd-disabled",
-		Desc:   "Force disabling statsd reporting completely.",
-		EnvVar: "PEGGO_STATSD_DISABLED",
-		Value:  "true",
 	})
 }
 
