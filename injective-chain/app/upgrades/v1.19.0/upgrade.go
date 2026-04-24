@@ -13,6 +13,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/InjectiveLabs/injective-core/injective-chain/app/upgrades"
+	exchangetypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types"
+	exchangev2types "github.com/InjectiveLabs/injective-core/injective-chain/modules/exchange/types/v2"
 	peggytypes "github.com/InjectiveLabs/injective-core/injective-chain/modules/peggy/types"
 	chaintypes "github.com/InjectiveLabs/injective-core/injective-chain/types"
 )
@@ -21,6 +23,22 @@ const (
 	UpgradeVersion = "v1.19.0"
 )
 
+var ausdSpotMarketIDsToDemolish = []common.Hash{
+	common.HexToHash("0xae91b4f0c34ed3e7fbd9fbec1a9acbc74d53892de5e79e8da8f9537471dbd6b7"), // ausd-usdt
+	common.HexToHash("0x609376b88fd2e6e37ffc2ac9d6858633ab1d6c90ec6d100f9d205d38e531f8ac"), // ausd-usdc
+	common.HexToHash("0xee25f87facc4952d06b93d44ebb0e9eebf9ee1b39c6c7dcf6b14445b6bb6097e"), // inj-ausd
+}
+
+var whiteKnightLiquidatorsToAdd = []string{
+	"inj1jr094svc02v8ft5x3ecrcnrryp2g5vt23ngulu",
+	"inj1fsuxt5a0cfsxpj6gzxx5nmyhd9hy97edklj4cn",
+	"inj16ezzzulhz66v5yjh0nkuutms0at66dvh8d40ew",
+	"inj1xdqvnlk3jztnfc79mula20cvlhagtauneslm96",
+	"inj1qqyvtnzpygeqe8d9y3ghmsj020ljdly6nc9ght",
+	"inj1h2ltgg6kk237f53f3fgph0tc6w5lqwv2whemmz",
+	"inj12fgfe6mkvv7rfslcmj86nnvvajsknu45lkpkjk",
+	"inj174splsttpxxrrwcew0nwxy83nf2tmx2nvkjjru",
+}
 func StoreUpgrades() storetypes.StoreUpgrades {
 	return storetypes.StoreUpgrades{
 		Added:   nil,
@@ -56,6 +74,12 @@ func UpgradeSteps() []*upgrades.UpgradeHandlerStep {
 			CreateAuctionFeesSubaccount,
 		),
 		upgrades.NewUpgradeHandlerStep(
+			"[exchange] Demolish legacy aUSD spot markets",
+			UpgradeVersion,
+			upgrades.MainnetChainID,
+			DemolishAUSDSpotMarkets,
+		),
+		upgrades.NewUpgradeHandlerStep(
 			"[exchange] Update auction InjBasketMaxCap",
 			UpgradeVersion,
 			upgrades.MainnetChainID,
@@ -68,10 +92,10 @@ func UpgradeSteps() []*upgrades.UpgradeHandlerStep {
 			RebuildAuthzGrantsToCreateIndexes,
 		),
 		upgrades.NewUpgradeHandlerStep(
-			"[exchange] Set white-knight liquidator reward share to 50%",
+			"[exchange] Configure white-knight liquidator params",
 			UpgradeVersion,
 			upgrades.MainnetChainID,
-			SetWhiteKnightLiquidatorRewardShareRateTo50Percent,
+			ConfigureWhiteKnightLiquidatorParams,
 		),
 	}
 }
@@ -146,6 +170,32 @@ func BackfillInsuranceRedemptionAddrIndex(ctx sdk.Context, app upgrades.Injectiv
 	return nil
 }
 
+func DemolishAUSDSpotMarkets(ctx sdk.Context, app upgrades.InjectiveApplication, logger log.Logger) error {
+	exchangeKeeper := app.GetExchangeKeeper()
+
+	for _, marketID := range ausdSpotMarketIDsToDemolish {
+		market := exchangeKeeper.GetSpotMarketByID(ctx, marketID)
+		if market == nil {
+			logger.Error("Skipping missing aUSD spot market demolition target", "market_id", marketID.Hex())
+			continue
+		}
+
+		if market.Status == exchangev2types.MarketStatus_Demolished {
+			logger.Info("aUSD spot market already demolished", "market_id", marketID.Hex(), "ticker", market.Ticker)
+			continue
+		}
+
+		exchangeKeeper.CancelAllRestingLimitOrdersFromSpotMarket(ctx, market, marketID)
+		if _, err := exchangeKeeper.SetSpotMarketStatus(ctx, marketID, exchangev2types.MarketStatus_Demolished); err != nil {
+			return err
+		}
+
+		logger.Info("Demolished aUSD spot market", "market_id", marketID.Hex(), "ticker", market.Ticker)
+	}
+
+	return nil
+}
+
 func UpdateAuctionInjBasketMaxCap(ctx sdk.Context, app upgrades.InjectiveApplication, logger log.Logger) error {
 	auctionKeeper := app.GetAuctionKeeper()
 	params := auctionKeeper.GetParams(ctx)
@@ -155,16 +205,27 @@ func UpdateAuctionInjBasketMaxCap(ctx sdk.Context, app upgrades.InjectiveApplica
 	return nil
 }
 
-func SetWhiteKnightLiquidatorRewardShareRateTo50Percent(ctx sdk.Context, app upgrades.InjectiveApplication, logger log.Logger) error {
+func ConfigureWhiteKnightLiquidatorParams(ctx sdk.Context, app upgrades.InjectiveApplication, logger log.Logger) error {
 	params := app.GetExchangeKeeper().GetParams(ctx)
 	params.WhiteKnightLiquidatorRewardShareRate = math.LegacyNewDecWithPrec(5, 1)
 	if params.LiquidatorRewardShareRate.GT(params.WhiteKnightLiquidatorRewardShareRate) {
 		params.WhiteKnightLiquidatorRewardShareRate = params.LiquidatorRewardShareRate
 	}
 
+	if err := exchangetypes.ValidateWhiteKnightLiquidators(whiteKnightLiquidatorsToAdd); err != nil {
+		return fmt.Errorf("invalid white-knight liquidators: %w", err)
+	}
+
+	params.WhiteKnightLiquidators = append([]string(nil), whiteKnightLiquidatorsToAdd...)
 	app.GetExchangeKeeper().SetParams(ctx, params)
 
-	logger.Info("Set white-knight liquidator reward share rate", "new_value", params.WhiteKnightLiquidatorRewardShareRate.String())
+	logger.Info(
+		"Configured white-knight liquidator params",
+		"reward_share_rate",
+		params.WhiteKnightLiquidatorRewardShareRate.String(),
+		"num_liquidators",
+		len(params.WhiteKnightLiquidators),
+	)
 
 	return nil
 }
